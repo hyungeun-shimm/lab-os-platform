@@ -1,0 +1,3820 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Lab Scheduler</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="theme-color" content="#007aff" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Lab OS" />
+<link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png" />
+<script>if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js').catch(function(){});</script>
+<style>
+  :root {
+    --bg: #ffffff;
+    --bg-alt: #f7f7f9;
+    --border: #e5e5ea;
+    --border-strong: #d1d1d6;
+    --text: #1c1c1e;
+    --text-muted: #8e8e93;
+    --accent: #007aff;
+    --accent-soft: #e8f1ff;
+    --row-h: 60px;     /* one hour = 60px */
+    --slot: 15px;      /* 15-min snap */
+    --hours-start: 6;  /* default visible start (6am) */
+    --hours-end: 24;   /* default visible end (midnight) */
+    --time-col: 56px;
+    --cat-manuscript: #5AC8FA;
+    --cat-surgery: #FF3B30;
+    --cat-behavior: #FF9500;
+    --cat-experiments: #34C759;
+    --cat-histology: #AF52DE;
+    --cat-deadlines: #FFCC00;
+  }
+  /* ---------- Dark mode ---------- */
+  body.dark {
+    --bg: #1c1c1e;
+    --bg-alt: #2c2c2e;
+    --border: #3a3a3c;
+    --border-strong: #48484a;
+    --text: #f2f2f7;
+    --text-muted: #8e8e93;
+    --accent-soft: #1a3a6e;
+  }
+  body.dark .day-col.today { background: #202030; }
+  body.dark .month .mcell.other { background: #141416; }
+  body.dark .cat-item:hover, body.dark .proj-item:hover { background: #3a3a3c; }
+  body.dark .time-col .hour span { background: var(--bg); }
+  body.dark .modal { background: #2c2c2e; }
+  body.dark .modal input, body.dark .modal select, body.dark .modal textarea { background: #1c1c1e; color: var(--text); border-color: var(--border); }
+  body.dark .day-col .hour-line .half { border-bottom-color: #2a2a2e; }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; height: 100%;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, sans-serif;
+    color: var(--text); background: var(--bg);
+    font-size: 14px;
+  }
+  body { display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* ---------- Compact mode ---------- */
+  body.compact { --row-h: 40px; }
+  body.compact .event { padding: 2px 5px; font-size: 11px; }
+  body.compact .ev-meta { display: none; }
+
+  /* ---------- Top bar ---------- */
+  header.topbar {
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 16px; border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .brand { font-weight: 700; font-size: 16px; margin-right: 8px; }
+  .nav-btns { display: flex; align-items: center; gap: 4px; }
+  .nav-btns button, .view-switch button, .icon-btn, .primary-btn {
+    background: var(--bg-alt); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 12px; cursor: pointer;
+    color: var(--text); font: inherit;
+  }
+  .nav-btns button:hover, .view-switch button:hover, .icon-btn:hover { background: #efeff4; }
+  .view-switch { display: flex; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+  .view-switch button { border: none; border-radius: 0; background: var(--bg); padding: 6px 14px; }
+  .view-switch button.active { background: var(--accent); color: white; }
+  .period-label { font-weight: 600; font-size: 16px; min-width: 220px; }
+  .spacer { flex: 1; }
+  .primary-btn { background: var(--accent); color: white; border-color: var(--accent); font-weight: 600; }
+  .primary-btn:hover { background: #0a6cdc; }
+  .icon-btn.active { background: var(--accent); color: white; border-color: var(--accent); }
+
+  /* ---------- Search overlay ---------- */
+  .search-wrap { position: relative; }
+  .search-wrap input {
+    width: 200px; padding: 6px 10px 6px 30px;
+    border: 1px solid var(--border); border-radius: 8px;
+    font: inherit; background: var(--bg-alt); color: var(--text);
+    transition: width 0.2s;
+  }
+  .search-wrap input:focus { width: 260px; outline: none; border-color: var(--accent); }
+  .search-wrap .search-icon {
+    position: absolute; left: 8px; top: 50%; transform: translateY(-50%);
+    color: var(--text-muted); font-size: 13px; pointer-events: none;
+  }
+  .event.search-dim { opacity: 0.18; }
+  .event.search-match { outline: 2px solid white; z-index: 5; }
+
+  /* ---------- Layout ---------- */
+  .layout { display: flex; flex: 1; overflow: hidden; }
+  aside.sidebar {
+    width: 220px; min-width: 160px; max-width: 480px;
+    border-right: 1px solid var(--border);
+    padding: 14px; background: var(--bg-alt);
+    overflow-y: auto; overflow-x: hidden;
+    flex: none;
+    position: relative;
+  }
+  aside.sidebar.collapsed { width: 0; padding: 0; border-right: none; }
+  aside.sidebar.collapsed .sb-resize { display: none; }
+  /* Drag handle on the right edge of the sidebar to resize width */
+  .sb-resize {
+    position: absolute; top: 0; right: -3px;
+    width: 6px; height: 100%;
+    cursor: col-resize; z-index: 5;
+    background: transparent;
+  }
+  .sb-resize:hover, .sb-resize.dragging {
+    background: var(--accent); opacity: 0.4;
+  }
+  body.sb-dragging { cursor: col-resize !important; user-select: none; }
+  body.sb-dragging * { user-select: none !important; }
+  .sidebar h3 {
+    margin: 14px 0 6px; font-size: 11px; text-transform: uppercase;
+    letter-spacing: 0.6px; color: var(--text-muted);
+  }
+  .sidebar h3:first-child { margin-top: 0; }
+  .cat-item, .proj-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 4px 6px; border-radius: 6px; cursor: pointer;
+  }
+  .cat-item:hover, .proj-item:hover { background: #efeff4; }
+  .cat-dot { width: 12px; height: 12px; border-radius: 50%; flex: none; }
+  .cat-item input { margin: 0; }
+  .sidebar input[type=text] {
+    width: 100%; padding: 6px 8px; border: 1px solid var(--border);
+    border-radius: 6px; font: inherit; margin-top: 4px;
+  }
+  .sidebar .io-btns { display: flex; gap: 6px; margin-top: 8px; }
+  .sidebar .io-btns button { flex: 1; font-size: 12px; padding: 5px 6px; }
+
+  main.viewport { flex: 1; overflow: auto; position: relative; }
+
+  /* ---------- Agenda (mobile-first list) view ---------- */
+  .agenda { padding: 10px 12px 90px; max-width: 720px; margin: 0 auto; }
+  .agenda-day { margin: 16px 0 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: var(--text-muted); }
+  .agenda-day.today { color: var(--accent); }
+  .agenda-empty { color: var(--text-muted); font-size: 14px; padding: 36px 4px; text-align: center; line-height: 1.6; }
+  .ag-card { display: flex; gap: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; cursor: pointer; }
+  .ag-card:active { background: var(--bg-alt); }
+  .ag-accent { width: 4px; border-radius: 2px; flex: none; }
+  .ag-title { font-size: 15px; font-weight: 600; line-height: 1.25; }
+  .ag-meta { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
+  .ag-tags { margin-top: 7px; display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .ag-mouse { font-size: 11.5px; padding: 2px 7px; border-radius: 6px; background: var(--bg-alt); color: var(--text-muted); }
+  .ag-owner { width: 20px; height: 20px; border-radius: 50%; color: #fff; font-size: 10px; display: inline-flex; align-items: center; justify-content: center; }
+
+  /* Floating add button — mobile only */
+  .fab { display: none; position: fixed; right: 18px; bottom: 18px; width: 52px; height: 52px;
+    border-radius: 50%; background: var(--accent); color: #fff; border: none; font-size: 30px;
+    line-height: 1; align-items: center; justify-content: center; z-index: 40; cursor: pointer;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25); }
+
+  /* ---------- Mobile / touch layout ---------- */
+  @media (max-width: 640px) {
+    header.topbar { flex-wrap: wrap; row-gap: 6px; height: auto; padding: 8px 10px; }
+    /* Phone: strip the header to one compact row. The page title (redundant with
+       the nav), date label, search, filters toggle, exports, and colony/V-O links
+       all go; + is the FAB. !important beats the colony/V-O inline display. */
+    .brand, .period-label, .search-wrap,
+    #notifBtn, #compactBtn, #darkBtn, #pdfBtn, #sidebarBtn, #newBtn,
+    header.topbar a.icon-btn { display: none !important; }
+    .tb-txt { display: none; }            /* icon-only Mine / AI on phones */
+    header.topbar { gap: 8px; }
+    aside.sidebar { position: fixed; top: 0; left: 0; bottom: 0; z-index: 60;
+      width: 84%; max-width: 320px; transform: translateX(-100%); transition: transform .2s ease;
+      box-shadow: 0 0 30px rgba(0,0,0,0.3); overflow-y: auto; }
+    aside.sidebar.mobile-open { transform: translateX(0); }
+    aside.sidebar.collapsed { transform: translateX(-100%); width: 84%; padding: 14px; }
+    .sb-resize { display: none; }
+    .fab { display: flex; }
+    .modal-back { align-items: stretch; }
+    /* !important overrides each modal's inline min-width (520/560/480px) which
+       otherwise overflows the phone and pushes the action buttons off-screen. */
+    .modal { min-width: 0 !important; width: 100% !important; max-width: 100% !important;
+      min-height: 100%; border-radius: 0; padding: 16px; overflow-y: auto; }
+    .modal .row { flex-direction: column; gap: 10px; }
+    .modal input, .modal select, .modal textarea { padding: 10px 11px; font-size: 16px; }
+    .nav-btns button, .icon-btn, .primary-btn { min-height: 38px; }
+    /* Native page scroll instead of trapped 100vh + nested overflow (Safari dynamic
+       toolbar makes the internal-scroll model janky). The whole document scrolls. */
+    html, body { height: auto; min-height: 100vh; overflow: visible; }
+    .layout { overflow: visible; }
+    main.viewport { overflow: visible; height: auto; }
+    /* Week/Month grids are unreadable on a phone — keep Agenda + Day only. */
+    #viewSwitch button[data-view="week"],
+    #viewSwitch button[data-view="month"] { display: none; }
+  }
+
+  /* ---------- Week / Day grid ---------- */
+  .calendar { position: relative; }
+  .cal-header {
+    display: grid; position: sticky; top: 0; z-index: 5;
+    background: var(--bg); border-bottom: 1px solid var(--border);
+  }
+  .cal-header .corner { border-right: 1px solid var(--border); }
+  .cal-header .day-h {
+    text-align: center; padding: 8px 4px; border-right: 1px solid var(--border);
+    font-size: 12px; color: var(--text-muted);
+  }
+  .cal-header .day-h .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 28px; height: 28px; border-radius: 50%; font-size: 16px;
+    font-weight: 600; color: var(--text); margin-top: 2px;
+  }
+  .cal-header .day-h.today .num { background: var(--accent); color: white; }
+  .cal-header .day-h.today { color: var(--accent); }
+
+  /* ---------- All-day strip ---------- */
+  .allday-strip {
+    display: grid; position: sticky; top: 0; z-index: 4;
+    background: var(--bg); border-bottom: 2px solid var(--border);
+    min-height: 28px;
+  }
+  .allday-corner {
+    border-right: 1px solid var(--border);
+    font-size: 9px; color: var(--text-muted);
+    display: flex; align-items: flex-end; justify-content: flex-end;
+    padding: 2px 4px;
+  }
+  .allday-cell { position: relative; border-right: 1px solid var(--border); min-height: 28px; }
+  .allday-bar {
+    position: absolute; height: 18px; border-radius: 4px;
+    font-size: 11px; font-weight: 600; color: white;
+    padding: 0 5px; display: flex; align-items: center;
+    overflow: hidden; white-space: nowrap; cursor: pointer;
+    z-index: 2;
+  }
+  .allday-bar.continues-left { border-radius: 0 4px 4px 0; }
+  .allday-bar.continues-right { border-radius: 4px 0 0 4px; }
+  .allday-bar.continues-both { border-radius: 0; }
+
+  .cal-body { display: grid; position: relative; }
+  .time-col {
+    border-right: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .time-col .hour {
+    height: var(--row-h); position: relative;
+    font-size: 10px; color: var(--text-muted);
+    padding-right: 6px; text-align: right;
+  }
+  .time-col .hour span {
+    position: absolute; top: -7px; right: 6px; background: var(--bg); padding: 0 2px;
+  }
+  .day-col {
+    position: relative; border-right: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .day-col.today { background: #fbfbff; }
+  .day-col .hour-line {
+    height: var(--row-h); border-bottom: 1px solid var(--border);
+  }
+  .day-col .hour-line .half {
+    height: 50%; border-bottom: 1px dashed #efeff4;
+  }
+
+  /* now-line */
+  .now-line {
+    position: absolute; left: 0; right: 0; height: 0;
+    border-top: 2px solid #ff3b30; z-index: 3; pointer-events: none;
+  }
+  .now-line::before {
+    content: ''; position: absolute; left: -5px; top: -5px;
+    width: 8px; height: 8px; background: #ff3b30; border-radius: 50%;
+  }
+
+  /* events */
+  .event {
+    position: absolute; left: 4px; right: 4px;
+    border-radius: 6px; padding: 4px 6px;
+    font-size: 12px; line-height: 1.2; overflow: hidden;
+    color: white; cursor: grab; user-select: none;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+    border-left: 3px solid rgba(0,0,0,0.25);
+  }
+  .event.dragging { opacity: 0.7; cursor: grabbing; z-index: 10; }
+  .event .ev-title { font-weight: 600; }
+  .event .ev-cohort { font-size: 11px; opacity: 0.9; font-style: italic; }
+  .event .ev-mice { font-size: 11px; opacity: 0.9; }
+  .event .ev-meta { opacity: 0.85; font-size: 11px; }
+  body.compact .ev-mice { display: none; }
+  .event .resize-handle {
+    position: absolute; left: 0; right: 0; bottom: 0; height: 6px;
+    cursor: ns-resize;
+  }
+  .event.done { opacity: 0.5; }
+  .event.done .ev-title { text-decoration: line-through; }
+  .event.delayed { border-left-color: #ffcc00 !important; }
+  .ev-check {
+    position: absolute; top: 3px; right: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.7);
+    background: transparent; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; color: white; transition: background 0.15s;
+    flex: none;
+  }
+  .event.done .ev-check { background: rgba(255,255,255,0.9); color: #34c759; border-color: transparent; }
+  .ev-assignee-dot {
+    display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    margin-right: 3px; flex: none; vertical-align: middle;
+  }
+
+  /* ---------- Month view ---------- */
+  .month {
+    display: grid; grid-template-columns: repeat(7, 1fr);
+    grid-auto-rows: minmax(110px, 1fr); height: 100%;
+  }
+  .month .mh {
+    text-align: center; font-size: 11px; color: var(--text-muted);
+    padding: 8px 0; border-bottom: 1px solid var(--border);
+    background: var(--bg);
+    text-transform: uppercase; letter-spacing: 0.5px;
+  }
+  .month .mcell {
+    border-right: 1px solid var(--border);
+    border-bottom: 1px solid var(--border);
+    padding: 4px; overflow: hidden; cursor: pointer;
+    background: var(--bg);
+  }
+  .month .mcell.other { background: #fafafa; color: var(--text-muted); }
+  .month .mcell .mnum {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 22px; height: 22px; border-radius: 50%; font-size: 12px; font-weight: 600;
+  }
+  .month .mcell.today .mnum { background: var(--accent); color: white; }
+  .month .mev {
+    margin-top: 2px; font-size: 11px; padding: 1px 4px;
+    border-radius: 3px; color: white; white-space: nowrap;
+    overflow: hidden; text-overflow: ellipsis;
+    cursor: grab; user-select: none;
+  }
+  .month .mev:hover { filter: brightness(1.08); }
+  .month .mev.dragging {
+    cursor: grabbing; opacity: 0.65; transform: scale(1.03);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.25);
+    z-index: 20; position: relative;
+  }
+  .month .mcell.drop-target {
+    background: rgba(0,122,255,0.12);
+    box-shadow: inset 0 0 0 2px var(--accent);
+  }
+
+  /* ---------- Day view week strip ---------- */
+  .week-strip {
+    display: flex; justify-content: space-around; padding: 8px 16px;
+    border-bottom: 1px solid var(--border); background: var(--bg);
+  }
+  .week-strip .wd {
+    text-align: center; cursor: pointer; padding: 4px 8px; border-radius: 8px;
+    min-width: 42px;
+  }
+  .week-strip .wd small { display: block; color: var(--text-muted); font-size: 11px; }
+  .week-strip .wd .num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 50%;
+    font-weight: 600; font-size: 15px; margin-top: 2px;
+  }
+  .week-strip .wd.active .num { background: var(--accent); color: white; }
+  .week-strip .wd.today { color: var(--accent); }
+
+  /* ---------- Modal ---------- */
+  .modal-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.25);
+    display: none; align-items: center; justify-content: center; z-index: 50;
+  }
+  .modal-back.show { display: flex; }
+  #micePanelBack { z-index: 200; }
+  .modal {
+    background: var(--bg); border-radius: 12px; min-width: 380px;
+    padding: 18px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  }
+  .modal h2 { margin: 0 0 12px; font-size: 16px; }
+  .modal .row { display: flex; gap: 8px; margin-bottom: 10px; }
+  .modal label { display: block; font-size: 11px; color: var(--text-muted); margin-bottom: 3px; text-transform: uppercase; letter-spacing: 0.4px; }
+  .modal input, .modal select, .modal textarea {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border);
+    border-radius: 6px; font: inherit; background: var(--bg);
+  }
+  .modal textarea { resize: vertical; min-height: 60px; }
+  .modal .actions {
+    display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;
+  }
+  .modal .actions .danger {
+    background: #fff; color: #ff3b30; border: 1px solid #ffd1cf; margin-right: auto;
+  }
+  .modal .field { flex: 1; }
+  .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 4px; min-height: 4px; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 4px;
+    background: var(--accent-soft); color: var(--accent);
+    border-radius: 12px; padding: 2px 8px; font-size: 12px;
+  }
+  .chip button {
+    background: none; border: none; color: inherit; cursor: pointer;
+    padding: 0; margin: 0; font-size: 14px; line-height: 1;
+  }
+
+  /* ---------- Animal picker ---------- */
+  .mp-filter-sel {
+    font: inherit; font-size: 11px; padding: 3px 6px;
+    border: 1px solid var(--border); border-radius: 5px;
+    background: var(--bg); color: var(--text); cursor: pointer;
+  }
+  .mp-filter-sel:focus { outline: none; border-color: var(--accent); }
+  body.dark .mp-filter-sel { background: #2c2c2e; }
+  .animal-row { transition: background 0.1s; }
+  .animal-row:hover { background: var(--bg-alt); }
+  .animal-tag {
+    display: inline-block; font-size: 10px; padding: 1px 5px;
+    border-radius: 8px; line-height: 1.5; white-space: nowrap;
+  }
+  .animal-db-bar { font-size: 11px; color: var(--text-muted); }
+  .animal-db-bar button {
+    font-size: 11px; padding: 2px 7px; border: 1px solid var(--border);
+    border-radius: 4px; cursor: pointer; background: none; color: var(--text);
+  }
+  .animal-db-bar button:hover { background: var(--bg-alt); }
+
+  /* ---------- PDF modal filter chips ---------- */
+  .pdf-filter-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 4px 8px; border: 1px solid var(--border); border-radius: 12px;
+    cursor: pointer; font-size: 12px; user-select: none;
+    background: var(--bg-alt); transition: background 0.1s;
+  }
+  .pdf-filter-chip:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  .pdf-filter-chip input { display: none; }
+  .pdf-filter-chip .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .pdf-section-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.4px; margin-bottom: 6px; }
+  .pdf-all-toggle { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; display: flex; align-items: center; gap: 5px; }
+
+  /* ---------- Color palette popup ---------- */
+  .color-palette-popup {
+    position: fixed; z-index: 300;
+    background: var(--bg); border: 1px solid var(--border-strong);
+    border-radius: 12px; padding: 10px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.18);
+    display: none; grid-template-columns: repeat(6, 26px); gap: 6px;
+  }
+  .color-palette-popup.show { display: grid; }
+  .cp-swatch {
+    width: 26px; height: 26px; border-radius: 50%; cursor: pointer;
+    border: 2px solid transparent; transition: transform 0.12s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.15);
+  }
+  .cp-swatch:hover { transform: scale(1.2); }
+  .cp-swatch.active { border-color: white; box-shadow: 0 0 0 2px var(--accent), 0 1px 3px rgba(0,0,0,0.15); }
+  .color-dot-btn { cursor: pointer; }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="brand">🗓 Lab Scheduler</div>
+  <div class="nav-btns">
+    <button id="prevBtn" title="Previous">‹</button>
+    <button id="todayBtn">Today</button>
+    <button id="nextBtn" title="Next">›</button>
+  </div>
+  <div class="period-label" id="periodLabel">—</div>
+  <div class="search-wrap">
+    <span class="search-icon">⌕</span>
+    <input id="searchInput" type="text" placeholder="Search tasks…" />
+  </div>
+  <div class="spacer"></div>
+  <div class="view-switch" id="viewSwitch">
+    <button data-view="agenda">Agenda</button>
+    <button data-view="day">Day</button>
+    <button data-view="week" class="active">Week</button>
+    <button data-view="month">Month</button>
+  </div>
+  <button class="icon-btn" id="mineBtn" title="Show only events I created or am assigned to">👤<span class="tb-txt"> Mine</span></button>
+  <button class="icon-btn" id="sidebarBtn" title="Toggle sidebar">⟨</button>
+  <button class="icon-btn" id="notifBtn" title="Enable event reminders">🔔</button>
+  <button class="icon-btn" id="compactBtn" title="Compact / Normal">⊟</button>
+  <button class="icon-btn" id="darkBtn" title="Dark mode">🌙</button>
+  <button class="icon-btn" id="pdfBtn" title="Print / PDF & CSV export">📄</button>
+  <a href="/colony.html" class="icon-btn" title="Colony DB" style="text-decoration:none; display:inline-flex; align-items:center;">🐭</a>
+  <a href="/vor_okr.html" class="icon-btn" title="VOR / OKR Log" style="text-decoration:none; display:inline-flex; align-items:center;">V/O</a>
+  <button class="primary-btn" id="aiSchedBtn" title="AI schedule from plain language" style="margin-right:6px;">✨<span class="tb-txt"> AI</span></button>
+  <button class="primary-btn" id="newBtn">+ New</button>
+</header>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="sb-resize" id="sbResize" title="Drag to resize"></div>
+    <h3>Projects
+      <button id="addProjectBtn" style="float:right; font-size:11px; padding:0 6px; background:none; border:1px solid var(--border); border-radius:4px; cursor:pointer;">+</button>
+    </h3>
+    <label class="proj-item" style="font-weight:600;">
+      <input type="checkbox" id="projShowAll" checked /> <span>All projects</span>
+    </label>
+    <div id="projList"></div>
+
+    <div id="teamSection" style="display:none;">
+      <h3>Team
+        <button id="addMemberBtn" style="float:right;font-size:11px;padding:0 6px;background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;">+</button>
+      </h3>
+      <label class="proj-item" style="font-weight:600;">
+        <input type="checkbox" id="assigneeShowAll" checked /> <span>All members</span>
+      </label>
+      <div id="memberList"></div>
+    </div>
+
+    <!-- Hidden no-op placeholders so render() doesn't crash if it tries to write here -->
+    <div id="catList" style="display:none;"></div>
+    <div id="cohortList" style="display:none;"></div>
+    <input type="checkbox" id="cohortShowAll" checked style="display:none;" />
+
+    <h3>Animals DB</h3>
+    <div id="animalSyncBar" class="animal-db-bar"></div>
+
+    <h3>Data</h3>
+    <div class="io-btns">
+      <button id="exportBtn">Export</button>
+      <button id="importBtn">Import</button>
+    </div>
+    <input type="file" id="importFile" accept="application/json" style="display:none" />
+    <div class="io-btns" style="margin-top:6px">
+      <button id="migrateBtn" title="One-time import from old browser storage">Migrate localStorage</button>
+    </div>
+    <div style="margin-top:10px; font-size:11px; color:var(--text-muted);">
+      Saved to local server (scheduler.db).
+    </div>
+  </aside>
+
+  <main class="viewport" id="viewport"></main>
+</div>
+<button class="fab" id="fabBtn" type="button" aria-label="New event">+</button>
+
+<!-- Mouse picker panel -->
+<div class="modal-back" id="micePanelBack">
+  <div class="modal" style="min-width:560px; max-width:640px; max-height:90vh; display:flex; flex-direction:column;">
+    <h2 style="flex:none;">Select Mice</h2>
+
+    <!-- Search row -->
+    <div style="display:flex; gap:8px; align-items:center; margin-bottom:8px; flex:none;">
+      <input id="micePanelSearch" type="text" placeholder="Search ID, project, condition, strain…" style="flex:1; padding:7px 9px; border:1px solid var(--border); border-radius:6px; font:inherit;" />
+      <label style="font-size:12px; white-space:nowrap; display:flex; align-items:center; gap:4px; cursor:pointer;">
+        <input type="checkbox" id="showSacrificedChk" /> Sacrificed
+      </label>
+    </div>
+
+    <!-- Filter row -->
+    <div id="micePanelFilters" style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px; flex:none;">
+      <select id="mpfProject"   class="mp-filter-sel"><option value="">All projects</option></select>
+      <select id="mpfCohort"    class="mp-filter-sel"><option value="">All cohorts</option></select>
+      <select id="mpfCondition" class="mp-filter-sel"><option value="">All conditions</option></select>
+      <select id="mpfExp"       class="mp-filter-sel"><option value="">All experiments</option></select>
+      <select id="mpfStrain"    class="mp-filter-sel"><option value="">All strains</option></select>
+      <select id="mpfSex"       class="mp-filter-sel">
+        <option value="">All sexes</option>
+        <option value="M">♂ Male</option>
+        <option value="F">♀ Female</option>
+      </select>
+      <button id="mpfClear" style="font-size:11px; padding:3px 8px; border:1px solid var(--border); border-radius:5px; cursor:pointer; background:none; color:var(--text-muted);">✕ Clear</button>
+    </div>
+
+    <!-- List -->
+    <div id="micePanelList" style="flex:1; overflow-y:auto; border:1px solid var(--border); border-radius:6px; min-height:120px;"></div>
+    <div id="micePanelFooter" style="font-size:11px; color:var(--text-muted); margin-top:8px; flex:none;"></div>
+    <div class="actions" style="flex:none;">
+      <button id="micePanelCancel">Cancel</button>
+      <button class="primary-btn" id="micePanelAdd">Add selected</button>
+    </div>
+  </div>
+</div>
+
+<!-- Color palette popup (singleton, repositioned by JS) -->
+<div id="colorPalettePopup" class="color-palette-popup"></div>
+
+<!-- PDF / CSV export modal -->
+<div class="modal-back" id="pdfModalBack">
+  <div class="modal" style="min-width:480px; max-width:560px;">
+    <h2>📄 Print / Export</h2>
+    <div class="row">
+      <div class="field">
+        <label>Week</label>
+        <input id="pdfWeekStart" type="date" />
+      </div>
+      <div class="field" style="display:flex;align-items:flex-end;padding-bottom:2px;">
+        <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:13px;cursor:pointer;">
+          <input type="checkbox" id="pdfShowNotes" checked /> Include notes
+        </label>
+      </div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div class="pdf-section-label">Categories</div>
+      <label class="pdf-all-toggle"><input type="checkbox" id="pdfCatAll" checked /> All categories</label>
+      <div id="pdfCatFilter" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div class="pdf-section-label">Projects</div>
+      <label class="pdf-all-toggle"><input type="checkbox" id="pdfProjAll" checked /> All projects</label>
+      <div id="pdfProjFilter" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+    </div>
+    <div style="margin-bottom:10px;">
+      <div class="pdf-section-label">Assignees</div>
+      <label class="pdf-all-toggle"><input type="checkbox" id="pdfAssigneeAll" checked /> All members</label>
+      <div id="pdfAssigneeFilter" style="display:flex;flex-wrap:wrap;gap:5px;"></div>
+    </div>
+    <div class="actions">
+      <button id="pdfIcalBtn" title="Download .ics for Apple/Google Calendar">📅 iCal</button>
+      <button id="pdfCsvBtn" title="Download CSV of matching events">⬇ CSV</button>
+      <button id="pdfCancelBtn">Cancel</button>
+      <button class="primary-btn" id="pdfGenerateBtn">🖨 Print / PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI scheduling modal -->
+<div class="modal-back" id="aiSchedBack">
+  <div class="modal" style="min-width:520px; max-width:620px; max-height:90vh; display:flex; flex-direction:column;">
+    <h2 style="flex:none;">✨ AI schedule</h2>
+    <p style="flex:none; margin:0 0 10px; font-size:12px; color:var(--text-muted);">
+      Describe the experiments in plain language — cohort, assay, dates, mice/day, control mixing.
+      A preview is shown before anything is added to the calendar.
+    </p>
+    <textarea id="aiSchedText" rows="3"
+      placeholder="e.g. Schedule cohort dA OKR testing next week on weekdays, 2 mice/day, randomly mixed with the dA-con control group"
+      style="flex:none; width:100%; box-sizing:border-box; padding:9px; border:1px solid var(--border); border-radius:6px; font:inherit; resize:vertical;"></textarea>
+    <div class="actions" style="flex:none; margin-top:8px; justify-content:flex-start;">
+      <button class="primary-btn" id="aiGenBtn">Generate preview</button>
+    </div>
+    <div id="aiSchedMsg" style="flex:none; display:none; font-size:12px; margin:4px 0;"></div>
+    <div id="aiSchedPreview" style="flex:1; overflow-y:auto; display:none; border-top:1px solid var(--border); margin-top:8px; padding-top:8px;"></div>
+    <div class="actions" style="flex:none;">
+      <button id="aiSchedCancel">Cancel</button>
+      <button class="primary-btn" id="aiCommitBtn" disabled>Confirm &amp; add</button>
+    </div>
+  </div>
+</div>
+
+<!-- Locations & rigs admin manager -->
+<div class="modal-back" id="resModalBack" style="z-index:210;">
+  <div class="modal" style="min-width:420px; max-width:540px;">
+    <h2>⚙ Locations &amp; rigs</h2>
+    <div class="row">
+      <div class="field">
+        <label>Locations</label>
+        <div id="resLocList" style="margin-bottom:6px;"></div>
+        <div style="display:flex; gap:6px;"><input id="resLocInput" type="text" placeholder="Add location" /><button id="resLocAdd" class="primary-btn">Add</button></div>
+      </div>
+      <div class="field">
+        <label>Rigs</label>
+        <div id="resRigList" style="margin-bottom:6px;"></div>
+        <div style="display:flex; gap:6px;"><input id="resRigInput" type="text" placeholder="Add rig" /><button id="resRigAdd" class="primary-btn">Add</button></div>
+      </div>
+    </div>
+    <div class="actions"><button class="primary-btn" id="resCloseBtn">Done</button></div>
+  </div>
+</div>
+
+<!-- Event editor modal -->
+<div class="modal-back" id="modalBack">
+  <div class="modal" id="modal">
+    <h2 id="modalTitle">New Task</h2>
+    <div id="fCreatedBy" style="display:none; font-size:12px; color:var(--text-muted); margin:-6px 0 10px;"></div>
+    <div class="row">
+      <div class="field">
+        <label>Category</label>
+        <select id="fCategory"></select>
+      </div>
+      <div class="field">
+        <label>Subcategory</label>
+        <select id="fSubcategory"></select>
+      </div>
+      <div class="field" id="sub2Field" style="display:none">
+        <label id="sub2Label">Type</label>
+        <select id="fSubcategory2"></select>
+      </div>
+    </div>
+    <div class="row" id="titleRow">
+      <div class="field">
+        <label>Title <span id="titleAutoHint" style="font-weight:400;color:var(--text-muted);font-size:10px;">(auto from subcategory)</span></label>
+        <input id="fTitle" type="text" placeholder="e.g. Virus injection — Cohort A" />
+      </div>
+    </div>
+    <div class="row" id="cohortRow" style="display:none">
+      <div class="field">
+        <label>Cohort</label>
+        <input id="fCohort" type="text" placeholder="e.g. Cohort A, WT group…" />
+      </div>
+    </div>
+    <div class="row" id="miceRow" style="display:none">
+      <div class="field">
+        <label id="miceLabel">Mice</label>
+        <div id="miceChips" class="chips"></div>
+        <div style="display:flex; gap:6px;">
+          <input id="fMiceInput" type="text" placeholder="Type mouse ID, press Enter" style="flex:1" />
+          <button type="button" id="openMicePanelBtn">🐭 From panel…</button>
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Project</label>
+        <select id="fProject"></select>
+      </div>
+      <div class="field">
+        <label>Assignee</label>
+        <select id="fAssignee"></select>
+      </div>
+      <div class="field">
+        <label>Status</label>
+        <select id="fStatus">
+          <option value="planned">Planned</option>
+          <option value="in_progress">In progress</option>
+          <option value="done">✓ Done</option>
+          <option value="delayed">⏱ Delayed</option>
+          <option value="skipped">Skipped</option>
+        </select>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Location</label>
+        <select id="fLocation"></select>
+        <input id="fLocationCustom" type="text" placeholder="Custom location" style="display:none; margin-top:4px;" />
+      </div>
+      <div class="field">
+        <label>Rig</label>
+        <select id="fRig"></select>
+        <input id="fRigCustom" type="text" placeholder="Custom rig" style="display:none; margin-top:4px;" />
+      </div>
+    </div>
+    <div id="resAdminRow" style="display:none; margin:-4px 0 8px;">
+      <a href="#" id="manageResLink" style="font-size:12px; color:var(--accent); text-decoration:none;">⚙ Manage locations &amp; rigs</a>
+    </div>
+    <div id="delayFields" style="display:none">
+      <div class="row">
+        <div class="field">
+          <label>Delay reason</label>
+          <textarea id="fDelayReason" rows="2" placeholder="Why was this delayed?"></textarea>
+        </div>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Reschedule to</label>
+          <input id="fRescheduleTo" type="date" />
+        </div>
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Start date</label>
+        <input id="fDate" type="date" />
+      </div>
+      <div class="field">
+        <label>End date</label>
+        <input id="fDateEnd" type="date" />
+      </div>
+      <div class="field" style="flex:0; align-self:flex-end; padding-bottom:6px;">
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;">
+          <input id="fAllDay" type="checkbox" /> All day
+        </label>
+      </div>
+    </div>
+    <div class="row" id="timeRow">
+      <div class="field">
+        <label>Start time</label>
+        <input id="fStart" type="time" step="900" />
+      </div>
+      <div class="field">
+        <label>End time</label>
+        <input id="fEnd" type="time" step="900" />
+      </div>
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Repeat</label>
+        <select id="fRecurFreq">
+          <option value="">No repeat</option>
+          <option value="daily">Daily</option>
+          <option value="weekly">Weekly</option>
+          <option value="biweekly">Every 2 weeks</option>
+          <option value="monthly">Monthly</option>
+        </select>
+      </div>
+      <div class="field" id="recurUntilField" style="display:none">
+        <label>Repeat until</label>
+        <input id="fRecurUntil" type="date" />
+      </div>
+    </div>
+    <div id="recurHint" style="display:none; font-size:11px; color:var(--text-muted); margin: -4px 0 8px;">
+      ⟳ Saving updates all occurrences in this series
+    </div>
+    <div class="row">
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="fNotes"></textarea>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="danger" id="deleteBtn">Delete</button>
+      <button id="cancelBtn">Cancel</button>
+      <button class="primary-btn" id="saveBtn">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+// ---------- Constants ----------
+const BUILTIN_CATS = [
+  { key: 'manuscript',  label: 'Manuscript writing', color: 'var(--cat-manuscript)',  subs: [] },
+  { key: 'surgery',     label: 'Surgery',            color: 'var(--cat-surgery)',     subs: ['Eye surgery','Virus injection','Cannula implantation'] },
+  { key: 'behavior',    label: 'Behavior',           color: 'var(--cat-behavior)',    subs: ['VOR / OKR','Other'] },
+  { key: 'experiments', label: 'Experiments',        color: 'var(--cat-experiments)', subs: ['Slice ePhys','In-vivo ePhys','Imaging (photometry)','Optogenetics','Behavior','Histology'] },
+  { key: 'histology',   label: 'Histology',          color: 'var(--cat-histology)',   subs: ['Perfusion','Sucrose down','Slicing','Histology procedure'] },
+  { key: 'deadlines',   label: 'Deadlines',          color: 'var(--cat-deadlines)',   subs: [] },
+];
+// Palette for user-defined categories
+const CUSTOM_CAT_PALETTE = ['#5856D6','#FF2D55','#00C7BE','#A2845E','#FF6482','#30B0C7','#8E8E93'];
+let CATS = [...BUILTIN_CATS];
+let CAT_BY_KEY = Object.fromEntries(CATS.map(c => [c.key, c]));
+function rebuildCatIndex() {
+  CAT_BY_KEY = Object.fromEntries(CATS.map(c => [c.key, c]));
+}
+// Categories that need a mouse selector
+const MOUSE_CATS = { surgery: { required: true }, experiments: { required: false }, histology: { required: false } };
+
+// Subcategories inside Experiments that expand into a 2nd sub-level
+const SUB2_SUBS = {
+  'Behavior':  ['VOR / OKR', 'Other'],
+  'Histology': ['Perfusion', 'Sucrose down', 'Slicing', 'Histology procedure'],
+};
+
+// Categories where title is auto-generated from sub selection
+const AUTO_TITLE_CATS = new Set(['experiments']);
+const HOURS_START = 6;
+const HOURS_END = 24;
+const ROW_H = 60;          // px per hour
+const SLOT_MIN = 15;       // snap minutes
+const SLOT_PX = ROW_H * SLOT_MIN / 60; // 15px per slot
+const STORAGE_KEY = 'lab-scheduler-v1';
+
+// ---------- State ----------
+const API = ''; // same-origin
+const state = {
+  events: [],            // {id, title, category, subcategory, project_slug, status, start, end, notes, mice}
+  customSubs: {},        // {categoryKey: [labels...]}
+  customCats: [],        // [{key,label,color,subs:[]}]
+  projects: [],          // [{slug, name, color, source}]
+  cursor: new Date(),    // current focal date
+  view: 'week',
+  catFilter: new Set(BUILTIN_CATS.map(c => c.key)),
+  projectFilter: new Set(),   // selected project slugs; empty = show all
+  projectShowAll: true,
+  editing: null,
+  loaded: false,
+  searchQuery: '',
+  darkMode: false,
+  compact: false,
+  team: [],           // [{id, name, role, color}]
+  assigneeFilter: new Set(),
+  assigneeShowAll: true,
+  me: null,                // logged-in ELN user (set in boot)
+  mineOnly: false,         // topbar "only my events" toggle
+  elnUsersById: {},        // eln user id -> {display_name, username, initials, color}
+  myTeamIds: new Set(),    // team_members.id linked to my eln user (assignee match)
+  resources: { locations: [], rigs: [] },   // admin-curated location/rig lists
+  cohortFilter: new Set(),    // selected base-cohort names; empty = show all
+  cohortShowAll: true,
+  animalSyncStatus: { excel_path: '', last_synced: '', count: 0 },
+  animals: [],        // [{id, mouse_id, project, condition, experiment, cohort, strain, sex, dos, sacrificed, ...}]
+  animalsLoaded: false,
+};
+
+function reloadCats() {
+  CATS = [...BUILTIN_CATS, ...state.customCats];
+  rebuildCatIndex();
+  state.customCats.forEach(c => state.catFilter.add(c.key));
+}
+
+// ---------- API ----------
+async function api(path, opts = {}) {
+  const res = await fetch(API + path, {
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    ...opts,
+  });
+  if (!res.ok) {
+    const txt = await res.text().catch(() => '');
+    throw new Error(`API ${path}: ${res.status} ${txt}`);
+  }
+  return res.json();
+}
+
+function evToWire(ev) {
+  return {
+    id: ev.id, title: ev.title, category: ev.category,
+    subcategory: ev.subcategory || '', subcategory2: ev.subcategory2 || '',
+    cohort: ev.cohort || '', project_slug: ev.project_slug || '',
+    status: ev.status || 'planned',
+    start: ev.start instanceof Date ? ev.start.toISOString() : ev.start,
+    end: ev.end instanceof Date ? ev.end.toISOString() : ev.end,
+    all_day: ev.all_day || false, notes: ev.notes || '', mice: ev.mice || [],
+    assignee: ev.assignee || '',
+    owner_id: ev.owner_id || '',
+    location: ev.location || '', rig: ev.rig || '',
+    delay_reason: ev.delay_reason || '',
+    reschedule_to: ev.reschedule_to || '',
+    recur: ev.recur || null,
+  };
+}
+function evFromWire(w) {
+  return {
+    id: w.id, title: w.title, category: w.category,
+    subcategory: w.subcategory || '', subcategory2: w.subcategory2 || '',
+    cohort: w.cohort || '', project_slug: w.project_slug || '',
+    status: w.status || 'planned',
+    start: new Date(w.start), end: new Date(w.end),
+    all_day: !!w.all_day, notes: w.notes || '', mice: w.mice || [],
+    assignee: w.assignee || '',
+    owner_id: w.owner_id || '',
+    location: w.location || '', rig: w.rig || '',
+    delay_reason: w.delay_reason || '',
+    reschedule_to: w.reschedule_to || '',
+    recur: w.recur || null,
+  };
+}
+
+async function loadAll() {
+  const [evRes, custRes, projRes, teamRes, animalStatus] = await Promise.all([
+    api('/api/events'),
+    api('/api/customs'),
+    api('/api/projects'),
+    api('/api/team'),
+    api('/api/animals/sync-status'),
+  ]);
+  state.events = evRes.events.map(evFromWire);
+  state.customCats = custRes.categories || [];
+  state.customSubs = custRes.subcategories || {};
+  state.projects = projRes.projects || [];
+  state.team = teamRes.members || [];
+  // ELN users → owner_id display names + "my events" matching. Best-effort: a
+  // failure here must not break the calendar.
+  try {
+    const ur = await api('/api/eln/users-light');
+    state.elnUsersById = {};
+    (ur.users || []).forEach(u => { state.elnUsersById[u.id] = u; });
+  } catch (_) {}
+  try { state.resources = await api('/api/schedule/resources'); } catch (_) {}
+  state.myTeamIds = new Set(
+    state.me ? state.team.filter(m => m.eln_user_id === state.me.id).map(m => m.id) : []
+  );
+  state.animalSyncStatus = animalStatus;
+  reloadCats();
+  state.loaded = true;
+}
+
+function timeSince(date) {
+  const s = Math.floor((Date.now() - date) / 1000);
+  if (s < 60) return `${s}s ago`;
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`;
+  return `${Math.floor(s / 86400)}d ago`;
+}
+
+async function loadAnimals() {
+  const data = await api('/api/animals');
+  state.animals = data.animals || [];
+  state.animalsLoaded = true;
+}
+
+async function pushDbToExcel(btn) {
+  const origLabel = btn?.textContent;
+  if (btn) { btn.disabled = true; btn.textContent = '⋯ checking diff…'; }
+  let diff;
+  try {
+    diff = await api('/api/animals/excel-diff');
+  } catch (err) {
+    alert('Diff failed: ' + err.message);
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+    return;
+  }
+  const { summary, adds, updates, excel_only_preview, duplicates_in_db } = diff;
+  if (!summary.adds && !summary.updates) {
+    alert('No DB → Excel changes. Excel is already up to date.');
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+    return;
+  }
+  // Build preview text
+  const lines = [];
+  lines.push(`📊 Excel push preview`);
+  lines.push(`  • Rows to ADD:       ${summary.adds}`);
+  lines.push(`  • Rows to UPDATE:    ${summary.updates}`);
+  lines.push(`  • Excel-only (left untouched): ${summary.excel_only}`);
+  if (summary.duplicates_in_db) {
+    lines.push(`  ⚠️ DB has ${summary.duplicates_in_db} duplicate mouse_id(s) — only first row pushed`);
+  }
+  lines.push('');
+  if (adds.length) {
+    lines.push(`New rows (first 10):`);
+    adds.slice(0, 10).forEach(a => lines.push(`  + ${a.mouse_id}`));
+    if (adds.length > 10) lines.push(`  … and ${adds.length - 10} more`);
+    lines.push('');
+  }
+  if (updates.length) {
+    lines.push(`Updates (first 10):`);
+    updates.slice(0, 10).forEach(u => {
+      const fields = u.changes.map(c => c.field).join(', ');
+      lines.push(`  ~ ${u.mouse_id} → ${fields}`);
+    });
+    if (updates.length > 10) lines.push(`  … and ${updates.length - 10} more`);
+    lines.push('');
+  }
+  lines.push('Proceed with writing to the Excel file?');
+  const ok = confirm(lines.join('\n'));
+  if (!ok) {
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+    return;
+  }
+  if (btn) btn.textContent = '⋯ writing…';
+  try {
+    const res = await api('/api/animals/excel-push', { method: 'POST', body: '{}' });
+    alert(`✅ Excel updated\n  Updated rows: ${res.updated_rows}\n  Added rows:   ${res.added_rows}\n  Fields changed: ${res.fields_changed}`);
+  } catch (err) {
+    alert('Push failed: ' + err.message);
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = origLabel; }
+  }
+}
+
+async function syncAnimals(btn) {
+  const orig = btn ? btn.textContent : '';
+  if (btn) { btn.textContent = '↻ Syncing…'; btn.disabled = true; }
+  try {
+    const result = await api('/api/animals/sync', { method: 'POST', body: JSON.stringify({}) });
+    state.animalSyncStatus.last_synced = result.last_synced;
+    state.animalSyncStatus.count = result.count;
+    await loadAnimals();
+    renderSidebar();
+    const r = result.report;
+    const footer = document.getElementById('micePanelFooter');
+    if (footer) {
+      if (r && r.counts) {
+        const c = r.counts;
+        const mg = c.merged ? ` ⊕${c.merged}` : '';
+        footer.textContent = `Synced: +${c.added} ~${c.modified} −${c.removed} ✗${c.rejected}${mg} (${result.count} live)`;
+      } else {
+        footer.textContent = `${result.count} mice loaded from DB`;
+      }
+    }
+    // Surface rows that need attention: rejected (blocked), removed (vanished),
+    // conflicts (ambiguous same-id duplicates a human must resolve).
+    if (r && (r.rejected?.length || r.removed?.length || r.conflicts?.length)) {
+      let msg = `Sync complete — ${r.counts.added} added, ${r.counts.modified} modified, ${r.counts.unchanged} unchanged` +
+        (r.counts.merged ? `, ${r.counts.merged} duplicate(s) merged` : '') + '.';
+      if (r.rejected.length) {
+        msg += `\n\n⚠️ ${r.rejected.length} row(s) REJECTED (not written — fix in the source):\n` +
+          r.rejected.slice(0, 12).map(x => `  • ${x.mouse_id || '(no id)'}: ${x.errors.join('; ')}`).join('\n') +
+          (r.rejected.length > 12 ? `\n  …and ${r.rejected.length - 12} more` : '');
+      }
+      if (r.conflicts?.length) {
+        msg += `\n\n❓ ${r.conflicts.length} conflicting duplicate ID(s) in the DB (same id, different data — resolve manually):\n  ` +
+          r.conflicts.slice(0, 20).join(', ');
+      }
+      if (r.removed.length) {
+        msg += `\n\n🗑 ${r.removed.length} mouse/mice soft-removed (gone from source, recoverable):\n  ` +
+          r.removed.slice(0, 20).join(', ') + (r.removed.length > 20 ? '…' : '');
+      }
+      alert(msg);
+    }
+    if (document.getElementById('micePanelBack').classList.contains('show')) {
+      renderMicePanelList(
+        document.getElementById('micePanelSearch').value,
+        document.getElementById('showSacrificedChk')?.checked
+      );
+    }
+  } catch (err) { alert('Sync failed: ' + err.message); }
+  finally { if (btn) { btn.textContent = orig; btn.disabled = false; } }
+}
+
+async function setAnimalPath() {
+  const current = state.animalSyncStatus.excel_path || '';
+  const path = prompt('Excel file path (absolute path to Animal_Usage_board.xlsx):', current);
+  if (!path || path.trim() === current) return;
+  try {
+    await api('/api/animals/config', { method: 'POST', body: JSON.stringify({ excel_path: path.trim() }) });
+    state.animalSyncStatus.excel_path = path.trim();
+    renderSidebar();
+  } catch (err) { alert(err.message); }
+}
+
+async function saveEvent(ev) {
+  const wire = evToWire(ev);
+  if (state.events.find(x => x.id === ev.id && x !== ev)) {
+    // updating existing
+    return api(`/api/events/${ev.id}`, { method: 'PUT', body: JSON.stringify(wire) });
+  }
+  return api(`/api/events`, { method: 'POST', body: JSON.stringify(wire) });
+}
+async function deleteEventApi(id) {
+  return api(`/api/events/${id}`, { method: 'DELETE' });
+}
+
+async function migrateFromLocalStorage() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) { alert('No old localStorage data found.'); return; }
+  let d;
+  try { d = JSON.parse(raw); } catch { alert('Old data is corrupted.'); return; }
+  const events = (d.events || []).map(e => ({
+    id: e.id, title: e.title, category: e.category, subcategory: e.subcategory || '',
+    project_slug: e.project || e.project_slug || '', status: e.status || 'planned',
+    start: new Date(e.start).toISOString(), end: new Date(e.end).toISOString(),
+    notes: e.notes || '', mice: e.mice || [],
+  }));
+  if (!confirm(`Import ${events.length} events from old browser storage?`)) return;
+  const res = await api('/api/events/bulk-import', { method: 'POST', body: JSON.stringify({ events }) });
+  alert(`Imported ${res.inserted} / ${res.total}.`);
+  localStorage.removeItem(STORAGE_KEY);
+  await loadAll(); render(); renderSidebar();
+}
+
+// ---------- Utility ----------
+const uid = () => Math.random().toString(36).slice(2, 10);
+const pad = n => String(n).padStart(2, '0');
+const sameDay = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+const startOfWeek = d => { const x = new Date(d); const day = (x.getDay() + 6) % 7; x.setDate(x.getDate() - day); x.setHours(0,0,0,0); return x; }; // Monday-start
+const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+const fmtTime = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtDateIso = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+const parseTime = (dateStr, timeStr) => {
+  const [y,m,da] = dateStr.split('-').map(Number);
+  const [h,mi] = timeStr.split(':').map(Number);
+  return new Date(y, m-1, da, h, mi, 0, 0);
+};
+const minutesBetween = (a, b) => Math.round((b - a) / 60000);
+const snapMin = m => Math.round(m / SLOT_MIN) * SLOT_MIN;
+const monthLabel = d => d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+const weekLabel = d => {
+  const s = startOfWeek(d), e = addDays(s, 6);
+  const sM = s.toLocaleDateString(undefined, { month: 'short' });
+  const eM = e.toLocaleDateString(undefined, { month: 'short' });
+  return sM === eM
+    ? `${sM} ${s.getDate()}–${e.getDate()}, ${e.getFullYear()}`
+    : `${sM} ${s.getDate()} – ${eM} ${e.getDate()}, ${e.getFullYear()}`;
+};
+const dayLabel = d => d.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+
+function eventColor(cat) {
+  const c = CAT_BY_KEY[cat] || CATS[0];
+  if (!c) return '#888';
+  if (c.color && c.color.startsWith('var(')) {
+    return getComputedStyle(document.documentElement).getPropertyValue(c.color.replace('var(', '').replace(')', '')).trim() || '#888';
+  }
+  return c.color || '#888';
+}
+
+// ---------- Recurring event expansion ----------
+function nextOccurrence(d, freq) {
+  const n = new Date(d);
+  if      (freq === 'daily')    n.setDate(n.getDate() + 1);
+  else if (freq === 'weekly')   n.setDate(n.getDate() + 7);
+  else if (freq === 'biweekly') n.setDate(n.getDate() + 14);
+  else if (freq === 'monthly')  n.setMonth(n.getMonth() + 1);
+  return n;
+}
+
+function expandEventsForDisplay(masterEvents, winStart, winEnd) {
+  const result = [];
+  for (const ev of masterEvents) {
+    if (!ev.recur || !ev.recur.freq) { result.push(ev); continue; }
+    const { freq, until } = ev.recur;
+    const bound = until
+      ? new Date(Math.min(new Date(until + 'T23:59:59').getTime(), winEnd.getTime()))
+      : winEnd;
+    const dur = ev.end - ev.start;
+    let cursor = new Date(ev.start);
+    let count = 0;
+    while (cursor <= bound && count < 730) {
+      if (new Date(cursor.getTime() + dur) >= winStart) {
+        result.push({
+          ...ev,
+          start: new Date(cursor),
+          end:   new Date(cursor.getTime() + dur),
+          _masterId: ev.id,
+        });
+      }
+      cursor = nextOccurrence(cursor, freq);
+      count++;
+    }
+  }
+  return result;
+}
+
+// Strip trailing "-con" / "-control" / "_con" / "_control" so "dA-con" → "dA".
+// Used so a single cohort filter row represents both experimental + control
+// groups (e.g. selecting "dA" shows events with cohort=dA AND cohort=dA-con).
+function baseCohort(name) {
+  if (!name) return '';
+  return String(name).replace(/[-_](?:con|control|ctrl)$/i, '');
+}
+
+function visibleEvents() {
+  return state.events.filter(ev => {
+    if (!state.catFilter.has(ev.category)) return false;
+    if (!state.projectShowAll) {
+      if (state.projectFilter.size === 0) return false;
+      if (!state.projectFilter.has(ev.project_slug || '')) return false;
+    }
+    if (!state.assigneeShowAll) {
+      if (state.assigneeFilter.size === 0) return false;
+      if (!state.assigneeFilter.has(ev.assignee || '')) return false;
+    }
+    if (!state.cohortShowAll) {
+      // Events with no cohort are always shown (they're not "filterable by cohort").
+      const evBase = baseCohort(ev.cohort || '');
+      if (evBase && state.cohortFilter.size > 0 && !state.cohortFilter.has(evBase)) return false;
+    }
+    if (state.mineOnly && state.me) {
+      const mine = (ev.owner_id && ev.owner_id === state.me.id) || state.myTeamIds.has(ev.assignee || '');
+      if (!mine) return false;
+    }
+    return true;
+  });
+}
+
+function memberById(id) { return state.team.find(m => m.id === id); }
+function memberColor(id) { return memberById(id)?.color || '#8e8e93'; }
+
+function projectNameOf(slug) {
+  const p = state.projects.find(x => x.slug === slug);
+  return p ? (p.short_name || p.name) : (slug || '');
+}
+function projectFullNameOf(slug) {
+  const p = state.projects.find(x => x.slug === slug);
+  return p ? p.name : (slug || '');
+}
+
+function notesWithMice(notes, mice) {
+  const ids = (mice || []).filter(Boolean);
+  if (!ids.length) return notes || '';
+  const line = `Mice: ${ids.join(', ')}`;
+  const text = (notes || '').trim();
+  if (text.includes(line)) return text;
+  if (/^Mice:\s*/mi.test(text)) return text;
+  return text ? `${text}\n\n${line}` : line;
+}
+
+function logMouseId(id) {
+  return String(id || '').replace(/^con[-_]/i, '').trim();
+}
+
+function emptyVorOkrLog() {
+  return {
+    dropout: false,
+    acclimatization: ['', '', ''],
+    trials: Array.from({ length: 10 }, () => ({ type: '', date: '', memo: '' })),
+  };
+}
+
+function normaliseVorOkrLog(log) {
+  const out = log ? JSON.parse(JSON.stringify(log)) : emptyVorOkrLog();
+  out.dropout = !!out.dropout;
+  out.acclimatization = (out.acclimatization || []).slice(0, 3);
+  while (out.acclimatization.length < 3) out.acclimatization.push('');
+  out.trials = (out.trials || []).slice(0, 10);
+  while (out.trials.length < 10) out.trials.push({ type: '', date: '', memo: '' });
+  return out;
+}
+
+function eventLogDate(ev) {
+  return fmtDateIso(ev.start instanceof Date ? ev.start : new Date(ev.start));
+}
+
+function acclimIndexForEvent(ev) {
+  const text = `${ev.title || ''}\n${ev.notes || ''}`;
+  const m = text.match(/acclimatization\s+day\s+([1-3])\s*\/\s*3/i);
+  return m ? Number(m[1]) - 1 : -1;
+}
+
+function vorOkrTrialTypesForEvent(ev) {
+  const text = `${ev.title || ''} ${ev.subcategory || ''} ${ev.subcategory2 || ''}`.toLowerCase();
+  const hasVor = /\bvor\b/.test(text);
+  const hasOkr = /\bokr\b/.test(text);
+  if (hasVor && hasOkr) return ['VOR', 'OKR'];
+  if (hasVor) return ['VOR'];
+  if (hasOkr) return ['OKR'];
+  return [];
+}
+
+async function syncVorOkrLogForEvent(ev, mode) {
+  const ids = [...new Set((ev.mice || []).map(logMouseId).filter(Boolean))];
+  if (!ids.length) return { updated: 0, skipped: 0 };
+  const date = eventLogDate(ev);
+  const data = await api('/api/vor-okr');
+  const logs = data.logs || {};
+  let updated = 0, skipped = 0;
+
+  for (const mouseId of ids) {
+    const log = normaliseVorOkrLog(logs[mouseId]);
+    let changed = false;
+
+    if (mode === 'acclim') {
+      const requestedIdx = acclimIndexForEvent(ev);
+      const idx = requestedIdx >= 0 ? requestedIdx : log.acclimatization.findIndex(x => !x);
+      if (idx >= 0 && idx < 3 && !log.acclimatization[idx]) {
+        log.acclimatization[idx] = date;
+        changed = true;
+      }
+    } else {
+      const types = vorOkrTrialTypesForEvent(ev);
+      for (const type of types) {
+        const already = log.trials.some(t => t.type === type && t.date === date);
+        if (already) continue;
+        const idx = log.trials.findIndex(t => !t.date && !t.type);
+        if (idx < 0) { skipped++; continue; }
+        log.trials[idx] = { ...(log.trials[idx] || {}), type, date, memo: log.trials[idx]?.memo || '' };
+        changed = true;
+      }
+    }
+
+    if (changed) {
+      await api('/api/vor-okr/' + encodeURIComponent(mouseId), {
+        method: 'PUT',
+        body: JSON.stringify(log),
+      });
+      updated++;
+    }
+  }
+  return { updated, skipped };
+}
+
+async function syncEphysLogForEvent(ev) {
+  const ids = [...new Set((ev.mice || []).map(logMouseId).filter(Boolean))];
+  if (!ids.length) return { updated: 0, skipped: 0 };
+  const date = eventLogDate(ev);
+  const data = await api('/api/ephys');
+  const logs = data.logs || {};
+  let updated = 0, skipped = 0;
+
+  for (const mouseId of ids) {
+    const existing = logs[mouseId] || {};
+    if (existing.exp_date) { skipped++; continue; }
+    const memo = existing.memo || `Auto-filled from calendar event: ${ev.title || 'Slice ePhys'}`;
+    await api('/api/ephys/' + encodeURIComponent(mouseId), {
+      method: 'PUT',
+      body: JSON.stringify({
+        cohort_number: existing.cohort_number || ev.cohort || '',
+        exp_date: date,
+        memo,
+      }),
+    });
+    updated++;
+  }
+  return { updated, skipped };
+}
+
+function logModeForEvent(ev) {
+  const title = (ev.title || '').toLowerCase();
+  const sub = (ev.subcategory || '').toLowerCase();
+  const sub2 = (ev.subcategory2 || '').toLowerCase();
+  if (title.includes('acclimatization')) return 'acclim';
+  if (sub.includes('ephys') || title.includes('ephys')) return 'ephys';
+  if (sub2.includes('vor') || sub2.includes('okr') || title.includes('vor') || title.includes('okr')) return 'vorokr';
+  return '';
+}
+
+async function syncExperimentLogForDoneEvent(ev) {
+  const mode = logModeForEvent(ev);
+  if (!mode || !(ev.mice || []).length) return;
+  try {
+    if (mode === 'ephys') await syncEphysLogForEvent(ev);
+    else await syncVorOkrLogForEvent(ev, mode);
+  } catch (err) {
+    alert(`Task marked done, but auto log update failed: ${err.message}`);
+  }
+}
+
+// ---------- Sidebar ----------
+function renderSidebar() {
+  // Categories
+  const list = document.getElementById('catList');
+  list.innerHTML = '';
+  CATS.forEach(c => {
+    const item = document.createElement('label');
+    item.className = 'cat-item';
+    item.innerHTML = `
+      <input type="checkbox" ${state.catFilter.has(c.key) ? 'checked' : ''} data-cat="${c.key}" />
+      <span class="cat-dot" style="background:${c.color.startsWith('var(') ? c.color : c.color}"></span>
+      <span>${escapeHtml(c.label)}</span>
+    `;
+    list.appendChild(item);
+  });
+  list.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const k = e.target.dataset.cat;
+      if (e.target.checked) state.catFilter.add(k); else state.catFilter.delete(k);
+      render();
+    });
+  });
+
+  // Projects
+  const projList = document.getElementById('projList');
+  projList.innerHTML = '';
+  state.projects.forEach(p => {
+    const item = document.createElement('label');
+    item.className = 'proj-item';
+    const checked = state.projectFilter.has(p.slug);
+    item.innerHTML = `
+      <input type="checkbox" data-proj="${escapeHtml(p.slug)}" ${checked ? 'checked' : ''} ${state.projectShowAll ? 'disabled' : ''} />
+      <span class="cat-dot proj-dot" data-proj="${escapeHtml(p.slug)}" style="background:${p.color}; cursor:pointer" title="Click to change color"></span>
+      <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;" title="${escapeHtml(p.name)}">${escapeHtml(p.short_name || p.name)}</span>
+      ${p.source && p.source.includes('custom') ? `<button class="rename-proj" data-proj="${escapeHtml(p.slug)}" data-name="${escapeHtml(p.name)}" data-short="${escapeHtml(p.short_name || '')}" title="Rename / set short name" style="background:none;border:none;color:var(--text-muted);cursor:pointer;font-size:12px;padding:0 2px;">✏️</button><button class="del-proj" data-proj="${escapeHtml(p.slug)}" data-name="${escapeHtml(p.name)}" title="Remove from calendar" style="background:none; border:none; color:var(--text-muted); cursor:pointer;">×</button>` : ''}
+    `;
+    projList.appendChild(item);
+  });
+  projList.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const slug = e.target.dataset.proj;
+      if (e.target.checked) state.projectFilter.add(slug); else state.projectFilter.delete(slug);
+      render();
+    });
+  });
+  projList.querySelectorAll('.proj-dot').forEach(dot => {
+    dot.addEventListener('click', async e => {
+      e.preventDefault(); e.stopPropagation();
+      const slug = dot.dataset.proj;
+      const cur = state.projects.find(p => p.slug === slug)?.color || '#5AC8FA';
+      showColorPalette(dot, cur, async color => {
+        try {
+          await api(`/api/projects/${encodeURIComponent(slug)}/color`, { method: 'POST', body: JSON.stringify({ color }) });
+          const p = state.projects.find(x => x.slug === slug); if (p) p.color = color;
+          renderSidebar(); render();
+        } catch (err) { alert(err.message); }
+      });
+    });
+  });
+  projList.querySelectorAll('.rename-proj').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.preventDefault(); e.stopPropagation();
+      const slug = btn.dataset.proj;
+      const oldName = btn.dataset.name;
+      const oldShort = btn.dataset.short || '';
+      const newName = prompt(`Full name for "${oldName}":`, oldName);
+      if (newName === null) return;
+      const newShort = prompt(`Short name (used in calendar pills, leave blank to clear):`, oldShort);
+      if (newShort === null) return;
+      const body = {};
+      if (newName.trim() && newName.trim() !== oldName) body.name = newName.trim();
+      body.short_name = newShort.trim();   // intentional — empty clears it
+      if (!body.name && body.short_name === oldShort) return;
+      try {
+        const res = await api(`/api/projects/custom/${encodeURIComponent(slug)}`, {
+          method: 'PATCH', body: JSON.stringify(body)
+        });
+        const p = state.projects.find(x => x.slug === slug);
+        if (p) { p.name = res.name; p.short_name = body.short_name; }
+        renderSidebar(); render();
+      } catch (err) { alert(err.message); }
+    });
+  });
+  projList.querySelectorAll('.del-proj').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.preventDefault();
+      const slug = btn.dataset.proj;
+      if (!confirm(`Delete custom project "${slug}"? Tasks remain but become unassigned.`)) return;
+      try {
+        await api(`/api/projects/custom/${encodeURIComponent(slug)}`, { method: 'DELETE' });
+        state.projects = state.projects.filter(p => p.slug !== slug);
+        state.projectFilter.delete(slug);
+        renderSidebar(); render();
+      } catch (err) { alert(err.message); }
+    });
+  });
+
+  const showAll = document.getElementById('projShowAll');
+  showAll.checked = state.projectShowAll;
+  showAll.onchange = e => {
+    state.projectShowAll = e.target.checked;
+    renderSidebar(); render();
+  };
+
+  // Team members
+  const memberList = document.getElementById('memberList');
+  memberList.innerHTML = '';
+  state.team.forEach(m => {
+    const item = document.createElement('label');
+    item.className = 'proj-item';
+    const checked = state.assigneeFilter.has(m.id);
+    item.innerHTML = `
+      <input type="checkbox" data-mid="${m.id}" ${checked ? 'checked' : ''} ${state.assigneeShowAll ? 'disabled' : ''} />
+      <span class="cat-dot color-dot-btn" data-mid="${m.id}" style="background:${m.color}; cursor:pointer;" title="Click to change color"></span>
+      <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(m.name)}${m.role ? ' <span style="color:var(--text-muted);font-size:11px;">(' + escapeHtml(m.role) + ')</span>' : ''}</span>
+      <button class="del-member" data-mid="${m.id}" title="Remove member" style="background:none;border:none;color:var(--text-muted);cursor:pointer;">×</button>
+    `;
+    memberList.appendChild(item);
+  });
+  memberList.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const id = e.target.dataset.mid;
+      if (e.target.checked) state.assigneeFilter.add(id); else state.assigneeFilter.delete(id);
+      render();
+    });
+  });
+  memberList.querySelectorAll('.color-dot-btn').forEach(dot => {
+    dot.addEventListener('click', async e => {
+      e.preventDefault(); e.stopPropagation();
+      const id = dot.dataset.mid;
+      const m = state.team.find(x => x.id === id);
+      if (!m) return;
+      showColorPalette(dot, m.color, async color => {
+        try {
+          await api(`/api/team/${id}`, { method: 'PUT', body: JSON.stringify({ color }) });
+          m.color = color;
+          renderSidebar(); render();
+        } catch (err) { alert(err.message); }
+      });
+    });
+  });
+
+  memberList.querySelectorAll('.del-member').forEach(btn => {
+    btn.addEventListener('click', async e => {
+      e.preventDefault();
+      const id = btn.dataset.mid;
+      const m = state.team.find(x => x.id === id);
+      if (!confirm(`Remove "${m?.name}" from team?`)) return;
+      try {
+        await api(`/api/team/${id}`, { method: 'DELETE' });
+        state.team = state.team.filter(x => x.id !== id);
+        state.assigneeFilter.delete(id);
+        renderSidebar();
+      } catch (err) { alert(err.message); }
+    });
+  });
+
+  const assigneeShowAll = document.getElementById('assigneeShowAll');
+  assigneeShowAll.checked = state.assigneeShowAll;
+  assigneeShowAll.onchange = e => {
+    state.assigneeShowAll = e.target.checked;
+    renderSidebar(); render();
+  };
+
+  // ── Cohorts ─────────────────────────────────────────────
+  // Derive distinct base-cohort names from current events.
+  // Each row shows " (n)" event count and a "+con" hint when a control
+  // cohort exists for it. Filtering by one row matches both exp + control.
+  const cohortList = document.getElementById('cohortList');
+  cohortList.innerHTML = '';
+  const cohortStats = new Map(); // base → {count, hasCtrl}
+  state.events.forEach(ev => {
+    const raw = (ev.cohort || '').trim();
+    if (!raw) return;
+    const base = baseCohort(raw);
+    const stat = cohortStats.get(base) || { count: 0, hasCtrl: false };
+    stat.count++;
+    if (raw !== base) stat.hasCtrl = true;
+    cohortStats.set(base, stat);
+  });
+  const sortedCohorts = [...cohortStats.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+  sortedCohorts.forEach(([base, stat]) => {
+    const item = document.createElement('label');
+    item.className = 'proj-item';
+    const checked = state.cohortFilter.has(base);
+    const ctrlHint = stat.hasCtrl ? ' <span style="color:var(--text-muted);font-size:11px;">+con</span>' : '';
+    item.innerHTML = `
+      <input type="checkbox" data-cohort="${escapeHtml(base)}" ${checked ? 'checked' : ''} ${state.cohortShowAll ? 'disabled' : ''} />
+      <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(base)}${ctrlHint}</span>
+      <span style="color:var(--text-muted); font-size:11px;">${stat.count}</span>
+    `;
+    cohortList.appendChild(item);
+  });
+  cohortList.querySelectorAll('input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const name = e.target.dataset.cohort;
+      if (e.target.checked) state.cohortFilter.add(name); else state.cohortFilter.delete(name);
+      render();
+    });
+  });
+
+  const cohortShowAll = document.getElementById('cohortShowAll');
+  cohortShowAll.checked = state.cohortShowAll;
+  cohortShowAll.onchange = e => {
+    state.cohortShowAll = e.target.checked;
+    renderSidebar(); render();
+  };
+
+  document.getElementById('addMemberBtn').onclick = openMemberPickerModal;
+
+  // Animals DB sync bar
+  const syncBar = document.getElementById('animalSyncBar');
+  if (syncBar) {
+    syncBar.innerHTML = '';
+    const { sheet_id, last_synced, count } = state.animalSyncStatus;
+    const infoLine = document.createElement('div');
+    infoLine.style.cssText = 'margin-bottom:5px;';
+    const ago = last_synced ? timeSince(new Date(last_synced)) : 'never';
+    infoLine.textContent = `${count} mice · synced ${ago}`;
+    syncBar.appendChild(infoLine);
+    const btnRow = document.createElement('div');
+    btnRow.style.cssText = 'display:flex; gap:5px; margin-bottom:4px;';
+    const syncBtn = document.createElement('button');
+    syncBtn.textContent = '↻ Sync now';
+    syncBtn.title = 'Pull the latest animals from the Google Sheet';
+    syncBtn.onclick = () => syncAnimals(syncBtn);
+    btnRow.appendChild(syncBtn);
+    syncBar.appendChild(btnRow);
+    const srcDiv = document.createElement('div');
+    srcDiv.style.cssText = 'font-size:10px; opacity:0.7;';
+    srcDiv.textContent = sheet_id ? 'source: Google Sheet' : 'source: not configured';
+    syncBar.appendChild(srcDiv);
+  }
+
+  document.getElementById('addProjectBtn').onclick = openPmPickerModal;
+}
+
+// ── PM-folder picker modal ──
+async function openPmPickerModal() {
+  let modal = document.getElementById('pmPickerModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'pmPickerModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:flex-start;justify-content:center;padding:80px 16px;z-index:9000;';
+    modal.innerHTML = `
+      <div style="background:var(--bg-card);border-radius:12px;width:100%;max-width:520px;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);font-weight:700;color:var(--text);">
+          + Add project from PM system
+          <button id="pmPickerClose" style="float:right;background:none;border:0;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1;">×</button>
+        </div>
+        <div style="padding:16px 18px;">
+          <div id="pmPickerList" style="max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:6px;"></div>
+          <div id="pmPickerMsg" style="margin-top:10px;font-size:12px;color:var(--text-muted);"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+    document.getElementById('pmPickerClose').onclick = () => { modal.style.display = 'none'; };
+  }
+  modal.style.display = 'flex';
+  await renderPmPickerList();
+}
+
+async function renderPmPickerList() {
+  const list = document.getElementById('pmPickerList');
+  list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Loading…</div>';
+  try {
+    const r = await fetch('/api/projects', { credentials: 'include' });
+    const d = await r.json();
+    const knownSlugs = new Set(state.projects.map(p => p.slug));
+    const all = (d.projects || []);
+    const available = all.filter(p => !knownSlugs.has(p.slug));
+    if (!available.length) {
+      list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">All PM projects are already on the calendar.</div>';
+      return;
+    }
+    list.innerHTML = available.map(p => `
+      <div data-slug="${escapeHtml(p.slug)}" data-name="${escapeHtml(p.name)}"
+           style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--bg);"
+           class="pm-pick-row">
+        <span style="width:12px;height:12px;border-radius:50%;background:${p.color};flex:none;"></span>
+        <div style="flex:1;min-width:0;">
+          <div style="font-weight:600;color:var(--text);">${escapeHtml(p.short_name || p.name)}</div>
+          ${p.short_name ? `<div style="font-size:11.5px;color:var(--text-muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(p.name)}</div>` : ''}
+        </div>
+        <span style="font-size:11px;color:var(--text-muted);">${escapeHtml(p.source)}</span>
+      </div>`).join('');
+    list.querySelectorAll('.pm-pick-row').forEach(row => {
+      row.addEventListener('mouseenter', () => row.style.background = 'var(--bg-alt)');
+      row.addEventListener('mouseleave', () => row.style.background = 'var(--bg)');
+      row.addEventListener('click', () => pickPmProject(row.dataset.slug, row.dataset.name));
+    });
+  } catch (e) {
+    list.innerHTML = `<div style="color:var(--danger);">${e.message}</div>`;
+  }
+}
+
+async function pickPmProject(slug, name) {
+  // Register it as a custom_projects row so it appears in the sidebar.
+  // If the user wants to also set a short_name now, prompt for it.
+  const short = prompt(`Optional short name for "${name}"\n(used in tight spaces like calendar event pills):`, '');
+  const msg = document.getElementById('pmPickerMsg');
+  try {
+    const body = { name, slug };
+    if (short && short.trim()) body.short_name = short.trim();
+    await api('/api/projects/custom', { method: 'POST', body: JSON.stringify(body) });
+    // Refresh
+    const projRes = await api('/api/projects');
+    state.projects = projRes.projects;
+    renderSidebar();
+    fillProjectSelect();
+    document.getElementById('pmPickerModal').style.display = 'none';
+  } catch (err) {
+    msg.style.color = 'var(--danger)';
+    msg.textContent = err.message;
+  }
+}
+
+// ── Team-member picker (only registered ELN users) ──
+async function openMemberPickerModal() {
+  let modal = document.getElementById('memberPickerModal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'memberPickerModal';
+    modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.45);display:flex;align-items:flex-start;justify-content:center;padding:80px 16px;z-index:9000;';
+    modal.innerHTML = `
+      <div style="background:var(--bg-card);border-radius:12px;width:100%;max-width:480px;box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+        <div style="padding:14px 18px;border-bottom:1px solid var(--border);font-weight:700;color:var(--text);">
+          + Add team member
+          <button id="memberPickerClose" style="float:right;background:none;border:0;color:var(--text-muted);font-size:20px;cursor:pointer;line-height:1;">×</button>
+        </div>
+        <div style="padding:16px 18px;">
+          <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Pick from registered Lab OS users. To add a new person, have them sign up via <a href="/eln/login" style="color:var(--accent);">/eln/login</a> first.</div>
+          <div id="memberPickerList" style="max-height:380px;overflow:auto;display:flex;flex-direction:column;gap:6px;"></div>
+          <div id="memberPickerMsg" style="margin-top:10px;font-size:12px;color:var(--text-muted);"></div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+    document.getElementById('memberPickerClose').onclick = () => { modal.style.display = 'none'; };
+  }
+  modal.style.display = 'flex';
+  await renderMemberPickerList();
+}
+
+async function renderMemberPickerList() {
+  const list = document.getElementById('memberPickerList');
+  list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">Loading…</div>';
+  try {
+    const r = await fetch('/api/eln/users-light', { credentials: 'include' });
+    const d = await r.json();
+    const eln = d.users || [];
+    // Skip ELN users already linked to a team_members row.
+    const linkedElnIds = new Set(state.team.map(m => m.eln_user_id).filter(Boolean));
+    const available = eln.filter(u => !linkedElnIds.has(u.id));
+    if (!available.length) {
+      list.innerHTML = '<div style="color:var(--text-muted);font-size:13px;">All registered users are already on the team.</div>';
+      return;
+    }
+    list.innerHTML = available.map(u => {
+      const initials = u.initials || (u.display_name || u.username || '?')[0];
+      return `
+        <div data-uid="${escapeHtml(u.id)}" data-name="${escapeHtml(u.display_name || u.username || '')}" data-color="${escapeHtml(u.color || '')}"
+             class="member-pick-row"
+             style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;cursor:pointer;background:var(--bg);">
+          <span style="width:26px;height:26px;border-radius:50%;background:${u.color || '#8e8e93'};color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:11.5px;flex:none;">${escapeHtml(initials)}</span>
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;color:var(--text);">${escapeHtml(u.display_name || u.username || u.id)}</div>
+            <div style="font-size:11.5px;color:var(--text-muted);">${escapeHtml(u.username || '')}</div>
+          </div>
+        </div>`;
+    }).join('');
+    list.querySelectorAll('.member-pick-row').forEach(row => {
+      row.addEventListener('mouseenter', () => row.style.background = 'var(--bg-alt)');
+      row.addEventListener('mouseleave', () => row.style.background = 'var(--bg)');
+      row.addEventListener('click', () => pickElnUser(row.dataset.uid, row.dataset.name, row.dataset.color));
+    });
+  } catch (e) {
+    list.innerHTML = `<div style="color:var(--danger);">${e.message}</div>`;
+  }
+}
+
+async function pickElnUser(elnUserId, name, color) {
+  const msg = document.getElementById('memberPickerMsg');
+  try {
+    const body = {
+      name,
+      role: '',
+      color: color || '#5AC8FA',
+      eln_user_id: elnUserId,
+    };
+    const m = await api('/api/team', { method: 'POST', body: JSON.stringify(body) });
+    state.team.push(m);
+    renderSidebar();
+    document.getElementById('memberPickerModal').style.display = 'none';
+  } catch (err) {
+    msg.style.color = 'var(--danger)';
+    msg.textContent = err.message;
+  }
+}
+
+// ---------- Location / Rig resource selects ----------
+const RES_CUSTOM = '__custom__';
+function fillResourceSelect(selectId, customId, items, current) {
+  const sel = document.getElementById(selectId), custom = document.getElementById(customId);
+  if (!sel) return;
+  sel.innerHTML = ['<option value="">—</option>']
+    .concat((items || []).map(it => `<option value="${escapeHtml(it.value)}">${escapeHtml(it.value)}</option>`))
+    .concat([`<option value="${RES_CUSTOM}">Custom…</option>`]).join('');
+  const inList = (items || []).some(it => it.value === current);
+  if (current && !inList) { sel.value = RES_CUSTOM; custom.value = current; custom.style.display = ''; }
+  else { sel.value = current || ''; custom.value = ''; custom.style.display = 'none'; }
+  sel.onchange = () => { custom.style.display = sel.value === RES_CUSTOM ? '' : 'none'; if (sel.value === RES_CUSTOM) custom.focus(); };
+}
+function readResourceField(selectId, customId) {
+  const sel = document.getElementById(selectId), custom = document.getElementById(customId);
+  if (!sel) return '';
+  return sel.value === RES_CUSTOM ? custom.value.trim() : sel.value;
+}
+function renderResLists() {
+  const mk = items => (items && items.length)
+    ? items.map(it => `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:13px;"><span style="flex:1;">${escapeHtml(it.value)}</span><button class="res-del" data-id="${it.id}" title="Remove" style="background:none;border:none;color:#ff3b30;cursor:pointer;font-size:15px;">×</button></div>`).join('')
+    : '<div style="color:var(--text-muted);font-size:12px;">None yet</div>';
+  document.getElementById('resLocList').innerHTML = mk(state.resources.locations);
+  document.getElementById('resRigList').innerHTML = mk(state.resources.rigs);
+  document.querySelectorAll('#resModalBack .res-del').forEach(b => b.onclick = async () => {
+    try { await api('/api/schedule/resources/' + b.dataset.id, { method: 'DELETE' }); await reloadResources(); }
+    catch (e) { alert(e.message || e); }
+  });
+}
+async function reloadResources() { try { state.resources = await api('/api/schedule/resources'); } catch (_) {} renderResLists(); }
+async function addResourceVal(kind, inputId) {
+  const el = document.getElementById(inputId), v = el.value.trim(); if (!v) return;
+  try { await api('/api/schedule/resources', { method: 'POST', body: JSON.stringify({ kind, value: v }) }); el.value = ''; await reloadResources(); }
+  catch (e) { alert(e.message || e); }
+}
+function openResModal() { renderResLists(); document.getElementById('resModalBack').classList.add('show'); }
+function closeResModal() {
+  document.getElementById('resModalBack').classList.remove('show');
+  fillResourceSelect('fLocation', 'fLocationCustom', state.resources.locations || [], readResourceField('fLocation', 'fLocationCustom'));
+  fillResourceSelect('fRig', 'fRigCustom', state.resources.rigs || [], readResourceField('fRig', 'fRigCustom'));
+}
+
+function fillAssigneeSelect(selectedId) {
+  const sel = document.getElementById('fAssignee');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— none —';
+  sel.appendChild(blank);
+  state.team.forEach(m => {
+    const o = document.createElement('option');
+    o.value = m.id; o.textContent = m.name;
+    sel.appendChild(o);
+  });
+  sel.value = selectedId || '';
+}
+
+function fillProjectSelect(selectedSlug) {
+  const sel = document.getElementById('fProject');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— none —';
+  sel.appendChild(blank);
+  state.projects.forEach(p => {
+    const o = document.createElement('option');
+    o.value = p.slug;
+    o.textContent = p.short_name ? `${p.short_name} · ${p.name}` : p.name;
+    o.title = p.name;
+    sel.appendChild(o);
+  });
+  sel.value = selectedSlug || '';
+}
+
+// ---------- View routing ----------
+function render() {
+  // On phones the week/month grids are unusable — force the agenda list.
+  if (window.matchMedia('(max-width: 640px)').matches && (state.view === 'week' || state.view === 'month')) {
+    state.view = 'agenda';
+  }
+  document.getElementById('periodLabel').textContent =
+    state.view === 'day' ? dayLabel(state.cursor)
+    : state.view === 'week' ? weekLabel(state.cursor)
+    : state.view === 'agenda' ? 'Agenda'
+    : monthLabel(state.cursor);
+  document.querySelectorAll('#viewSwitch button').forEach(b => {
+    b.classList.toggle('active', b.dataset.view === state.view);
+  });
+  const vp = document.getElementById('viewport');
+  vp.innerHTML = '';
+  if (state.view === 'agenda') renderAgenda(vp);
+  else if (state.view === 'week') renderWeek(vp);
+  else if (state.view === 'day') renderDay(vp);
+  else renderMonth(vp);
+}
+
+function renderAgenda(vp) {
+  const start = new Date(state.cursor); start.setHours(0, 0, 0, 0);
+  const end = addDays(start, 35);
+  const evs = expandEventsForDisplay(visibleEvents(), start, end)
+    .filter(ev => ev.end >= start && ev.start < end)
+    .sort((a, b) => a.start - b.start);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'agenda';
+  if (!evs.length) {
+    wrap.innerHTML = `<div class="agenda-empty">No events in the next 5 weeks.<br>Tap ＋ to add one.</div>`;
+    vp.appendChild(wrap);
+    return;
+  }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  let curKey = '';
+  evs.forEach(ev => {
+    const d = new Date(ev.start); d.setHours(0, 0, 0, 0);
+    const key = d.toISOString().slice(0, 10);
+    if (key !== curKey) {
+      curKey = key;
+      const hd = document.createElement('div');
+      hd.className = 'agenda-day' + (sameDay(d, today) ? ' today' : '');
+      const rel = sameDay(d, today) ? 'Today · ' : sameDay(d, addDays(today, 1)) ? 'Tomorrow · ' : '';
+      hd.textContent = rel + d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      wrap.appendChild(hd);
+    }
+    wrap.appendChild(agendaCard(ev));
+  });
+  vp.appendChild(wrap);
+}
+
+function agendaCard(ev) {
+  const card = document.createElement('div');
+  card.className = 'ag-card';
+  const t = (x) => x.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const time = ev.all_day ? 'All day' : `${t(ev.start)}–${t(ev.end)}`;
+  const sub = (CAT_BY_KEY[ev.category] && CAT_BY_KEY[ev.category].label) || ev.category || '';
+  const mice = (ev.mice || []).map(m => `<span class="ag-mouse">${escapeHtml(m)}</span>`).join('');
+  let owner = '';
+  if (ev.assignee) {
+    const m = memberById(ev.assignee);
+    if (m) owner = `<span class="ag-owner" style="background:${m.color || '#8e8e93'}" title="${escapeHtml(m.name || '')}">${escapeHtml((m.name || '?').slice(0, 2).toUpperCase())}</span>`;
+  }
+  const tags = (mice || owner) ? `<div class="ag-tags">${mice}${owner}</div>` : '';
+  card.innerHTML =
+    `<div class="ag-accent" style="background:${eventColor(ev.category)}"></div>` +
+    `<div style="flex:1; min-width:0;">` +
+      `<div class="ag-title">${escapeHtml(ev.title || '(untitled)')}</div>` +
+      `<div class="ag-meta">${escapeHtml(time)} · ${escapeHtml(sub)}</div>` +
+      tags +
+    `</div>`;
+  card.addEventListener('click', () => openModal(ev._masterId || ev.id));
+  return card;
+}
+
+// ---------- Time-grid (shared by day + week) ----------
+function buildTimeColumn() {
+  const tc = document.createElement('div');
+  tc.className = 'time-col';
+  for (let h = HOURS_START; h < HOURS_END; h++) {
+    const row = document.createElement('div');
+    row.className = 'hour';
+    const lbl = document.createElement('span');
+    const hr12 = ((h + 11) % 12) + 1;
+    const ampm = h < 12 ? 'AM' : 'PM';
+    lbl.textContent = `${hr12} ${ampm}`;
+    row.appendChild(lbl);
+    tc.appendChild(row);
+  }
+  return tc;
+}
+
+function buildDayColumn(date) {
+  const col = document.createElement('div');
+  col.className = 'day-col' + (sameDay(date, new Date()) ? ' today' : '');
+  col.dataset.date = fmtDateIso(date);
+  for (let h = HOURS_START; h < HOURS_END; h++) {
+    const hr = document.createElement('div');
+    hr.className = 'hour-line';
+    const half = document.createElement('div');
+    half.className = 'half';
+    hr.appendChild(half);
+    col.appendChild(hr);
+  }
+  // Click empty area → new event
+  col.addEventListener('mousedown', e => {
+    if (e.target.closest('.event')) return;
+    const rect = col.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const min = snapMin(y / ROW_H * 60) + HOURS_START * 60;
+    const startD = new Date(date);
+    startD.setHours(0,0,0,0);
+    startD.setMinutes(min);
+    const endD = new Date(startD.getTime() + 60 * 60000);
+    openModal(null, startD, endD);
+  });
+  return col;
+}
+
+function yForTime(d) {
+  const minsFromStart = d.getHours() * 60 + d.getMinutes() - HOURS_START * 60;
+  return Math.max(0, minsFromStart / 60 * ROW_H);
+}
+
+function placeDayEvents(col, date, events) {
+  const dayStart = new Date(date); dayStart.setHours(HOURS_START, 0, 0, 0);
+  const dayEnd = new Date(date); dayEnd.setHours(HOURS_END, 0, 0, 0);
+  const onDay = [];
+  for (const ev of events) {
+    const s = ev.start < dayStart ? new Date(dayStart) : new Date(ev.start);
+    const e = ev.end > dayEnd ? new Date(dayEnd) : new Date(ev.end);
+    if (e <= dayStart || s >= dayEnd) continue;
+    onDay.push({ ev, s, e });
+  }
+  onDay.sort((a, b) => a.s - b.s || a.e - b.e);
+
+  // Cluster overlapping events
+  const clusters = [];
+  let cluster = [];
+  let clusterEnd = null;
+  for (const it of onDay) {
+    if (clusterEnd && it.s >= clusterEnd) {
+      clusters.push(cluster);
+      cluster = [];
+      clusterEnd = null;
+    }
+    cluster.push(it);
+    clusterEnd = clusterEnd ? new Date(Math.max(clusterEnd.getTime(), it.e.getTime())) : it.e;
+  }
+  if (cluster.length) clusters.push(cluster);
+
+  for (const cl of clusters) {
+    // Greedy column assignment
+    const cols = [];
+    for (const it of cl) {
+      let placed = false;
+      for (let i = 0; i < cols.length; i++) {
+        const last = cols[i][cols[i].length - 1];
+        if (last.e <= it.s) { cols[i].push(it); it.colIdx = i; placed = true; break; }
+      }
+      if (!placed) { it.colIdx = cols.length; cols.push([it]); }
+    }
+    const colCount = cols.length;
+    for (const it of cl) renderEventBlock(col, it.ev, it.s, it.e, it.colIdx, colCount);
+  }
+}
+
+function renderEventBlock(col, ev, s, e, colIdx, colCount) {
+  const top = yForTime(s);
+  const height = Math.max(SLOT_PX, (e - s) / 60000 / 60 * ROW_H);
+  const node = document.createElement('div');
+  node.className = 'event' + (ev.status === 'done' ? ' done' : '') + (ev.status === 'delayed' ? ' delayed' : '');
+  node.style.top = top + 'px';
+  node.style.height = height + 'px';
+  node.style.background = eventColor(ev.category);
+  const gap = 2;       // px between side-by-side blocks
+  const pad = 4;       // px padding from column edges
+  if (colCount > 1) {
+    const innerW = `calc(100% - ${pad * 2}px)`;
+    node.style.left = `calc(${pad}px + ${(colIdx / colCount) * 100}% - ${pad * 2 * colIdx / colCount}px)`;
+    node.style.width = `calc(${innerW} / ${colCount} - ${gap}px)`;
+    node.style.right = 'auto';
+  } else {
+    node.style.left = pad + 'px';
+    node.style.right = pad + 'px';
+  }
+  node.dataset.eventId = ev._masterId || ev.id;
+  const member = memberById(ev.assignee);
+  node.style.borderLeftColor = member ? member.color : 'rgba(0,0,0,0.25)';
+  const recurIcon = ev.recur ? '<span title="Recurring" style="opacity:0.8"> ⟳</span>' : '';
+  node.innerHTML = `
+    <button class="ev-check" data-id="${ev._masterId || ev.id}" title="Toggle done">${ev.status === 'done' ? '✓' : ''}</button>
+    <div class="ev-title">${escapeHtml(ev.title || '(untitled)')}${recurIcon}</div>
+    ${ev.cohort ? `<div class="ev-cohort">${escapeHtml(ev.cohort)}</div>` : ''}
+    ${(ev.mice && ev.mice.length) ? `<div class="ev-mice">🐭 ${escapeHtml(ev.mice.join(', '))}</div>` : ''}
+    <div class="ev-meta">
+      ${member ? `<span class="ev-assignee-dot" style="background:${member.color}"></span>${escapeHtml(member.name)} · ` : ''}
+      ${fmtTime(ev.start)}–${fmtTime(ev.end)}${ev.project_slug ? ' · ' + escapeHtml(projectNameOf(ev.project_slug)) : ''}
+    </div>
+    <div class="resize-handle"></div>
+  `;
+  // check button updates the master event
+  const masterId = ev._masterId || ev.id;
+  const masterEv = state.events.find(x => x.id === masterId) || ev;
+  node.querySelector('.ev-check').addEventListener('click', async e => {
+    e.stopPropagation();
+    const newStatus = masterEv.status === 'done' ? 'planned' : 'done';
+    masterEv.status = newStatus;
+    try {
+      await api(`/api/events/${masterId}`, { method: 'PUT', body: JSON.stringify(evToWire(masterEv)) });
+      if (newStatus === 'done') await syncExperimentLogForDoneEvent(masterEv);
+    }
+    catch (err) { masterEv.status = newStatus === 'done' ? 'planned' : 'done'; alert(err.message); }
+    render();
+  });
+  col.appendChild(node);
+  // disable drag/resize for recurring occurrences (they are virtual)
+  if (ev._masterId) {
+    node.style.cursor = 'pointer';
+    node.querySelector('.resize-handle').style.display = 'none';
+    node.addEventListener('click', e => { if (!e.target.closest('.ev-check')) openModal(masterId); });
+  } else {
+    attachEventInteractions(node, ev);
+  }
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+// ---------- All-day / multi-day helpers ----------
+function isMultiDay(ev) {
+  return !sameDay(ev.start, ev.end) || ev.all_day;
+}
+
+function buildAlldayStrip(days, evs, gridCols) {
+  const multiDay = evs.filter(isMultiDay);
+  const BAR_H = 20;
+  const BAR_GAP = 2;
+  const PAD_TOP = 4;
+
+  // For each event, determine which day columns (0-6) it covers
+  const weekStart = new Date(days[0]); weekStart.setHours(0,0,0,0);
+  const weekEnd   = new Date(days[days.length-1]); weekEnd.setHours(23,59,59,999);
+
+  const bars = multiDay.map(ev => {
+    const s = ev.start < weekStart ? weekStart : ev.start;
+    const e = ev.end   > weekEnd   ? weekEnd   : ev.end;
+    const startCol = days.findIndex(d => sameDay(d, s));
+    const endDay   = new Date(e); if (e.getHours()===0 && e.getMinutes()===0) endDay.setDate(endDay.getDate()-1);
+    const endCol   = days.findIndex(d => sameDay(d, endDay));
+    return {
+      ev,
+      startCol: startCol < 0 ? 0 : startCol,
+      endCol:   endCol   < 0 ? days.length-1 : endCol,
+      continuesLeft:  ev.start < weekStart,
+      continuesRight: ev.end   > weekEnd,
+      row: 0,
+    };
+  }).filter(b => b.endCol >= b.startCol);
+
+  // Assign rows (greedy)
+  const rowEnds = [];
+  bars.forEach(b => {
+    let row = 0;
+    while (rowEnds[row] !== undefined && rowEnds[row] > b.startCol) row++;
+    b.row = row;
+    rowEnds[row] = b.endCol + 1;
+  });
+
+  const maxRow = bars.reduce((m, b) => Math.max(m, b.row), -1);
+  const stripH = maxRow >= 0 ? PAD_TOP + (maxRow + 1) * (BAR_H + BAR_GAP) + 4 : PAD_TOP + 4;
+
+  const strip = document.createElement('div');
+  strip.className = 'allday-strip';
+  strip.style.gridTemplateColumns = gridCols;
+  strip.style.height = stripH + 'px';
+
+  const corner = document.createElement('div');
+  corner.className = 'allday-corner';
+  corner.textContent = 'ALL DAY';
+  strip.appendChild(corner);
+
+  // one cell per day
+  const cells = days.map(() => { const c = document.createElement('div'); c.className = 'allday-cell'; strip.appendChild(c); return c; });
+
+  bars.forEach(({ ev, startCol, endCol, continuesLeft, continuesRight, row }) => {
+    const cell = cells[startCol];
+    const colSpan = endCol - startCol + 1;
+    const bar = document.createElement('div');
+    bar.className = 'allday-bar'
+      + (continuesLeft && continuesRight ? ' continues-both' : continuesLeft ? ' continues-left' : continuesRight ? ' continues-right' : '');
+    bar.style.background = eventColor(ev.category);
+    bar.style.top  = (PAD_TOP + row * (BAR_H + BAR_GAP)) + 'px';
+    bar.style.left = '2px';
+    // width spans multiple cells — we'll use vw-independent calc via JS after mount
+    bar.dataset.span = colSpan;
+    bar.textContent = (continuesLeft ? '◀ ' : '') + (ev.title || '(untitled)') + (continuesRight ? ' ▶' : '');
+    bar.addEventListener('click', () => openModal(ev.id));
+    cell.appendChild(bar);
+  });
+
+  return { strip, bars, cells };
+}
+
+function fixAlldayBarWidths(cells) {
+  cells.forEach(cell => {
+    cell.querySelectorAll('.allday-bar').forEach(bar => {
+      const span = parseInt(bar.dataset.span) || 1;
+      if (span > 1) {
+        const cellW = cell.getBoundingClientRect().width;
+        bar.style.width = (cellW * span - 4) + 'px';
+      } else {
+        bar.style.width = 'calc(100% - 4px)';
+      }
+    });
+  });
+}
+
+// ---------- Week view ----------
+function renderWeek(vp) {
+  const cal = document.createElement('div');
+  cal.className = 'calendar';
+
+  const weekStart = startOfWeek(state.cursor);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const gridCols = `var(--time-col) repeat(7, 1fr)`;
+
+  // Day header
+  const header = document.createElement('div');
+  header.className = 'cal-header';
+  header.style.gridTemplateColumns = gridCols;
+  const corner = document.createElement('div');
+  corner.className = 'corner';
+  header.appendChild(corner);
+  days.forEach(d => {
+    const h = document.createElement('div');
+    h.className = 'day-h' + (sameDay(d, new Date()) ? ' today' : '');
+    h.innerHTML = `<div>${d.toLocaleDateString(undefined, { weekday: 'short' })}</div><div class="num">${d.getDate()}</div>`;
+    header.appendChild(h);
+  });
+  cal.appendChild(header);
+
+  // All-day strip
+  const weekEnd = addDays(weekStart, 7);
+  const evs = expandEventsForDisplay(visibleEvents(), weekStart, weekEnd);
+  const { strip, cells } = buildAlldayStrip(days, evs, gridCols);
+  cal.appendChild(strip);
+
+  // Time grid
+  const body = document.createElement('div');
+  body.className = 'cal-body';
+  body.style.gridTemplateColumns = gridCols;
+  body.appendChild(buildTimeColumn());
+  const dayCols = days.map(d => buildDayColumn(d));
+  dayCols.forEach(c => body.appendChild(c));
+  cal.appendChild(body);
+  vp.appendChild(cal);
+
+  // Timed events only
+  const timedEvs = evs.filter(ev => !isMultiDay(ev));
+  dayCols.forEach((col, idx) => placeDayEvents(col, days[idx], timedEvs));
+  drawNowLine(dayCols, days);
+
+  // Fix bar widths after layout
+  requestAnimationFrame(() => fixAlldayBarWidths(cells));
+
+  applySearchHighlight();
+}
+
+// ---------- Day view ----------
+function renderDay(vp) {
+  // Week strip
+  const strip = document.createElement('div');
+  strip.className = 'week-strip';
+  const weekStart = startOfWeek(state.cursor);
+  for (let i = 0; i < 7; i++) {
+    const d = addDays(weekStart, i);
+    const wd = document.createElement('div');
+    wd.className = 'wd' + (sameDay(d, new Date()) ? ' today' : '') + (sameDay(d, state.cursor) ? ' active' : '');
+    wd.innerHTML = `<small>${d.toLocaleDateString(undefined, { weekday: 'narrow' })}</small><div class="num">${d.getDate()}</div>`;
+    wd.addEventListener('click', () => { state.cursor = d; render(); });
+    strip.appendChild(wd);
+  }
+  vp.appendChild(strip);
+
+  const cal = document.createElement('div');
+  cal.className = 'calendar';
+  const body = document.createElement('div');
+  body.className = 'cal-body';
+  body.style.gridTemplateColumns = `var(--time-col) 1fr`;
+  body.appendChild(buildTimeColumn());
+  const col = buildDayColumn(state.cursor);
+  body.appendChild(col);
+  cal.appendChild(body);
+  vp.appendChild(cal);
+
+  const dayStart = new Date(state.cursor); dayStart.setHours(0,0,0,0);
+  const dayEnd   = new Date(state.cursor); dayEnd.setHours(23,59,59,999);
+  const evs = expandEventsForDisplay(visibleEvents(), dayStart, dayEnd);
+  const gridCols = `var(--time-col) 1fr`;
+  const { strip: alldayStrip, cells } = buildAlldayStrip([state.cursor], evs, gridCols);
+  cal.insertBefore(alldayStrip, body);
+
+  placeDayEvents(col, state.cursor, evs.filter(ev => !isMultiDay(ev)));
+  drawNowLine([col], [state.cursor]);
+  requestAnimationFrame(() => fixAlldayBarWidths(cells));
+  applySearchHighlight();
+}
+
+// ---------- now-line ----------
+function drawNowLine(cols, days) {
+  const now = new Date();
+  cols.forEach((col, i) => {
+    if (!sameDay(days[i], now)) return;
+    if (now.getHours() < HOURS_START || now.getHours() >= HOURS_END) return;
+    const line = document.createElement('div');
+    line.className = 'now-line';
+    line.style.top = yForTime(now) + 'px';
+    col.appendChild(line);
+  });
+}
+
+// ---------- Search highlight ----------
+function applySearchHighlight() {
+  const q = state.searchQuery.trim().toLowerCase();
+  if (!q) return;
+  document.querySelectorAll('.event').forEach(node => {
+    const id = node.dataset.eventId;
+    const ev = state.events.find(e => e.id === id);
+    if (!ev) return;
+    const haystack = [ev.title, ev.notes, ev.subcategory, projectNameOf(ev.project_slug), ev.category].join(' ').toLowerCase();
+    if (haystack.includes(q)) {
+      node.classList.add('search-match');
+    } else {
+      node.classList.add('search-dim');
+    }
+  });
+}
+
+// ---------- Month view ----------
+function renderMonth(vp) {
+  const cal = document.createElement('div');
+  cal.className = 'month';
+  ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].forEach(n => {
+    const h = document.createElement('div');
+    h.className = 'mh';
+    h.textContent = n;
+    cal.appendChild(h);
+  });
+  const first = new Date(state.cursor.getFullYear(), state.cursor.getMonth(), 1);
+  const gridStart = startOfWeek(first);
+  const gridEnd   = addDays(gridStart, 42);
+  const cells = 42;
+  const evs = expandEventsForDisplay(visibleEvents(), gridStart, gridEnd);
+  for (let i = 0; i < cells; i++) {
+    const d = addDays(gridStart, i);
+    const cell = document.createElement('div');
+    cell.className = 'mcell'
+      + (d.getMonth() !== state.cursor.getMonth() ? ' other' : '')
+      + (sameDay(d, new Date()) ? ' today' : '');
+    cell._date = d;  // tag for hit-testing during drag
+    cell.innerHTML = `<span class="mnum">${d.getDate()}</span>`;
+    cell.addEventListener('click', () => { state.cursor = d; state.view = 'day'; render(); });
+    evs.filter(ev => sameDay(ev.start, d) || (isMultiDay(ev) && ev.start <= d && ev.end >= d)).slice(0, 4).forEach(ev => {
+      const bar = document.createElement('div');
+      bar.className = 'mev';
+      bar.style.background = eventColor(ev.category);
+      const mMember = memberById(ev.assignee);
+      if (mMember) bar.style.borderLeft = `3px solid ${mMember.color}`;
+      bar.textContent = `${ev.recur ? '⟳ ' : ''}${fmtTime(ev.start)} ${ev.title}`;
+      attachMonthEventDrag(bar, ev);
+      cell.appendChild(bar);
+    });
+    cal.appendChild(cell);
+  }
+  vp.appendChild(cal);
+}
+
+// ---------- Drag for month-view event bars ----------
+function attachMonthEventDrag(node, ev) {
+  // Recurring occurrences are virtual — don't allow moving them here
+  // (matches the existing convention in week/day view).
+  if (ev.recur) {
+    node.addEventListener('click', e => {
+      e.stopPropagation();
+      openModal(ev._masterId || ev.id);
+    });
+    return;
+  }
+
+  let didDrag = false;
+  node.addEventListener('mousedown', e => {
+    if (e.button !== 0) return;
+    e.stopPropagation();
+    didDrag = false;
+    const startX = e.clientX, startY = e.clientY;
+    const origStart = new Date(ev.start);
+    const origEnd   = new Date(ev.end);
+    const origDay   = new Date(origStart.getFullYear(), origStart.getMonth(), origStart.getDate());
+
+    const onMove = (me) => {
+      if (!didDrag && (Math.abs(me.clientX - startX) > 3 || Math.abs(me.clientY - startY) > 3)) {
+        didDrag = true;
+        node.classList.add('dragging');
+      }
+      if (!didDrag) return;
+      // Highlight the cell the mouse is hovering over
+      const tgt = document.elementFromPoint(me.clientX, me.clientY);
+      const cell = tgt && tgt.closest ? tgt.closest('.mcell') : null;
+      document.querySelectorAll('.mcell.drop-target').forEach(c => c.classList.remove('drop-target'));
+      if (cell && cell._date && !sameDay(cell._date, origStart)) {
+        cell.classList.add('drop-target');
+      }
+    };
+
+    const onUp = (me) => {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      node.classList.remove('dragging');
+      document.querySelectorAll('.mcell.drop-target').forEach(c => c.classList.remove('drop-target'));
+
+      if (!didDrag) {
+        openModal(ev._masterId || ev.id);
+        return;
+      }
+
+      const tgt = document.elementFromPoint(me.clientX, me.clientY);
+      const cell = tgt && tgt.closest ? tgt.closest('.mcell') : null;
+      if (!cell || !cell._date) return;
+
+      const newDay = new Date(cell._date.getFullYear(), cell._date.getMonth(), cell._date.getDate());
+      const dDays = Math.round((newDay - origDay) / 86400000);
+      if (dDays === 0) return;
+
+      const ns = new Date(origStart); ns.setDate(ns.getDate() + dDays);
+      const ne = new Date(origEnd);   ne.setDate(ne.getDate() + dDays);
+      ev.start = ns; ev.end = ne;
+      render();
+      api(`/api/events/${ev.id}`, { method: 'PUT', body: JSON.stringify(evToWire(ev)) })
+        .catch(err => { alert(err.message); ev.start = origStart; ev.end = origEnd; render(); });
+    };
+
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+// ---------- Drag / resize ----------
+function attachEventInteractions(node, ev) {
+  const resize = node.querySelector('.resize-handle');
+
+  // Click (no drag) → open editor
+  let didDrag = false;
+
+  // Move
+  node.addEventListener('mousedown', e => {
+    if (e.target === resize) return;
+    e.preventDefault();
+    didDrag = false;
+    const startY = e.clientY;
+    const startX = e.clientX;
+    const origStart = new Date(ev.start);
+    const origEnd = new Date(ev.end);
+    const colWidth = node.parentElement.getBoundingClientRect().width;
+    node.classList.add('dragging');
+
+    function onMove(me) {
+      const dy = me.clientY - startY;
+      const dx = me.clientX - startX;
+      if (Math.abs(dy) > 3 || Math.abs(dx) > 3) didDrag = true;
+      const dMin = snapMin(dy / ROW_H * 60);
+      const dDays = state.view === 'week' ? Math.round(dx / colWidth) : 0;
+      const ns = new Date(origStart);
+      const ne = new Date(origEnd);
+      ns.setMinutes(ns.getMinutes() + dMin);
+      ne.setMinutes(ne.getMinutes() + dMin);
+      ns.setDate(ns.getDate() + dDays);
+      ne.setDate(ne.getDate() + dDays);
+      ev.start = ns; ev.end = ne;
+      render();  // simplest: full re-render
+      // re-grab the node after re-render not needed; mouseup will end this
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      if (didDrag) {
+        api(`/api/events/${ev.id}`, { method: 'PUT', body: JSON.stringify(evToWire(ev)) }).catch(err => alert(err.message));
+      } else {
+        openModal(ev.id);
+      }
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+
+  // Resize
+  resize.addEventListener('mousedown', e => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startY = e.clientY;
+    const origEnd = new Date(ev.end);
+    function onMove(me) {
+      const dy = me.clientY - startY;
+      const dMin = snapMin(dy / ROW_H * 60);
+      const ne = new Date(origEnd);
+      ne.setMinutes(ne.getMinutes() + dMin);
+      if (ne - ev.start < SLOT_MIN * 60000) return;
+      ev.end = ne;
+      render();
+    }
+    function onUp() {
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      api(`/api/events/${ev.id}`, { method: 'PUT', body: JSON.stringify(evToWire(ev)) }).catch(err => alert(err.message));
+    }
+    document.addEventListener('mousemove', onMove);
+    document.addEventListener('mouseup', onUp);
+  });
+}
+
+// ---------- Modal ----------
+const ADD_NEW = '__add_new__';
+let miceState = []; // array of strings for the open modal
+
+function fillCategoryOptions(selectedKey) {
+  const sel = document.getElementById('fCategory');
+  sel.innerHTML = '';
+  CATS.forEach(c => {
+    const o = document.createElement('option');
+    o.value = c.key; o.textContent = c.label;
+    sel.appendChild(o);
+  });
+  const addOpt = document.createElement('option');
+  addOpt.value = ADD_NEW; addOpt.textContent = '+ Add new category…';
+  sel.appendChild(addOpt);
+  if (selectedKey && CAT_BY_KEY[selectedKey]) sel.value = selectedKey;
+}
+
+function fillSubOptions(catKey, selectedSub) {
+  const sel = document.getElementById('fSubcategory');
+  sel.innerHTML = '';
+  const blank = document.createElement('option');
+  blank.value = ''; blank.textContent = '— none —';
+  sel.appendChild(blank);
+  const defaults = (CAT_BY_KEY[catKey]?.subs) || [];
+  const custom = state.customSubs[catKey] || [];
+  [...new Set([...defaults, ...custom])].forEach(s => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    sel.appendChild(o);
+  });
+  const addOpt = document.createElement('option');
+  addOpt.value = ADD_NEW; addOpt.textContent = '+ Add new…';
+  sel.appendChild(addOpt);
+  sel.value = selectedSub && [...defaults, ...custom].includes(selectedSub) ? selectedSub : '';
+  updateSub2(catKey, sel.value, '');
+  updateAutoTitleMode(catKey);
+}
+
+function fillSub2Options(subKey, selectedSub2) {
+  const subs = SUB2_SUBS[subKey] || [];
+  const sel = document.getElementById('fSubcategory2');
+  const field = document.getElementById('sub2Field');
+  if (!subs.length) { field.style.display = 'none'; return; }
+  field.style.display = '';
+  document.getElementById('sub2Label').textContent = subKey;
+  sel.innerHTML = '';
+  subs.forEach(s => {
+    const o = document.createElement('option');
+    o.value = s; o.textContent = s;
+    sel.appendChild(o);
+  });
+  const addOpt = document.createElement('option');
+  addOpt.value = ADD_NEW; addOpt.textContent = '+ Add new…';
+  sel.appendChild(addOpt);
+  sel.value = selectedSub2 && subs.includes(selectedSub2) ? selectedSub2 : subs[0];
+  updateAutoTitle();
+}
+
+function updateSub2(catKey, subVal, selectedSub2) {
+  if (catKey === 'experiments' && SUB2_SUBS[subVal]) {
+    fillSub2Options(subVal, selectedSub2);
+  } else {
+    document.getElementById('sub2Field').style.display = 'none';
+    document.getElementById('fSubcategory2').innerHTML = '';
+  }
+}
+
+function updateAutoTitleMode(catKey) {
+  const isAuto = AUTO_TITLE_CATS.has(catKey);
+  const hint = document.getElementById('titleAutoHint');
+  hint.style.display = isAuto ? '' : 'none';
+  if (isAuto) updateAutoTitle();
+}
+
+function updateAutoTitle() {
+  const cat = document.getElementById('fCategory').value;
+  if (!AUTO_TITLE_CATS.has(cat)) return;
+  const sub = document.getElementById('fSubcategory').value;
+  const sub2Field = document.getElementById('sub2Field');
+  const sub2 = sub2Field.style.display !== 'none'
+    ? document.getElementById('fSubcategory2').value : '';
+  const label = (sub2 && sub2 !== ADD_NEW) ? sub2 : (sub || '');
+  document.getElementById('fTitle').value = label;
+}
+
+function setupCategoryOptions() {
+  const catSel = document.getElementById('fCategory');
+  catSel.addEventListener('change', e => {
+    if (e.target.value === ADD_NEW) {
+      const label = prompt('New category name:');
+      if (!label) { fillCategoryOptions('manuscript'); fillSubOptions('manuscript'); updateMiceRow('manuscript'); return; }
+      const key = 'custom_' + label.toLowerCase().replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,'');
+      const color = CUSTOM_CAT_PALETTE[state.customCats.length % CUSTOM_CAT_PALETTE.length];
+      api('/api/customs/categories', { method: 'POST', body: JSON.stringify({ key, label, color }) }).catch(err => alert(err.message));
+      state.customCats.push({ key, label, color, subs: [] });
+      reloadCats();
+      renderSidebar();
+      fillCategoryOptions(key);
+      fillSubOptions(key);
+      updateMiceRow(key);
+    } else {
+      fillSubOptions(e.target.value);
+      updateMiceRow(e.target.value);
+    }
+  });
+
+  const subSel = document.getElementById('fSubcategory');
+  subSel.addEventListener('change', e => {
+    const cat = document.getElementById('fCategory').value;
+    if (e.target.value === ADD_NEW) {
+      const label = prompt('New subcategory name:');
+      if (!label) { fillSubOptions(cat); return; }
+      state.customSubs[cat] = state.customSubs[cat] || [];
+      if (!state.customSubs[cat].includes(label) && !(CAT_BY_KEY[cat]?.subs || []).includes(label)) {
+        state.customSubs[cat].push(label);
+        api('/api/customs/subcategories', { method: 'POST', body: JSON.stringify({ category_key: cat, label }) }).catch(err => alert(err.message));
+      }
+      fillSubOptions(cat, label);
+    } else {
+      updateSub2(cat, e.target.value, '');
+      updateAutoTitle();
+    }
+  });
+
+  document.getElementById('fSubcategory2').addEventListener('change', e => {
+    if (e.target.value === ADD_NEW) {
+      const sub = document.getElementById('fSubcategory').value;
+      const label = prompt(`New type for ${sub}:`);
+      if (!label) return;
+      if (!SUB2_SUBS[sub]) SUB2_SUBS[sub] = [];
+      if (!SUB2_SUBS[sub].includes(label)) SUB2_SUBS[sub].push(label);
+      fillSub2Options(sub, label);
+    }
+    updateAutoTitle();
+  });
+
+  // Mice chip input
+  const miceInput = document.getElementById('fMiceInput');
+  miceInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter' || e.key === ',') {
+      e.preventDefault();
+      const v = miceInput.value.trim().replace(/,$/, '').trim();
+      if (v && !miceState.includes(v)) {
+        miceState.push(v);
+        renderMiceChips();
+        updateAutoTitle();
+      }
+      miceInput.value = '';
+    } else if (e.key === 'Backspace' && !miceInput.value && miceState.length) {
+      miceState.pop();
+      renderMiceChips();
+      updateAutoTitle();
+    }
+  });
+}
+
+function renderMiceChips() {
+  const wrap = document.getElementById('miceChips');
+  wrap.innerHTML = '';
+  miceState.forEach((m, i) => {
+    const chip = document.createElement('span');
+    chip.className = 'chip';
+    chip.innerHTML = `${escapeHtml(m)} <button data-i="${i}" type="button">×</button>`;
+    chip.querySelector('button').addEventListener('click', () => {
+      miceState.splice(i, 1);
+      renderMiceChips();
+      updateAutoTitle();
+    });
+    wrap.appendChild(chip);
+  });
+  updateAutoTitle();
+}
+
+// ---------- Mouse picker panel ----------
+let micePanelSelection = new Set();
+
+function _fillMpFilter(selId, values) {
+  const sel = document.getElementById(selId);
+  if (!sel) return;
+  const cur = sel.value;
+  const first = sel.options[0];
+  sel.innerHTML = '';
+  sel.appendChild(first);
+  [...values].sort().forEach(v => {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v;
+    sel.appendChild(o);
+  });
+  sel.value = cur;
+}
+
+async function openMicePanel() {
+  micePanelSelection = new Set(miceState);
+  document.getElementById('micePanelSearch').value = '';
+  const chk = document.getElementById('showSacrificedChk');
+  if (chk) chk.checked = false;
+  // Reset filters
+  ['mpfProject','mpfCohort','mpfCondition','mpfExp','mpfStrain','mpfSex'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+
+  if (!state.animalsLoaded && state.animalSyncStatus.count > 0) {
+    await loadAnimals();
+  }
+
+  // Populate filter dropdowns from DB data
+  if (state.animals.length > 0) {
+    _fillMpFilter('mpfProject',   new Set(state.animals.map(a => a.project).filter(Boolean)));
+    // Cohort dropdown lists BASE names (control suffix stripped) so one option
+    // covers both exp + control groups.
+    _fillMpFilter('mpfCohort',    new Set(state.animals.map(a => baseCohort(a.cohort || '')).filter(Boolean)));
+    _fillMpFilter('mpfCondition', new Set(state.animals.map(a => a.condition).filter(Boolean)));
+    _fillMpFilter('mpfExp',       new Set(state.animals.map(a => a.experiment).filter(Boolean)));
+    _fillMpFilter('mpfStrain',    new Set(state.animals.map(a => a.strain).filter(Boolean)));
+  }
+
+  renderMicePanelList('', false);
+
+  const footer = document.getElementById('micePanelFooter');
+  if (footer) {
+    if (state.animals.length > 0) {
+      footer.textContent = `${state.animals.length} mice in DB · synced ${state.animalSyncStatus.last_synced ? timeSince(new Date(state.animalSyncStatus.last_synced)) : 'never'}`;
+    } else if (state.animalSyncStatus.excel_path) {
+      footer.innerHTML = 'DB empty — <button onclick="syncAnimals()" style="background:none;border:none;color:var(--accent);cursor:pointer;font:inherit;padding:0;">sync now</button>';
+    } else {
+      footer.innerHTML = 'No animal DB — set path in sidebar';
+    }
+  }
+  document.getElementById('micePanelBack').classList.add('show');
+}
+
+function closeMicePanel() { document.getElementById('micePanelBack').classList.remove('show'); }
+
+function renderMicePanelList(query, showSacrificed) {
+  const list = document.getElementById('micePanelList');
+  list.innerHTML = '';
+  const q = (query || '').toLowerCase();
+
+  const fProject   = document.getElementById('mpfProject')?.value   || '';
+  const fCohort    = document.getElementById('mpfCohort')?.value    || '';
+  const fCondition = document.getElementById('mpfCondition')?.value || '';
+  const fExp       = document.getElementById('mpfExp')?.value       || '';
+  const fStrain    = document.getElementById('mpfStrain')?.value    || '';
+  const fSex       = document.getElementById('mpfSex')?.value       || '';
+
+  let items;
+  if (state.animals.length > 0) {
+    items = state.animals.filter(a => {
+      if (!showSacrificed && (a.sacrificed || '').toUpperCase() === 'Y') return false;
+      if (fProject   && a.project   !== fProject)   return false;
+      // Cohort filter pairs experimental + control: choosing "dA" matches both
+      // cohort=dA and cohort=dA-con (see baseCohort()).
+      if (fCohort    && baseCohort(a.cohort || '') !== fCohort) return false;
+      if (fCondition && a.condition !== fCondition) return false;
+      if (fExp       && a.experiment !== fExp)      return false;
+      if (fStrain    && a.strain    !== fStrain)    return false;
+      if (fSex       && a.sex       !== fSex)       return false;
+      if (!q) return true;
+      return (a.mouse_id || '').toLowerCase().includes(q) ||
+             (a.project || '').toLowerCase().includes(q) ||
+             (a.condition || '').toLowerCase().includes(q) ||
+             (a.strain || '').toLowerCase().includes(q) ||
+             (a.cohort || '').toLowerCase().includes(q) ||
+             (a.experiment || '').toLowerCase().includes(q);
+    });
+  } else {
+    const fromEvents = new Set();
+    state.events.forEach(ev => (ev.mice || []).forEach(m => fromEvents.add(m)));
+    items = [...fromEvents]
+      .filter(m => !q || m.toLowerCase().includes(q))
+      .map(id => ({ mouse_id: id }));
+  }
+
+  if (items.length === 0) {
+    list.innerHTML = '<div style="padding:12px; color:var(--text-muted); font-size:12px;">No matches.</div>';
+    return;
+  }
+
+  // Project → colour mapping for tags
+  const projColors = {};
+  state.projects.forEach(p => { projColors[p.slug] = p.color; });
+  const projectHues = {};
+  items.forEach(a => {
+    if (a.project && !projectHues[a.project]) {
+      const p = state.projects.find(x => x.name === a.project || x.slug === a.project);
+      projectHues[a.project] = p ? p.color : '#5AC8FA';
+    }
+  });
+
+  items.forEach(a => {
+    const mid = a.mouse_id;
+    const row = document.createElement('label');
+    row.className = 'animal-row';
+    row.style.cssText = 'display:flex; align-items:center; gap:7px; padding:6px 10px; border-bottom:1px solid var(--border); cursor:pointer;';
+
+    const projColor = a.project ? (projectHues[a.project] || '#5AC8FA') : null;
+    const projTag = a.project ? `<span class="animal-tag" style="background:${projColor}22; color:${projColor}; border:1px solid ${projColor}55;">${escapeHtml(a.project)}</span>` : '';
+    const strainTag = a.strain ? `<span class="animal-tag" style="background:var(--bg-alt); border:1px solid var(--border);">${escapeHtml(a.strain)}</span>` : '';
+    const sexHtml = a.sex ? `<span style="font-size:12px; color:var(--text-muted);">${a.sex === 'M' ? '♂' : a.sex === 'F' ? '♀' : escapeHtml(a.sex)}</span>` : '';
+    const sacDot = (a.sacrificed || '').toUpperCase() === 'Y' ? '<span style="font-size:9px; color:#ff453a; margin-left:2px;" title="Sacrificed">●</span>' : '';
+
+    // current_state badge with emoji + D+N counter
+    const STATE_STYLE = { NR:'background:#34c75922;color:#34c759;border:1px solid #34c75955;',
+                          DT:'background:#5856d622;color:#5856d6;border:1px solid #5856d655;',
+                          DLT:'background:#ff950022;color:#ff9500;border:1px solid #ff950055;' };
+    const STATE_EMOJI = { NR:'🏠', DT:'🌑', DLT:'🌓' };
+    const cs = a.current_state || a.condition || '';
+    const daysIn = a.days_in_state != null ? ` D+${a.days_in_state}` : '';
+    const stateStyle = STATE_STYLE[cs] || 'background:var(--bg-alt);border:1px solid var(--border);';
+    const stateTag = cs ? `<span class="animal-tag" style="${stateStyle}">${STATE_EMOJI[cs]||''}${escapeHtml(cs)}${daysIn}</span>` : '';
+
+    row.innerHTML = `
+      <input type="checkbox" ${micePanelSelection.has(mid) ? 'checked' : ''} />
+      <span style="font-weight:600; font-family:monospace; font-size:13px; min-width:56px;">${escapeHtml(mid)}</span>
+      ${sexHtml}
+      <span style="display:flex; gap:3px; flex-wrap:wrap; flex:1;">${projTag}${stateTag}${strainTag}</span>
+      ${sacDot}
+    `;
+    row.querySelector('input').addEventListener('change', e => {
+      if (e.target.checked) micePanelSelection.add(mid); else micePanelSelection.delete(mid);
+    });
+    list.appendChild(row);
+  });
+}
+
+function commitMicePanel() {
+  miceState = [...micePanelSelection];
+  renderMiceChips();
+  closeMicePanel();
+}
+
+function updateMiceRow(catKey) {
+  const row = document.getElementById('miceRow');
+  const cfg = MOUSE_CATS[catKey];
+  if (cfg) {
+    row.style.display = '';
+    document.getElementById('miceLabel').textContent = 'Mice' + (cfg.required ? ' (required)' : ' (optional)');
+  } else {
+    row.style.display = 'none';
+  }
+  document.getElementById('cohortRow').style.display = (catKey === 'experiments') ? '' : 'none';
+}
+
+function openModal(eventId, defaultStart, defaultEnd) {
+  state.editing = eventId;
+  let ev;
+  if (eventId) {
+    ev = state.events.find(x => x.id === eventId);
+    document.getElementById('modalTitle').textContent = 'Edit Task';
+    document.getElementById('deleteBtn').style.display = '';
+  } else {
+    ev = {
+      id: null, title: '', category: 'experiments', subcategory: '',
+      subcategory2: '', cohort: '', project_slug: '', status: 'planned',
+      start: defaultStart || new Date(),
+      end: defaultEnd || new Date(Date.now() + 60*60000),
+      notes: '', mice: [], all_day: false,
+      assignee: '', delay_reason: '', reschedule_to: '',
+    };
+    document.getElementById('modalTitle').textContent = 'New Task';
+    document.getElementById('deleteBtn').style.display = 'none';
+  }
+  const cb = document.getElementById('fCreatedBy');
+  if (ev && ev.owner_id) {
+    const u = state.elnUsersById[ev.owner_id];
+    cb.textContent = 'Created by ' + (u ? (u.display_name || u.username || ev.owner_id) : ev.owner_id);
+    cb.style.display = '';
+  } else {
+    cb.style.display = 'none';
+  }
+  fillCategoryOptions(ev.category);
+  fillSubOptions(ev.category, ev.subcategory || '');
+  updateSub2(ev.category, ev.subcategory || '', ev.subcategory2 || '');
+  miceState = Array.isArray(ev.mice) ? [...ev.mice] : [];
+  renderMiceChips();
+  updateMiceRow(ev.category);
+  document.getElementById('fMiceInput').value = '';
+  document.getElementById('fTitle').value = ev.title || '';
+  document.getElementById('fCohort').value = ev.cohort || '';
+  fillProjectSelect(ev.project_slug || '');
+  document.getElementById('fStatus').value = ev.status || 'planned';
+  fillAssigneeSelect(ev.assignee || '');
+  fillResourceSelect('fLocation', 'fLocationCustom', state.resources.locations || [], ev.location || '');
+  fillResourceSelect('fRig', 'fRigCustom', state.resources.rigs || [], ev.rig || '');
+  document.getElementById('resAdminRow').style.display = (state.me && state.me.role === 'admin') ? '' : 'none';
+  const delayFields = document.getElementById('delayFields');
+  const showDelay = (ev.status === 'delayed');
+  delayFields.style.display = showDelay ? '' : 'none';
+  document.getElementById('fDelayReason').value = ev.delay_reason || '';
+  document.getElementById('fRescheduleTo').value = ev.reschedule_to || '';
+  document.getElementById('fStatus').onchange = e => {
+    delayFields.style.display = e.target.value === 'delayed' ? '' : 'none';
+  };
+  document.getElementById('fDate').value = fmtDateIso(ev.start);
+  document.getElementById('fDateEnd').value = fmtDateIso(ev.end);
+  document.getElementById('fAllDay').checked = !!ev.all_day;
+  document.getElementById('timeRow').style.display = ev.all_day ? 'none' : '';
+  document.getElementById('fStart').value = fmtTime(ev.start);
+  document.getElementById('fEnd').value = fmtTime(ev.end);
+  document.getElementById('fAllDay').onchange = e => {
+    document.getElementById('timeRow').style.display = e.target.checked ? 'none' : '';
+  };
+  document.getElementById('fNotes').value = ev.notes || '';
+  // Recurrence
+  const freq = ev.recur?.freq || '';
+  document.getElementById('fRecurFreq').value = freq;
+  document.getElementById('fRecurUntil').value = ev.recur?.until || '';
+  document.getElementById('recurUntilField').style.display = freq ? '' : 'none';
+  document.getElementById('recurHint').style.display = freq ? '' : 'none';
+  document.getElementById('fRecurFreq').onchange = e => {
+    const hasFreq = !!e.target.value;
+    document.getElementById('recurUntilField').style.display = hasFreq ? '' : 'none';
+    document.getElementById('recurHint').style.display = hasFreq ? '' : 'none';
+  };
+  // Regenerate auto-title AFTER miceState is populated (overrides the earlier call in fillSubOptions)
+  if (AUTO_TITLE_CATS.has(ev.category)) updateAutoTitle();
+  document.getElementById('modalBack').classList.add('show');
+  document.getElementById('fTitle').focus();
+}
+
+function closeModal() {
+  document.getElementById('modalBack').classList.remove('show');
+  state.editing = null;
+}
+
+async function saveModal() {
+  const category = document.getElementById('fCategory').value;
+  const subcategory = document.getElementById('fSubcategory').value;
+  const sub2El = document.getElementById('fSubcategory2');
+  const subcategory2 = document.getElementById('sub2Field').style.display !== 'none' ? sub2El.value : '';
+  const cohort = document.getElementById('fCohort').value.trim();
+  const project_slug = document.getElementById('fProject').value;
+  const status = document.getElementById('fStatus').value;
+  const date = document.getElementById('fDate').value;
+  const dateEnd = document.getElementById('fDateEnd').value;
+  const allDay = document.getElementById('fAllDay').checked;
+  const startT = document.getElementById('fStart').value;
+  const endT = document.getElementById('fEnd').value;
+  let notes = document.getElementById('fNotes').value;
+  if (!date) { alert('Start date is required.'); return; }
+  if (!allDay && (!startT || !endT)) { alert('Start and end time are required for timed events.'); return; }
+  if (category === ADD_NEW) { alert('Please select a category.'); return; }
+
+  // Flush any text left in the mice input (user typed but didn't press Enter)
+  const miceInputEl = document.getElementById('fMiceInput');
+  if (miceInputEl) {
+    const pending = miceInputEl.value.trim().replace(/,$/, '').trim();
+    if (pending && !miceState.includes(pending)) { miceState.push(pending); miceInputEl.value = ''; }
+  }
+
+  const miceCfg = MOUSE_CATS[category];
+  if (miceCfg?.required && miceState.length === 0) {
+    if (!confirm('No mice selected for a surgery task. Save anyway?')) return;
+  }
+  let start, end;
+  if (allDay) {
+    start = parseTime(date, '00:00');
+    end = parseTime(dateEnd || date, '23:59');
+  } else {
+    start = parseTime(date, startT);
+    end = parseTime(dateEnd || date, endT);
+    if (end <= start) end = new Date(start.getTime() + 60*60000);
+  }
+
+  const subVal = subcategory === ADD_NEW ? '' : subcategory;
+  const sub2Val = subcategory2 === ADD_NEW ? '' : subcategory2;
+  const mice = miceCfg ? [...miceState] : [];
+
+  // For auto-title categories always derive title from subcategory + mice at save time
+  let title;
+  if (AUTO_TITLE_CATS.has(category)) {
+    const label = (sub2Val && sub2Val !== ADD_NEW) ? sub2Val : (subVal || '');
+    title = label;
+    if (!title) title = document.getElementById('fTitle').value.trim();
+  } else {
+    title = document.getElementById('fTitle').value.trim();
+  }
+  if (!title) { alert('Title is required.'); return; }
+  notes = notesWithMice(notes, mice);
+  const assignee = document.getElementById('fAssignee').value;
+  const location = readResourceField('fLocation', 'fLocationCustom');
+  const rig = readResourceField('fRig', 'fRigCustom');
+  const delay_reason = status === 'delayed' ? document.getElementById('fDelayReason').value.trim() : '';
+  const reschedule_to = status === 'delayed' ? document.getElementById('fRescheduleTo').value : '';
+  const recurFreq  = document.getElementById('fRecurFreq').value;
+  const recurUntil = document.getElementById('fRecurUntil').value;
+  const recur = recurFreq ? { freq: recurFreq, until: recurUntil || null } : null;
+
+  let eventForLog = null;
+  try {
+    if (state.editing) {
+      const ev = state.events.find(x => x.id === state.editing);
+      Object.assign(ev, { title, category, subcategory: subVal, subcategory2: sub2Val, cohort, project_slug, status, start, end, notes, mice, all_day: allDay, assignee, location, rig, delay_reason, reschedule_to, recur });
+      await api(`/api/events/${ev.id}`, { method: 'PUT', body: JSON.stringify(evToWire(ev)) });
+      eventForLog = ev;
+    } else {
+      const ev = { id: uid(), title, category, subcategory: subVal, subcategory2: sub2Val, cohort, project_slug, status, start, end, notes, mice, all_day: allDay, assignee, location, rig, delay_reason, reschedule_to, recur };
+      const saved = await api(`/api/events`, { method: 'POST', body: JSON.stringify(evToWire(ev)) });
+      eventForLog = evFromWire(saved);
+      state.events.push(eventForLog);
+      // If a cohort filter is active and the new event's cohort isn't included,
+      // auto-add it so the just-created event remains visible.
+      if (!state.cohortShowAll && cohort) {
+        const base = baseCohort(cohort);
+        if (base && !state.cohortFilter.has(base)) state.cohortFilter.add(base);
+      }
+    }
+    if (eventForLog?.status === 'done') await syncExperimentLogForDoneEvent(eventForLog);
+    // Persist custom subcategory
+    if (subVal) {
+      const defaults = (CAT_BY_KEY[category]?.subs) || [];
+      const custom = state.customSubs[category] || [];
+      if (!defaults.includes(subVal) && !custom.includes(subVal)) {
+        await api('/api/customs/subcategories', { method: 'POST', body: JSON.stringify({ category_key: category, label: subVal }) });
+        state.customSubs[category] = [...custom, subVal];
+      }
+    }
+  } catch (err) { alert(err.message); return; }
+  closeModal(); render(); renderSidebar();
+}
+
+async function deleteEvent() {
+  if (!state.editing) return;
+  if (!confirm('Delete this task?')) return;
+  try {
+    await deleteEventApi(state.editing);
+    state.events = state.events.filter(x => x.id !== state.editing);
+  } catch (err) { alert(err.message); return; }
+  closeModal(); render();
+}
+
+// ---------- Header controls ----------
+function shiftCursor(delta) {
+  if (state.view === 'day') state.cursor = addDays(state.cursor, delta);
+  else if (state.view === 'week' || state.view === 'agenda') state.cursor = addDays(state.cursor, delta * 7);
+  else state.cursor = new Date(state.cursor.getFullYear(), state.cursor.getMonth() + delta, 1);
+  render();
+}
+
+// ---------- Import / Export ----------
+function exportData() {
+  const blob = new Blob([JSON.stringify({
+    events: state.events,
+    customSubs: state.customSubs,
+    exportedAt: new Date().toISOString(),
+  }, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `scheduler-${fmtDateIso(new Date())}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = async () => {
+    try {
+      const d = JSON.parse(reader.result);
+      if (!Array.isArray(d.events)) throw new Error('Invalid file');
+      if (!confirm(`Import ${d.events.length} events? They will be added to existing data.`)) return;
+      const events = d.events.map(e => ({
+        id: e.id, title: e.title, category: e.category, subcategory: e.subcategory || '',
+        project_slug: e.project_slug || e.project || '',
+        status: e.status || 'planned',
+        start: new Date(e.start).toISOString(), end: new Date(e.end).toISOString(),
+        notes: e.notes || '', mice: e.mice || [],
+      }));
+      const res = await api('/api/events/bulk-import', { method: 'POST', body: JSON.stringify({ events }) });
+      alert(`Imported ${res.inserted} / ${res.total}.`);
+      await loadAll(); render(); renderSidebar();
+    } catch (err) { alert('Import failed: ' + err.message); }
+  };
+  reader.readAsText(file);
+}
+
+// ---------- Sidebar collapse ----------
+function initSidebar() {
+  const sidebar = document.querySelector('aside.sidebar');
+  const btn = document.getElementById('sidebarBtn');
+  const collapsed = localStorage.getItem('lab-sidebar-collapsed') === '1';
+  if (collapsed) { sidebar.classList.add('collapsed'); btn.textContent = '⟩'; }
+  btn.addEventListener('click', () => {
+    if (window.matchMedia('(max-width: 640px)').matches) {
+      sidebar.classList.remove('collapsed');
+      sidebar.classList.toggle('mobile-open');
+      return;
+    }
+    const isNowCollapsed = sidebar.classList.toggle('collapsed');
+    btn.textContent = isNowCollapsed ? '⟩' : '⟨';
+    localStorage.setItem('lab-sidebar-collapsed', isNowCollapsed ? '1' : '0');
+  });
+
+  // Restore persisted width
+  const savedW = parseInt(localStorage.getItem('lab-sidebar-width') || '', 10);
+  if (savedW >= 160 && savedW <= 480) sidebar.style.width = savedW + 'px';
+
+  // Drag-to-resize handle
+  const handle = document.getElementById('sbResize');
+  if (handle) {
+    let startX = 0, startW = 0, dragging = false;
+    const onMove = (e) => {
+      if (!dragging) return;
+      const w = Math.max(160, Math.min(480, startW + (e.clientX - startX)));
+      sidebar.style.width = w + 'px';
+    };
+    const onUp = () => {
+      if (!dragging) return;
+      dragging = false;
+      handle.classList.remove('dragging');
+      document.body.classList.remove('sb-dragging');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      localStorage.setItem('lab-sidebar-width', String(sidebar.getBoundingClientRect().width | 0));
+    };
+    handle.addEventListener('mousedown', (e) => {
+      if (sidebar.classList.contains('collapsed')) return;
+      dragging = true;
+      startX = e.clientX;
+      startW = sidebar.getBoundingClientRect().width;
+      handle.classList.add('dragging');
+      document.body.classList.add('sb-dragging');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      e.preventDefault();
+    });
+  }
+
+  // Show Team panel only when logged-in user is in admin mode
+  fetch('/api/eln/auth/me', { credentials: 'include' })
+    .then(r => r.ok ? r.json() : null)
+    .then(d => {
+      const isAdmin = d && d.user && d.user.effective_role === 'admin';
+      const team = document.getElementById('teamSection');
+      if (team) team.style.display = isAdmin ? '' : 'none';
+    })
+    .catch(() => {});
+}
+
+// ---------- Browser notifications ----------
+const _notified = new Set();   // tracks "evId@startMs" already fired
+
+function initNotifications() {
+  const btn = document.getElementById('notifBtn');
+  function updateBtn() {
+    const granted = Notification.permission === 'granted';
+    btn.classList.toggle('active', granted);
+    btn.title = granted ? 'Reminders on (15 min before)' : 'Click to enable event reminders';
+  }
+  updateBtn();
+  btn.addEventListener('click', async () => {
+    if (Notification.permission === 'granted') return;
+    const perm = await Notification.requestPermission();
+    if (perm === 'granted') { updateBtn(); scheduleNotifCheck(); }
+  });
+  if (Notification.permission === 'granted') scheduleNotifCheck();
+}
+
+function scheduleNotifCheck() {
+  checkUpcomingNotifs();
+  setInterval(checkUpcomingNotifs, 60_000);
+}
+
+function checkUpcomingNotifs() {
+  if (Notification.permission !== 'granted') return;
+  const now = Date.now();
+  const soon = now + 15 * 60_000;
+  state.events.forEach(ev => {
+    if (ev.status === 'done' || ev.status === 'skipped' || ev.all_day) return;
+    const t = ev.start.getTime();
+    if (t < now || t > soon) return;
+    const key = `${ev.id}@${t}`;
+    if (_notified.has(key)) return;
+    _notified.add(key);
+    const minsLeft = Math.round((t - now) / 60_000);
+    const body = [
+      minsLeft > 0 ? `Starts in ${minsLeft} min` : 'Starting now',
+      ev.project_slug ? projectNameOf(ev.project_slug) : null,
+      (ev.mice && ev.mice.length) ? '🐭 ' + ev.mice.join(', ') : null,
+    ].filter(Boolean).join(' · ');
+    new Notification(ev.title || '(untitled)', { body, icon: '' });
+  });
+}
+
+// ---------- iCal export ----------
+function exportIcal() {
+  const { cats, projs, assignees } = getPdfFilters();
+  const rows = state.events.filter(ev => {
+    if (cats      && !cats.has(ev.category))          return false;
+    if (projs     && !projs.has(ev.project_slug||'')) return false;
+    if (assignees && !assignees.has(ev.assignee||'')) return false;
+    return true;
+  });
+
+  function icsDate(d, allDay) {
+    if (allDay) {
+      return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}`;
+    }
+    return `${d.getUTCFullYear()}${pad(d.getUTCMonth()+1)}${pad(d.getUTCDate())}` +
+           `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}${pad(d.getUTCSeconds())}Z`;
+  }
+  function fold(line) {
+    // RFC 5545: fold lines > 75 chars
+    const out = [];
+    while (line.length > 75) { out.push(line.slice(0, 75)); line = ' ' + line.slice(75); }
+    out.push(line);
+    return out.join('\r\n');
+  }
+  function icsText(s) { return (s||'').replace(/\\/g,'\\\\').replace(/;/g,'\\;').replace(/,/g,'\\,').replace(/\n/g,'\\n'); }
+
+  const stamp = icsDate(new Date(), false);
+  const vevents = rows.map(ev => {
+    const lines = [
+      'BEGIN:VEVENT',
+      `UID:${ev.id}@lab-scheduler`,
+      `DTSTAMP:${stamp}`,
+      ev.all_day
+        ? `DTSTART;VALUE=DATE:${icsDate(ev.start, true)}`
+        : `DTSTART:${icsDate(ev.start, false)}`,
+      ev.all_day
+        ? `DTEND;VALUE=DATE:${icsDate(ev.end, true)}`
+        : `DTEND:${icsDate(ev.end, false)}`,
+      fold(`SUMMARY:${icsText(ev.title)}`),
+    ];
+    const descParts = [
+      ev.subcategory  ? `Type: ${ev.subcategory}` : null,
+      ev.cohort       ? `Cohort: ${ev.cohort}` : null,
+      (ev.mice && ev.mice.length) ? `Mice: ${ev.mice.join(', ')}` : null,
+      ev.assignee     ? `Assignee: ${memberById(ev.assignee)?.name || ev.assignee}` : null,
+      ev.notes        ? `Notes: ${ev.notes}` : null,
+      ev.delay_reason ? `Delay: ${ev.delay_reason}` : null,
+    ].filter(Boolean).join('\\n');
+    if (descParts) lines.push(fold(`DESCRIPTION:${icsText(descParts)}`));
+    if (ev.project_slug) lines.push(fold(`LOCATION:${icsText(projectNameOf(ev.project_slug))}`));
+    const cat = CAT_BY_KEY[ev.category]?.label || ev.category;
+    lines.push(`CATEGORIES:${icsText(cat)}`);
+    lines.push(`STATUS:${ev.status === 'done' ? 'COMPLETED' : 'CONFIRMED'}`);
+    lines.push('END:VEVENT');
+    return lines.join('\r\n');
+  });
+
+  const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//Lab Scheduler//EN',
+    'CALSCALE:GREGORIAN','METHOD:PUBLISH', ...vevents, 'END:VCALENDAR'].join('\r\n');
+
+  const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `lab-schedule-${fmtDateIso(new Date())}.ics`;
+  a.click(); URL.revokeObjectURL(url);
+  closePdfModal();
+}
+
+// ---------- Color palette picker ----------
+const PALETTE_COLORS = [
+  '#FF3B30','#FF6B6B','#FF9500','#FFCC00','#FFD60A','#A2845E',
+  '#34C759','#30D158','#00C7BE','#32ADE6','#5AC8FA','#30B0C7',
+  '#007AFF','#0A84FF','#5856D6','#6E6CF7','#AF52DE','#BF5AF2',
+  '#FF2D55','#FF375F','#FF85A1','#C96FBF','#8E8E93','#636366',
+];
+
+let _paletteCallback = null;
+let _paletteCurrentColor = null;
+
+function initColorPalette() {
+  const popup = document.getElementById('colorPalettePopup');
+  PALETTE_COLORS.forEach(color => {
+    const sw = document.createElement('div');
+    sw.className = 'cp-swatch';
+    sw.dataset.color = color;
+    sw.style.background = color;
+    sw.title = color;
+    sw.addEventListener('click', e => {
+      e.stopPropagation();
+      if (_paletteCallback) _paletteCallback(color);
+      hideColorPalette();
+    });
+    popup.appendChild(sw);
+  });
+  document.addEventListener('click', e => {
+    if (!popup.contains(e.target) && !e.target.classList.contains('color-dot-btn')) {
+      hideColorPalette();
+    }
+  });
+}
+
+function showColorPalette(anchorEl, currentColor, callback) {
+  _paletteCallback = callback;
+  _paletteCurrentColor = (currentColor || '').toLowerCase();
+  const popup = document.getElementById('colorPalettePopup');
+  popup.querySelectorAll('.cp-swatch').forEach(sw => {
+    sw.classList.toggle('active', sw.dataset.color.toLowerCase() === _paletteCurrentColor);
+  });
+  const rect = anchorEl.getBoundingClientRect();
+  const popW = 6 * 26 + 5 * 6 + 20; // approx popup width
+  let left = rect.left;
+  if (left + popW > window.innerWidth - 8) left = window.innerWidth - popW - 8;
+  popup.style.left = left + 'px';
+  popup.style.top  = (rect.bottom + 6) + 'px';
+  popup.classList.add('show');
+}
+
+function hideColorPalette() {
+  document.getElementById('colorPalettePopup').classList.remove('show');
+  _paletteCallback = null;
+}
+
+// ---------- PDF / CSV Export ----------
+const STATUS_LABELS = { planned: 'Planned', in_progress: 'In progress', done: '✓ Done', delayed: '⏱ Delayed', skipped: 'Skipped' };
+const DAY_NAMES  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const MONTH_NAMES = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+function openPdfModal() {
+  document.getElementById('pdfWeekStart').value = fmtDateIso(startOfWeek(state.cursor));
+
+  function buildChips(containerId, items, keyFn, labelFn, colorFn) {
+    const div = document.getElementById(containerId);
+    div.innerHTML = '';
+    items.forEach(item => {
+      const lbl = document.createElement('label');
+      lbl.className = 'pdf-filter-chip';
+      lbl.innerHTML = `<input type="checkbox" value="${escapeHtml(keyFn(item))}" checked />` +
+        `<span class="dot" style="background:${colorFn(item)}"></span>${escapeHtml(labelFn(item))}`;
+      div.appendChild(lbl);
+    });
+  }
+
+  buildChips('pdfCatFilter',      CATS,          c => c.key,  c => c.label, c => eventColor(c.key));
+  buildChips('pdfProjFilter',     state.projects, p => p.slug, p => p.name,  p => p.color);
+  buildChips('pdfAssigneeFilter', state.team,     m => m.id,   m => m.name,  m => m.color);
+
+  ['pdfCatAll','pdfProjAll','pdfAssigneeAll'].forEach(id => {
+    const map = { pdfCatAll: 'pdfCatFilter', pdfProjAll: 'pdfProjFilter', pdfAssigneeAll: 'pdfAssigneeFilter' };
+    const el = document.getElementById(id);
+    el.checked = true;
+    el.onchange = e => {
+      document.getElementById(map[id]).querySelectorAll('input').forEach(cb => {
+        cb.disabled = e.target.checked;
+        if (e.target.checked) cb.checked = true;
+      });
+    };
+    el.onchange({ target: el });
+  });
+
+  document.getElementById('pdfModalBack').classList.add('show');
+}
+
+function closePdfModal() { document.getElementById('pdfModalBack').classList.remove('show'); }
+
+// ---------- AI scheduling (autoschedule, BYOK) ----------
+function openAiSched() {
+  document.getElementById('aiSchedText').value = '';
+  const prev = document.getElementById('aiSchedPreview');
+  prev.style.display = 'none'; prev.innerHTML = '';
+  document.getElementById('aiCommitBtn').disabled = true;
+  aiSchedMsg('');
+  state.aiProposed = null;
+  document.getElementById('aiSchedBack').classList.add('show');
+  document.getElementById('aiSchedText').focus();
+}
+function closeAiSched() { document.getElementById('aiSchedBack').classList.remove('show'); }
+
+function aiSchedMsg(text, kind) {
+  const m = document.getElementById('aiSchedMsg');
+  m.textContent = text || '';
+  m.style.color = kind === 'error' ? '#d33' : 'var(--text-muted)';
+  m.style.display = text ? 'block' : 'none';
+}
+
+async function aiGeneratePreview() {
+  const text = document.getElementById('aiSchedText').value.trim();
+  if (!text) { aiSchedMsg('Type a request first.', 'error'); return; }
+  const genBtn = document.getElementById('aiGenBtn');
+  genBtn.disabled = true; aiSchedMsg('Thinking…');
+  try {
+    const r = await api('/api/schedule/ai', { method: 'POST', body: JSON.stringify({ text }) });
+    state.aiProposed = r.events || [];
+    renderAiPreview(r);
+    document.getElementById('aiCommitBtn').disabled = state.aiProposed.length === 0;
+    aiSchedMsg('');
+  } catch (e) {
+    aiSchedMsg(String(e.message || e), 'error');
+  } finally {
+    genBtn.disabled = false;
+  }
+}
+
+function renderAiPreview(r) {
+  const prev = document.getElementById('aiSchedPreview');
+  const s = r.summary || {}, p = r.params || {};
+  const rows = (r.events || []).map(e =>
+    `<tr><td style="white-space:nowrap; padding:2px 8px 2px 0; color:var(--text-muted);">${escapeHtml(e.start.replace('T', ' '))}</td><td style="padding:2px 0;">${escapeHtml(e.title)}</td></tr>`
+  ).join('');
+  const warn = (r.warnings || []).map(w => `<div>⚠ ${escapeHtml(w)}</div>`).join('');
+  const conf = (r.conflicts || []).map(c =>
+    `<div>⛔ ${escapeHtml(c.proposed)} @ ${escapeHtml(c.at.replace('T', ' '))} ↔ ${escapeHtml(c.conflicts_with)}</div>`
+  ).join('');
+  prev.innerHTML = `
+    <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
+      Understood: <b>${escapeHtml(p.cohort || '?')}</b>${p.control_cohort ? ' + ' + escapeHtml(p.control_cohort) + ' (control)' : ''} ·
+      ${escapeHtml(p.subcategory || p.category || '')} · ${escapeHtml(p.date_from || '')}→${escapeHtml(p.date_to || '')} ·
+      ${p.per_day}/day${p.weekdays_only ? ' · weekdays' : ''}
+    </div>
+    <div style="font-size:13px; margin-bottom:6px;">
+      <b>${s.scheduled || 0}</b> events · ${s.mice || 0} mice over ${s.days || 0} days${s.conflicts ? ` · <span style="color:#d33;">${s.conflicts} conflict(s)</span>` : ''}
+    </div>
+    ${warn ? `<div style="font-size:12px; color:#b80; margin-bottom:6px;">${warn}</div>` : ''}
+    ${conf ? `<div style="font-size:12px; color:#d33; margin-bottom:6px;">${conf}</div>` : ''}
+    <table style="width:100%; border-collapse:collapse; font-size:12px;"><tbody>${rows}</tbody></table>`;
+  prev.style.display = 'block';
+}
+
+async function aiCommit() {
+  if (!state.aiProposed || !state.aiProposed.length) return;
+  const btn = document.getElementById('aiCommitBtn');
+  btn.disabled = true; aiSchedMsg('Adding…');
+  try {
+    await api('/api/schedule/commit', { method: 'POST', body: JSON.stringify({ events: state.aiProposed }) });
+    closeAiSched();
+    await loadAll(); render(); renderSidebar();
+  } catch (e) {
+    aiSchedMsg(String(e.message || e), 'error');
+    btn.disabled = false;
+  }
+}
+
+function getPdfFilters() {
+  const weekStartVal = document.getElementById('pdfWeekStart').value;
+  const weekStart = weekStartVal ? new Date(weekStartVal + 'T00:00:00') : startOfWeek(state.cursor);
+  const showNotes  = document.getElementById('pdfShowNotes').checked;
+
+  function getSet(allId, filterId) {
+    if (document.getElementById(allId).checked) return null;
+    return new Set([...document.getElementById(filterId).querySelectorAll('input:checked')].map(cb => cb.value));
+  }
+  return {
+    weekStart, showNotes,
+    cats:      getSet('pdfCatAll',      'pdfCatFilter'),
+    projs:     getSet('pdfProjAll',     'pdfProjFilter'),
+    assignees: getSet('pdfAssigneeAll', 'pdfAssigneeFilter'),
+  };
+}
+
+function buildPrintHtml({ weekStart, showNotes, cats, projs, assignees }) {
+  const days    = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
+  const weekEnd = new Date(days[6]); weekEnd.setHours(23, 59, 59, 999);
+
+  const allEvts = state.events.filter(ev => {
+    if (ev.end < weekStart || ev.start > weekEnd) return false;
+    if (cats      && !cats.has(ev.category))          return false;
+    if (projs     && !projs.has(ev.project_slug||'')) return false;
+    if (assignees && !assignees.has(ev.assignee||'')) return false;
+    return true;
+  });
+
+  const fmtDR = () => {
+    const s = `${MONTH_NAMES[weekStart.getMonth()]} ${weekStart.getDate()}`;
+    const e = `${MONTH_NAMES[days[6].getMonth()]} ${days[6].getDate()}, ${days[6].getFullYear()}`;
+    return `${s} – ${e}`;
+  };
+  const filterSummary = () => {
+    const p = [];
+    if (cats)      p.push('Categories: ' + [...cats].map(k => CAT_BY_KEY[k]?.label || k).join(', '));
+    if (projs)     p.push('Projects: '   + [...projs].map(s => projectNameOf(s) || s).join(', '));
+    if (assignees) p.push('Assignees: '  + [...assignees].map(id => memberById(id)?.name || id).join(', '));
+    return p.length ? p.join(' | ') : 'All events';
+  };
+  const evColor = cat => eventColor(cat);   // resolves CSS vars in browser context
+  const statusBadge = s => ({
+    done:        '<span style="color:#34c759">✓ Done</span>',
+    in_progress: '<span style="color:#007aff">● In progress</span>',
+    delayed:     '<span style="color:#ff9500">⏱ Delayed</span>',
+    skipped:     '<span style="color:#8e8e93;text-decoration:line-through">Skipped</span>',
+  }[s] || '');
+
+  let body = '';
+  for (const day of days) {
+    const ds = new Date(day); ds.setHours(0,0,0,0);
+    const de = new Date(day); de.setHours(23,59,59,999);
+    const evs = allEvts.filter(ev => ev.end > ds && ev.start < de).sort((a,b) => a.start - b.start);
+
+    let rows = evs.length ? '' : '<div class="empty">No scheduled events</div>';
+    for (const ev of evs) {
+      const timeStr = ev.all_day ? 'All day' : `${fmtTime(ev.start)}–${fmtTime(ev.end)}`;
+      const details = [
+        CAT_BY_KEY[ev.category]?.label || ev.category,
+        ev.subcategory || null,
+        ev.project_slug ? projectNameOf(ev.project_slug) : null,
+        ev.assignee    ? (memberById(ev.assignee)?.name || null) : null,
+        ev.cohort      || null,
+        (ev.mice && ev.mice.length) ? '🐭 ' + ev.mice.join(', ') : null,
+      ].filter(Boolean).join(' · ');
+      const notes = showNotes && ev.notes
+        ? `<div class="notes">📝 ${escapeHtml(ev.notes)}</div>` : '';
+      const delay = ev.status === 'delayed' && ev.delay_reason
+        ? `<div class="notes" style="color:#ff9500">⏱ ${escapeHtml(ev.delay_reason)}${ev.reschedule_to ? ' → ' + ev.reschedule_to : ''}</div>` : '';
+      rows += `<div class="er">
+        <div class="et">${timeStr}</div>
+        <div class="ec" style="background:${evColor(ev.category)}"></div>
+        <div class="eb">
+          <div class="etitle">${escapeHtml(ev.title||'(untitled)')} ${statusBadge(ev.status)}</div>
+          ${details ? `<div class="edet">${escapeHtml(details)}</div>` : ''}${notes}${delay}
+        </div></div>`;
+    }
+    body += `<div class="day">
+      <div class="dh">${DAY_NAMES[day.getDay()]}, ${MONTH_NAMES[day.getMonth()]} ${day.getDate()}</div>
+      ${rows}</div>`;
+  }
+
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/>
+<title>Lab Schedule — ${fmtDR()}</title>
+<style>
+*{box-sizing:border-box}
+body{font-family:-apple-system,"Helvetica Neue",Arial,sans-serif;font-size:12px;color:#1c1c1e;margin:0;padding:24px 32px}
+h1{font-size:20px;font-weight:700;margin:0 0 2px}
+.sub{color:#8e8e93;font-size:11px;margin-bottom:3px}
+.fline{color:#8e8e93;font-size:10px;border-bottom:2px solid #1c1c1e;padding-bottom:8px;margin-bottom:20px}
+.day{margin-bottom:18px}
+.dh{font-size:13px;font-weight:700;color:#007aff;border-bottom:1.5px solid #007aff;padding-bottom:3px;margin-bottom:6px}
+.er{display:flex;gap:9px;padding:5px 0;border-bottom:1px solid #f2f2f7;align-items:flex-start}
+.et{width:96px;flex:none;color:#8e8e93;font-size:11px;padding-top:1px}
+.ec{width:3px;flex:none;border-radius:2px;align-self:stretch;min-height:14px}
+.eb{flex:1}
+.etitle{font-weight:600;font-size:12px}
+.edet{color:#8e8e93;font-size:10px;margin-top:1px}
+.notes{color:#6b6b70;font-size:10px;margin-top:2px;font-style:italic}
+.empty{color:#c7c7cc;font-style:italic;font-size:11px;padding:4px 0}
+.foot{margin-top:24px;font-size:9px;color:#c7c7cc;text-align:right;border-top:1px solid #f2f2f7;padding-top:6px}
+@media print{body{padding:0}.day{break-inside:avoid}@page{margin:1.5cm}}
+</style></head><body>
+<h1>🗓 Lab Schedule</h1>
+<div class="sub">Week of ${fmtDR()}</div>
+<div class="fline">Filters: ${filterSummary()}</div>
+${body}
+<div class="foot">Generated ${new Date().toLocaleString()}</div>
+<script>window.onload=()=>window.print()<\/script>
+</body></html>`;
+}
+
+function generatePdf() {
+  const opts = getPdfFilters();
+  const html = buildPrintHtml(opts);
+  const win  = window.open('', '_blank');
+  if (!win) { alert('Pop-up was blocked. Please allow pop-ups for this site.'); return; }
+  win.document.write(html);
+  win.document.close();
+  closePdfModal();
+}
+
+function exportCsv() {
+  const { cats, projs, assignees } = getPdfFilters();
+  const rows = state.events.filter(ev => {
+    if (cats      && !cats.has(ev.category))          return false;
+    if (projs     && !projs.has(ev.project_slug||'')) return false;
+    if (assignees && !assignees.has(ev.assignee||'')) return false;
+    return true;
+  }).sort((a, b) => a.start - b.start);
+
+  const q = v => '"' + String(v ?? '').replace(/"/g, '""') + '"';
+  const hms = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  const headers = ['Date','Start','End','Title','Category','Subcategory','Type','Cohort','Project','Status','Assignee','Mice','Notes','Delay reason','Reschedule to'];
+  const lines = [
+    headers.map(q).join(','),
+    ...rows.map(ev => [
+      fmtDateIso(ev.start),
+      ev.all_day ? 'All day' : hms(ev.start),
+      ev.all_day ? ''        : hms(ev.end),
+      ev.title || '',
+      CAT_BY_KEY[ev.category]?.label || ev.category,
+      ev.subcategory  || '',
+      ev.subcategory2 || '',
+      ev.cohort       || '',
+      ev.project_slug ? projectNameOf(ev.project_slug) : '',
+      STATUS_LABELS[ev.status] || ev.status || 'Planned',
+      ev.assignee ? (memberById(ev.assignee)?.name || ev.assignee) : '',
+      (ev.mice || []).join('; '),
+      ev.notes        || '',
+      ev.delay_reason || '',
+      ev.reschedule_to || '',
+    ].map(q).join(',')),
+  ];
+
+  const blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `lab-schedule-${fmtDateIso(new Date())}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+  closePdfModal();
+}
+
+// ---------- Wire up ----------
+function wire() {
+  document.getElementById('prevBtn').addEventListener('click', () => shiftCursor(-1));
+  document.getElementById('nextBtn').addEventListener('click', () => shiftCursor(1));
+  document.getElementById('todayBtn').addEventListener('click', () => { state.cursor = new Date(); render(); });
+  document.querySelectorAll('#viewSwitch button').forEach(b => {
+    b.addEventListener('click', () => { state.view = b.dataset.view; render(); });
+  });
+  document.getElementById('newBtn').addEventListener('click', () => {
+    const d = new Date(state.cursor); d.setHours(9, 0, 0, 0);
+    openModal(null, d, new Date(d.getTime() + 60*60000));
+  });
+  document.getElementById('cancelBtn').addEventListener('click', closeModal);
+  document.getElementById('saveBtn').addEventListener('click', saveModal);
+  document.getElementById('deleteBtn').addEventListener('click', deleteEvent);
+  document.getElementById('modalBack').addEventListener('click', e => {
+    if (e.target.id === 'modalBack') closeModal();
+  });
+  document.getElementById('openMicePanelBtn').addEventListener('click', openMicePanel);
+  document.getElementById('micePanelCancel').addEventListener('click', closeMicePanel);
+  document.getElementById('micePanelAdd').addEventListener('click', commitMicePanel);
+  document.getElementById('micePanelSearch').addEventListener('input', e => {
+    const showSac = document.getElementById('showSacrificedChk')?.checked;
+    renderMicePanelList(e.target.value, showSac);
+  });
+  document.getElementById('showSacrificedChk')?.addEventListener('change', e => {
+    renderMicePanelList(document.getElementById('micePanelSearch').value, e.target.checked);
+  });
+  ['mpfProject','mpfCohort','mpfCondition','mpfExp','mpfStrain','mpfSex'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', () => {
+      const q = document.getElementById('micePanelSearch').value;
+      const sac = document.getElementById('showSacrificedChk')?.checked;
+      renderMicePanelList(q, sac);
+    });
+  });
+  document.getElementById('mpfClear')?.addEventListener('click', () => {
+    ['mpfProject','mpfCohort','mpfCondition','mpfExp','mpfStrain','mpfSex'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.value = '';
+    });
+    document.getElementById('showSacrificedChk').checked = false;
+    document.getElementById('micePanelSearch').value = '';
+    renderMicePanelList('', false);
+  });
+  document.getElementById('micePanelBack').addEventListener('click', e => {
+    if (e.target.id === 'micePanelBack') closeMicePanel();
+  });
+  document.getElementById('exportBtn').addEventListener('click', exportData);
+  document.getElementById('importBtn').addEventListener('click', () => document.getElementById('importFile').click());
+  document.getElementById('migrateBtn').addEventListener('click', migrateFromLocalStorage);
+
+  initColorPalette();
+  initSidebar();
+  initNotifications();
+
+  // PDF / CSV / iCal export
+  document.getElementById('pdfBtn').addEventListener('click', openPdfModal);
+
+  document.getElementById('manageResLink').addEventListener('click', e => { e.preventDefault(); openResModal(); });
+  document.getElementById('resLocAdd').addEventListener('click', () => addResourceVal('location', 'resLocInput'));
+  document.getElementById('resRigAdd').addEventListener('click', () => addResourceVal('rig', 'resRigInput'));
+  document.getElementById('resCloseBtn').addEventListener('click', closeResModal);
+  document.getElementById('resModalBack').addEventListener('click', e => { if (e.target.id === 'resModalBack') closeResModal(); });
+
+  const mineBtn = document.getElementById('mineBtn');
+  if (mineBtn) mineBtn.addEventListener('click', () => {
+    state.mineOnly = !state.mineOnly;
+    mineBtn.style.background = state.mineOnly ? 'var(--accent)' : '';
+    mineBtn.style.color = state.mineOnly ? '#fff' : '';
+    render();
+  });
+
+  const fabBtn = document.getElementById('fabBtn');
+  if (fabBtn) fabBtn.addEventListener('click', () => openModal(null));
+
+  document.getElementById('aiSchedBtn').addEventListener('click', openAiSched);
+  document.getElementById('aiGenBtn').addEventListener('click', aiGeneratePreview);
+  document.getElementById('aiCommitBtn').addEventListener('click', aiCommit);
+  document.getElementById('aiSchedCancel').addEventListener('click', closeAiSched);
+  document.getElementById('aiSchedBack').addEventListener('click', e => {
+    if (e.target.id === 'aiSchedBack') closeAiSched();
+  });
+  document.getElementById('pdfCancelBtn').addEventListener('click', closePdfModal);
+  document.getElementById('pdfGenerateBtn').addEventListener('click', generatePdf);
+  document.getElementById('pdfCsvBtn').addEventListener('click', exportCsv);
+  document.getElementById('pdfIcalBtn').addEventListener('click', exportIcal);
+  document.getElementById('pdfModalBack').addEventListener('click', e => {
+    if (e.target.id === 'pdfModalBack') closePdfModal();
+  });
+
+  // Search
+  document.getElementById('searchInput').addEventListener('input', e => {
+    state.searchQuery = e.target.value;
+    render();
+  });
+
+  // Dark mode
+  const darkBtn = document.getElementById('darkBtn');
+  darkBtn.addEventListener('click', () => {
+    state.darkMode = !state.darkMode;
+    document.body.classList.toggle('dark', state.darkMode);
+    darkBtn.textContent = state.darkMode ? '☀️' : '🌙';
+    localStorage.setItem('lab-dark', state.darkMode ? '1' : '0');
+  });
+  if (localStorage.getItem('lab-dark') === '1') {
+    state.darkMode = true;
+    document.body.classList.add('dark');
+    darkBtn.textContent = '☀️';
+  }
+
+  // Compact
+  const compactBtn = document.getElementById('compactBtn');
+  compactBtn.addEventListener('click', () => {
+    state.compact = !state.compact;
+    document.body.classList.toggle('compact', state.compact);
+    compactBtn.classList.toggle('active', state.compact);
+    localStorage.setItem('lab-compact', state.compact ? '1' : '0');
+  });
+  if (localStorage.getItem('lab-compact') === '1') {
+    state.compact = true;
+    document.body.classList.add('compact');
+    compactBtn.classList.add('active');
+  }
+  document.getElementById('importFile').addEventListener('change', e => {
+    if (e.target.files[0]) importData(e.target.files[0]);
+    e.target.value = '';
+  });
+  document.addEventListener('keydown', e => {
+    if (document.getElementById('modalBack').classList.contains('show')) {
+      if (e.key === 'Escape') closeModal();
+      if (e.key === 'Enter' && e.ctrlKey) saveModal();
+      return;
+    }
+    if (e.key === 'ArrowLeft') shiftCursor(-1);
+    if (e.key === 'ArrowRight') shiftCursor(1);
+    if (e.key === 't' || e.key === 'T') { state.cursor = new Date(); render(); }
+    if (e.key === 'n' || e.key === 'N') document.getElementById('newBtn').click();
+  });
+}
+
+// ---------- Boot ----------
+async function boot() {
+  // Phones get the dedicated mobile scheduler (/m). Hysteresis vs /m's ≥900 back-redirect avoids a loop.
+  if (window.matchMedia('(max-width: 640px)').matches) { location.replace('/m'); return; }
+  // ELN login gate — the scheduler lives behind the same auth as the ELN.
+  // labos_nav.js also redirects on 401, but gate here first so loadAll()'s 401
+  // never flashes the "can't reach the server" screen before the redirect.
+  try {
+    const r = await fetch('/api/eln/auth/me', { credentials: 'include' });
+    if (!r.ok) { location.href = '/eln/login?next=' + encodeURIComponent(location.pathname + location.search); return; }
+    const d = await r.json();
+    state.me = (d && d.user) || null;
+    if (!state.me) { location.href = '/eln/login?next=' + encodeURIComponent(location.pathname + location.search); return; }
+  } catch (_) {
+    // network hiccup: fall through to loadAll()'s own error UI rather than bounce to login
+  }
+  try {
+    await loadAll();
+  } catch (err) {
+    document.body.innerHTML = `<div style="padding:40px; font-family:sans-serif;">
+      <h2>Can't reach the server</h2>
+      <p>${escapeHtml(err.message)}</p>
+      <p>Make sure to start it via <code>start_scheduler.command</code> (or <code>python3 server.py</code>).</p>
+    </div>`;
+    return;
+  }
+  setupCategoryOptions();
+  renderSidebar();
+  wire();
+  if (window.matchMedia('(max-width: 640px)').matches) state.view = 'agenda';
+  render();
+  setTimeout(() => {
+    const vp = document.getElementById('viewport');
+    vp.scrollTop = (8 - HOURS_START) * ROW_H;
+  }, 0);
+}
+boot();
+</script>
+<script src="/labos-nav.js" defer></script>
+<script>/* Lab OS guided tour — dependency-free, auto-skips missing targets */
+(function(){
+  if(window.__labosTour) return;
+  var STEPS = [
+ {sel:'#viewSwitch', t:'Calendar views', b:'Switch <b>Agenda / Day / Week / Month</b>. Week is the default; Agenda is a list grouped by day.'},
+ {sel:'#searchInput', t:'Search tasks', b:'Filter events by title, project, or category.'},
+ {sel:'#mineBtn', t:'\u{1F464} Mine', b:'Show only events you created or are assigned to.'},
+ {sel:'#pdfBtn', t:'Export', b:'Print / PDF, plus iCal (.ics) and CSV download.'},
+ {sel:'#aiSchedBtn', t:'\u2728 AI schedule', b:'Describe experiments in plain language \u2192 preview \u2192 confirm. <b>Nothing is saved until you approve.</b>'},
+ {sel:'#newBtn', t:'+ New', b:'Add a single event by hand \u2014 or click an empty time slot.'},
+ {sel:'#animalSyncBar', t:'Animals DB sync', b:'\u21bb Sync now pulls the latest mice from the Google Sheet. AI scheduling needs this to resolve a cohort to real mice.'}
+];
+  function elq(s){ try{ return document.querySelector(s); }catch(e){ return null; } }
+  var btn=document.createElement('button');
+  btn.id='labosTourBtn'; btn.type='button'; btn.textContent='🧭 Tour';
+  btn.style.cssText='position:fixed;right:18px;bottom:18px;z-index:99998;background:#1E2761;color:#fff;border:none;border-radius:24px;padding:11px 18px;font:600 14px -apple-system,system-ui,sans-serif;box-shadow:0 6px 18px rgba(30,39,97,.35);cursor:pointer';
+  btn.onclick=start;
+  function mount(){ if(document.body && !document.getElementById('labosTourBtn')) document.body.appendChild(btn); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',mount); else mount();
+  var ov,tip,ring,cur=0,active=[];
+  function start(){ active=STEPS.filter(function(s){ return !s.sel || elq(s.sel); }); if(!active.length){ alert('Nothing to tour on this screen yet — open a note/day first.'); return; } cur=0; build(); show(); }
+  function build(){ if(ov) return;
+    ov=document.createElement('div'); ov.id='labosTourOv'; ov.style.cssText='position:fixed;inset:0;z-index:99999;';
+    ring=document.createElement('div'); ring.style.cssText='position:absolute;border-radius:10px;box-shadow:0 0 0 9999px rgba(16,22,45,.55);border:2px solid #7A5CFF;transition:all .22s ease;pointer-events:none;';
+    tip=document.createElement('div'); tip.style.cssText='position:absolute;max-width:320px;background:#fff;border-radius:12px;padding:15px 16px 14px;box-shadow:0 14px 44px rgba(0,0,0,.32);font-family:-apple-system,system-ui,sans-serif;';
+    ov.appendChild(ring); ov.appendChild(tip);
+    ov.addEventListener('click',function(e){ if(e.target===ov) stop(); });
+    document.body.appendChild(ov);
+  }
+  function show(){
+    var s=active[cur]; var node=s.sel?elq(s.sel):null;
+    if(node) node.scrollIntoView({block:'center',behavior:'smooth'});
+    setTimeout(function(){
+      var r=node?node.getBoundingClientRect():{left:innerWidth/2-150,top:110,width:300,height:0,bottom:110};
+      ring.style.left=(r.left-6)+'px'; ring.style.top=(r.top-6)+'px'; ring.style.width=(r.width+12)+'px'; ring.style.height=(r.height+12)+'px';
+      ring.style.display=node?'block':'none';
+      tip.innerHTML='<div style="font:700 11px/1 system-ui;letter-spacing:1px;color:#7A5CFF;text-transform:uppercase;margin-bottom:6px">Step '+(cur+1)+' / '+active.length+'</div>'+
+        '<div style="font:700 16px/1.25 Georgia,serif;color:#1E2761;margin-bottom:6px">'+s.t+'</div>'+
+        '<div style="color:#1B2436;font-size:13.5px;line-height:1.5">'+s.b+'</div>'+
+        '<div style="display:flex;gap:8px;margin-top:13px">'+
+        '<button type="button" id="ltPrev" style="flex:1;border:1px solid #DCE4F2;background:#fff;color:#1E2761;border-radius:8px;padding:8px;font-weight:700;cursor:pointer">Prev</button>'+
+        '<button type="button" id="ltNext" style="flex:1;border:none;background:#7A5CFF;color:#fff;border-radius:8px;padding:8px;font-weight:700;cursor:pointer">'+(cur===active.length-1?'Done':'Next ›')+'</button></div>'+
+        '<button type="button" id="ltSkip" style="position:absolute;top:7px;right:10px;border:none;background:none;color:#6B7689;font-size:19px;cursor:pointer;line-height:1">×</button>';
+      var tw=320, th=tip.offsetHeight||190, top=r.bottom+12;
+      if(top+th>innerHeight-10) top=Math.max(10, r.top-th-12);
+      var left=Math.min(Math.max(10, r.left), innerWidth-tw-10);
+      tip.style.top=top+'px'; tip.style.left=left+'px';
+      document.getElementById('ltNext').onclick=function(){ if(cur===active.length-1) stop(); else { cur++; show(); } };
+      document.getElementById('ltPrev').onclick=function(){ if(cur>0){ cur--; show(); } };
+      document.getElementById('ltSkip').onclick=stop;
+    },190);
+  }
+  function stop(){ if(ov){ ov.remove(); ov=null; tip=null; ring=null; } }
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') stop(); });
+  window.__labosTour={start:start};
+})();</script>
+
+</body>
+</html>

@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#007aff" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Lab OS" />
+<link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png" />
+<title>Lab Scheduler</title>
+<style>
+  :root{ --accent:#007aff; --bg:#fff; --bg2:#f2f2f7; --line:#e5e5ea; --txt:#1c1c1e; --mut:#8e8e93; --hour:52px; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; background:var(--bg); color:var(--txt);
+    font:16px/1.4 -apple-system,"Helvetica Neue",sans-serif; }
+  /* ---- header ---- */
+  .mhead{ position:sticky; top:0; z-index:20; background:var(--bg); border-bottom:1px solid var(--line); }
+  .mrow{ display:flex; align-items:center; gap:8px; padding:8px 12px; }
+  .mtitle{ font-size:17px; font-weight:600; flex:1; }
+  .navbtns{ display:flex; align-items:center; gap:2px; }
+  .navbtns button{ border:none; background:none; color:var(--accent); font-size:15px; padding:6px 8px; border-radius:8px; }
+  .navbtns .today{ font-weight:600; }
+  .seg{ display:inline-flex; background:var(--bg2); border-radius:9px; padding:2px; }
+  .seg button{ border:none; background:none; color:var(--txt); font-size:13px; font-weight:500; padding:6px 12px; border-radius:7px; }
+  .seg button.on{ background:var(--bg); color:var(--accent); box-shadow:0 1px 2px rgba(0,0,0,0.12); }
+  .iconbtn{ border:none; background:var(--bg2); color:var(--accent); width:34px; height:34px; border-radius:9px; font-size:17px; }
+  .iconbtn.on{ background:var(--accent); color:#fff; }
+  .avatar{ flex:none; width:32px; height:32px; border-radius:50%; border:none; background:var(--accent);
+    color:#fff; font-size:12px; font-weight:700; }
+  .avatar-lg{ width:46px; height:46px; border-radius:50%; background:var(--accent); color:#fff;
+    display:inline-flex; align-items:center; justify-content:center; font-size:17px; font-weight:700; flex:none; }
+  .menu-link{ display:block; width:100%; text-align:left; text-decoration:none; color:var(--txt);
+    background:none; border:none; border-top:1px solid var(--line); padding:14px 4px; font-size:16px; }
+  .menu-link:active{ background:var(--bg2); }
+  .menu-link.signout{ color:#ff3b30; }
+  /* ---- views ---- */
+  main{ padding-bottom:88px; }
+  /* agenda */
+  .ag-day{ font-size:12px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--mut); padding:16px 14px 6px; }
+  .ag-day.today{ color:var(--accent); }
+  .ag-card{ display:flex; gap:11px; margin:0 12px 8px; padding:11px 12px; border:1px solid var(--line); border-radius:13px; }
+  .ag-card:active{ background:var(--bg2); }
+  .bar{ width:4px; border-radius:2px; flex:none; }
+  .ag-t{ font-size:15px; font-weight:600; line-height:1.25; }
+  .ag-m{ font-size:13px; color:var(--mut); margin-top:2px; }
+  .ag-chips{ margin-top:7px; display:flex; flex-wrap:wrap; gap:5px; }
+  .chip{ font-size:11px; padding:2px 7px; border-radius:6px; background:var(--bg2); color:var(--mut); }
+  .empty{ color:var(--mut); text-align:center; padding:50px 20px; font-size:15px; line-height:1.6; }
+  /* day strip */
+  .strip{ display:flex; border-bottom:1px solid var(--line); }
+  .strip .d{ flex:1; text-align:center; padding:6px 0 8px; }
+  .strip .d .w{ font-size:11px; color:var(--mut); }
+  .strip .d .n{ font-size:16px; font-weight:600; margin-top:3px; width:30px; height:30px; line-height:30px; border-radius:50%; display:inline-block; }
+  .strip .d.sel .n{ background:var(--accent); color:#fff; }
+  .strip .d.today .w{ color:var(--accent); }
+  /* timeline (day + week) */
+  .grid{ position:relative; }
+  .hrow{ height:var(--hour); border-bottom:1px solid var(--line); display:flex; }
+  .hlab{ width:46px; flex:none; font-size:11px; color:var(--mut); padding:2px 6px 0 0; text-align:right; }
+  .hcols{ flex:1; display:flex; }
+  .hcol{ flex:1; border-left:1px solid var(--line); position:relative; }
+  .canvas{ position:absolute; left:46px; right:0; top:0; bottom:0; }
+  .ev{ position:absolute; border-radius:7px; padding:3px 6px; overflow:hidden; color:#fff;
+    font-size:11px; line-height:1.2; }
+  .ev .et{ font-weight:600; }
+  .wkhdr{ display:flex; border-bottom:1px solid var(--line); position:sticky; top:0; background:var(--bg); z-index:5; }
+  .wkhdr .sp{ width:46px; flex:none; }
+  .wkhdr .wd{ flex:1; text-align:center; font-size:11px; color:var(--mut); padding:5px 0; }
+  .wkhdr .wd .n{ display:block; font-size:14px; font-weight:600; color:var(--txt); }
+  .wkhdr .wd.today .n{ color:var(--accent); }
+  /* FAB */
+  .fab{ position:fixed; right:18px; bottom:20px; width:56px; height:56px; border-radius:50%;
+    background:var(--accent); color:#fff; border:none; font-size:30px; z-index:30;
+    box-shadow:0 4px 16px rgba(0,0,0,0.3); }
+  /* ---- bottom sheets (always above everything) ---- */
+  .sheet{ position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,0.4); display:none; }
+  .sheet.show{ display:block; }
+  .sheet-inner{ position:absolute; left:0; right:0; bottom:0; max-height:92vh; overflow-y:auto;
+    background:var(--bg); border-radius:18px 18px 0 0; padding:14px 16px calc(20px + env(safe-area-inset-bottom)); }
+  .sheet h3{ margin:4px 0 12px; font-size:18px; }
+  .sheet label{ display:block; font-size:12px; color:var(--mut); margin:10px 0 4px; }
+  .sheet input,.sheet select,.sheet textarea{ width:100%; padding:11px; font-size:16px; border:1px solid var(--line);
+    border-radius:10px; background:var(--bg); color:var(--txt); }
+  .sheet textarea{ resize:vertical; min-height:64px; }
+  .sheet .acts{ display:flex; gap:8px; margin-top:16px; }
+  .sheet .acts button{ flex:1; padding:13px; font-size:16px; font-weight:600; border-radius:11px; border:none; }
+  .btn-primary{ background:var(--accent); color:#fff; }
+  .btn-grey{ background:var(--bg2); color:var(--txt); }
+  .btn-del{ background:#fff; color:#ff3b30; border:1px solid #ffd1cf !important; flex:none !important; padding:13px 16px !important; }
+  .grab{ width:40px; height:5px; border-radius:3px; background:var(--line); margin:0 auto 10px; }
+  .msg{ font-size:13px; margin:8px 0; display:none; }
+  .ai-row{ font-size:13px; padding:7px 0; border-top:1px solid var(--line); }
+</style>
+</head>
+<body>
+<header class="mhead">
+  <div class="mrow">
+    <button class="avatar" id="menuBtn" aria-label="Menu">·</button>
+    <span class="mtitle" id="title">—</span>
+    <div class="navbtns">
+      <button id="prev" aria-label="Previous">‹</button>
+      <button class="today" id="today">Today</button>
+      <button id="next" aria-label="Next">›</button>
+    </div>
+  </div>
+  <div class="mrow">
+    <div class="seg" id="seg">
+      <button data-v="agenda" class="on">Agenda</button>
+      <button data-v="day">Day</button>
+      <button data-v="week">Week</button>
+    </div>
+    <span style="flex:1"></span>
+    <button class="iconbtn" id="mineBtn" aria-label="My events">&#128100;</button>
+    <button class="iconbtn" id="aiBtn" aria-label="AI schedule">&#10024;</button>
+  </div>
+</header>
+
+<main id="main"></main>
+<button class="fab" id="fab" aria-label="New event">+</button>
+
+<!-- AI sheet -->
+<div class="sheet" id="aiSheet">
+  <div class="sheet-inner">
+    <div class="grab"></div>
+    <h3>&#10024; AI schedule</h3>
+    <textarea id="aiText" rows="3" placeholder="e.g. cohort dA OKR next week on weekdays, 2 mice/day, mixed with dA-con control"></textarea>
+    <div class="acts"><button class="btn-primary" id="aiGen">Generate preview</button></div>
+    <div class="msg" id="aiMsg"></div>
+    <div id="aiPrev"></div>
+    <div class="acts">
+      <button class="btn-grey" data-close="aiSheet">Cancel</button>
+      <button class="btn-primary" id="aiCommit" disabled>Add to calendar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Event sheet -->
+<div class="sheet" id="evSheet">
+  <div class="sheet-inner">
+    <div class="grab"></div>
+    <h3 id="evTitle">New event</h3>
+    <label>Title</label><input id="fTitle" type="text" />
+    <label>Category</label>
+    <select id="fCat">
+      <option value="experiments">Experiments</option>
+      <option value="surgery">Surgery</option>
+      <option value="behavior">Behavior</option>
+      <option value="histology">Histology</option>
+      <option value="manuscript">Manuscript</option>
+      <option value="deadlines">Deadlines</option>
+    </select>
+    <label>Date</label><input id="fDate" type="date" />
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1"><label>Start</label><input id="fStart" type="time" /></div>
+      <div style="flex:1"><label>End</label><input id="fEnd" type="time" /></div>
+    </div>
+    <label>Mice (comma-separated)</label><input id="fMice" type="text" placeholder="WT3479, WT3480" />
+    <div style="display:flex; gap:10px;">
+      <div style="flex:1"><label>Location</label><select id="fLoc"></select><input id="fLocC" type="text" placeholder="Custom" style="display:none;margin-top:6px;" /></div>
+      <div style="flex:1"><label>Rig</label><select id="fRig"></select><input id="fRigC" type="text" placeholder="Custom" style="display:none;margin-top:6px;" /></div>
+    </div>
+    <label>Notes</label><textarea id="fNotes" rows="2"></textarea>
+    <div class="msg" id="evMsg"></div>
+    <div class="acts">
+      <button class="btn-del" id="evDelete" style="display:none;">Delete</button>
+      <button class="btn-grey" data-close="evSheet">Cancel</button>
+      <button class="btn-primary" id="evSave">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Menu sheet (identity + cross-app nav) -->
+<div class="sheet" id="menuSheet">
+  <div class="sheet-inner">
+    <div class="grab"></div>
+    <div style="display:flex; align-items:center; gap:12px; margin:2px 0 10px;">
+      <span class="avatar-lg" id="menuAv">·</span>
+      <div><div id="menuName" style="font-size:17px; font-weight:600;">—</div>
+        <div id="menuRole" style="font-size:13px; color:var(--mut);"></div></div>
+    </div>
+    <a class="menu-link" href="/m">&#128197; Schedule</a>
+    <a class="menu-link" href="/eln/">&#128211; Lab Notes (ELN)</a>
+    <a class="menu-link" href="/eln/colony">&#128045; Animal DB</a>
+    <a class="menu-link" href="/eln/breeders">&#129516; Breeders</a>
+    <a class="menu-link" href="/eln/dashboard">&#128202; Dashboard</a>
+    <button class="menu-link signout" id="menuSignout">Sign out</button>
+  </div>
+</div>
+
+<script>
+const API='';
+const CAT={ manuscript:'#5AC8FA',surgery:'#FF3B30',behavior:'#FF9500',experiments:'#34C759',histology:'#AF52DE',deadlines:'#FFCC00' };
+const HS=6, HE=22;                       // visible hours 6am–10pm
+const state={ events:[], view:'agenda', cursor:new Date(), me:null, mineOnly:false, customCols:{}, editing:null, resources:{locations:[],rigs:[]} };
+const RESC='__custom__';
+function fillResSel(selId,custId,items,current){ const s=document.getElementById(selId),c=document.getElementById(custId);
+  s.innerHTML=['<option value="">—</option>'].concat((items||[]).map(it=>'<option>'+esc(it.value)+'</option>')).concat(['<option value="'+RESC+'">Custom…</option>']).join('');
+  const inList=(items||[]).some(it=>it.value===current);
+  if(current&&!inList){ s.value=RESC; c.value=current; c.style.display=''; } else { s.value=current||''; c.value=''; c.style.display='none'; }
+  s.onchange=()=>{ c.style.display=s.value===RESC?'':'none'; };
+}
+function readRes(selId,custId){ const s=document.getElementById(selId),c=document.getElementById(custId); return s.value===RESC?c.value.trim():s.value; }
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function color(c){ return state.customCols[c] || CAT[c] || '#8e8e93'; }
+async function api(path,opts={}){
+  const r=await fetch(API+path,{credentials:'include',headers:{'Content-Type':'application/json'},...opts});
+  if(!r.ok) throw new Error('API '+path+': '+r.status+' '+(await r.text().catch(()=>'')));
+  return r.json();
+}
+function evFromWire(w){ return {...w, start:new Date(w.start), end:new Date(w.end), mice:w.mice||[]}; }
+const pad=n=>String(n).padStart(2,'0');
+const sameDay=(a,b)=>a.getFullYear()===b.getFullYear()&&a.getMonth()===b.getMonth()&&a.getDate()===b.getDate();
+const addDays=(d,n)=>{ const x=new Date(d); x.setDate(x.getDate()+n); return x; };
+const startOfWeek=d=>{ const x=new Date(d); const dow=(x.getDay()+6)%7; x.setDate(x.getDate()-dow); x.setHours(0,0,0,0); return x; };
+const fmtTime=d=>d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
+
+function visible(){
+  return state.events.filter(ev=>{
+    if(state.mineOnly && state.me){
+      const mine=(ev.owner_id&&ev.owner_id===state.me.id)||(ev.assignee&&ev.assignee===state.me.id);
+      if(!mine) return false;
+    }
+    return true;
+  });
+}
+
+// ---------- render ----------
+function render(){
+  document.querySelectorAll('#seg button').forEach(b=>b.classList.toggle('on',b.dataset.v===state.view));
+  const t=document.getElementById('title');
+  if(state.view==='agenda') t.textContent='Agenda';
+  else if(state.view==='day') t.textContent=state.cursor.toLocaleDateString(undefined,{weekday:'long',month:'short',day:'numeric'});
+  else { const s=startOfWeek(state.cursor); t.textContent=s.toLocaleDateString(undefined,{month:'short',day:'numeric'})+' – '+addDays(s,6).toLocaleDateString(undefined,{month:'short',day:'numeric'}); }
+  const m=document.getElementById('main'); m.innerHTML='';
+  if(state.view==='agenda') renderAgenda(m);
+  else if(state.view==='day') renderDay(m);
+  else renderWeek(m);
+}
+
+function renderAgenda(m){
+  const start=new Date(); start.setHours(0,0,0,0);
+  const end=addDays(start,30);
+  const evs=visible().filter(e=>e.end>=start&&e.start<end).sort((a,b)=>a.start-b.start);
+  if(!evs.length){ m.innerHTML='<div class="empty">No events in the next 30 days.<br>Tap + to add one.</div>'; return; }
+  const today=new Date(); today.setHours(0,0,0,0);
+  let cur='';
+  evs.forEach(ev=>{
+    const d=new Date(ev.start); d.setHours(0,0,0,0); const key=d.toDateString();
+    if(key!==cur){ cur=key;
+      const h=document.createElement('div'); h.className='ag-day'+(sameDay(d,today)?' today':'');
+      const rel=sameDay(d,today)?'Today · ':sameDay(d,addDays(today,1))?'Tomorrow · ':'';
+      h.textContent=rel+d.toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+      m.appendChild(h);
+    }
+    m.appendChild(card(ev));
+  });
+}
+function card(ev){
+  const c=document.createElement('div'); c.className='ag-card';
+  const time=ev.all_day?'All day':fmtTime(ev.start)+'–'+fmtTime(ev.end);
+  const sub=ev.subcategory||ev.category||'';
+  const place=[ev.location,ev.rig].filter(Boolean).join(' · ');
+  const chips=(ev.mice||[]).slice(0,6).map(x=>'<span class="chip">'+esc(x)+'</span>').join('');
+  c.innerHTML='<div class="bar" style="background:'+color(ev.category)+'"></div>'+
+    '<div style="flex:1;min-width:0"><div class="ag-t">'+esc(ev.title||'(untitled)')+'</div>'+
+    '<div class="ag-m">'+esc(time)+' · '+esc(sub)+'</div>'+
+    (place?'<div class="ag-m">📍 '+esc(place)+'</div>':'')+
+    (chips?'<div class="ag-chips">'+chips+'</div>':'')+'</div>';
+  c.addEventListener('click',()=>openEv(ev.id));
+  return c;
+}
+
+function dayStrip(m){
+  const s=startOfWeek(state.cursor), today=new Date();
+  const strip=document.createElement('div'); strip.className='strip';
+  for(let i=0;i<7;i++){ const d=addDays(s,i);
+    const el=document.createElement('div'); el.className='d'+(sameDay(d,state.cursor)?' sel':'')+(sameDay(d,today)?' today':'');
+    el.innerHTML='<div class="w">'+d.toLocaleDateString(undefined,{weekday:'narrow'})+'</div><div class="n">'+d.getDate()+'</div>';
+    el.addEventListener('click',()=>{ state.cursor=d; render(); });
+    strip.appendChild(el);
+  }
+  m.appendChild(strip);
+}
+function eventsOn(day){
+  const s=new Date(day); s.setHours(0,0,0,0); const e=addDays(s,1);
+  return visible().filter(ev=>ev.start<e&&ev.end>s&&!ev.all_day).sort((a,b)=>a.start-b.start);
+}
+function placeEvent(ev,day){
+  const dayStart=new Date(day); dayStart.setHours(HS,0,0,0);
+  const minPerPx=60/52;
+  let top=((ev.start-dayStart)/60000)/minPerPx;
+  let bot=((ev.end-dayStart)/60000)/minPerPx;
+  const maxH=(HE-HS)*52;
+  top=Math.max(0,top); bot=Math.min(maxH,bot);
+  return {top, h:Math.max(20,bot-top)};
+}
+function renderDay(m){
+  dayStrip(m);
+  const wrap=document.createElement('div'); wrap.className='grid';
+  for(let h=HS;h<HE;h++){ const r=document.createElement('div'); r.className='hrow';
+    r.innerHTML='<div class="hlab">'+(h%12||12)+(h<12?'a':'p')+'</div><div class="hcols"><div class="hcol"></div></div>';
+    wrap.appendChild(r);
+  }
+  const canvas=document.createElement('div'); canvas.className='canvas';
+  eventsOn(state.cursor).forEach(ev=>{
+    const p=placeEvent(ev,state.cursor);
+    const b=document.createElement('div'); b.className='ev';
+    b.style.cssText='left:4px;right:4px;top:'+p.top+'px;height:'+p.h+'px;background:'+color(ev.category);
+    b.innerHTML='<span class="et">'+esc(ev.title||'')+'</span> '+fmtTime(ev.start);
+    b.addEventListener('click',()=>openEv(ev.id));
+    canvas.appendChild(b);
+  });
+  wrap.appendChild(canvas);
+  m.appendChild(wrap);
+}
+function renderWeek(m){
+  const s=startOfWeek(state.cursor), today=new Date();
+  const hdr=document.createElement('div'); hdr.className='wkhdr';
+  hdr.innerHTML='<div class="sp"></div>'+Array.from({length:7},(_,i)=>{ const d=addDays(s,i);
+    return '<div class="wd'+(sameDay(d,today)?' today':'')+'" data-i="'+i+'">'+d.toLocaleDateString(undefined,{weekday:'narrow'})+'<span class="n">'+d.getDate()+'</span></div>';
+  }).join('');
+  hdr.querySelectorAll('.wd').forEach(el=>el.addEventListener('click',()=>{ state.cursor=addDays(s,+el.dataset.i); state.view='day'; render(); }));
+  m.appendChild(hdr);
+  const wrap=document.createElement('div'); wrap.className='grid';
+  for(let h=HS;h<HE;h++){ const r=document.createElement('div'); r.className='hrow';
+    r.innerHTML='<div class="hlab">'+(h%12||12)+(h<12?'a':'p')+'</div><div class="hcols">'+'<div class="hcol"></div>'.repeat(7)+'</div>';
+    wrap.appendChild(r);
+  }
+  const canvas=document.createElement('div'); canvas.className='canvas'; canvas.style.display='flex';
+  for(let i=0;i<7;i++){ const day=addDays(s,i);
+    const col=document.createElement('div'); col.style.cssText='flex:1;position:relative;';
+    eventsOn(day).forEach(ev=>{ const p=placeEvent(ev,day);
+      const b=document.createElement('div'); b.className='ev';
+      b.style.cssText='left:1px;right:1px;top:'+p.top+'px;height:'+p.h+'px;background:'+color(ev.category)+';font-size:9px;padding:1px 3px;';
+      b.textContent=ev.title||'';
+      b.addEventListener('click',()=>openEv(ev.id));
+      col.appendChild(b);
+    });
+    canvas.appendChild(col);
+  }
+  wrap.appendChild(canvas);
+  m.appendChild(wrap);
+}
+
+// ---------- sheets ----------
+function showSheet(id){ document.getElementById(id).classList.add('show'); }
+function hideSheet(id){ document.getElementById(id).classList.remove('show'); }
+
+// AI
+function openAi(){ document.getElementById('aiText').value=''; document.getElementById('aiPrev').innerHTML='';
+  document.getElementById('aiCommit').disabled=true; aiMsg(''); state.aiProposed=null; showSheet('aiSheet'); }
+function aiMsg(t,err){ const e=document.getElementById('aiMsg'); e.textContent=t||''; e.style.color=err?'#ff3b30':'var(--mut)'; e.style.display=t?'block':'none'; }
+async function aiGenerate(){
+  const text=document.getElementById('aiText').value.trim();
+  if(!text){ aiMsg('Type a request first.',true); return; }
+  const btn=document.getElementById('aiGen'); btn.disabled=true; aiMsg('Thinking…');
+  try{
+    const r=await api('/api/schedule/ai',{method:'POST',body:JSON.stringify({text})});
+    state.aiProposed=r.events||[];
+    const p=r.params||{}, s=r.summary||{};
+    const rows=(r.events||[]).map(e=>'<div class="ai-row">'+esc(e.start.replace('T',' '))+' · '+esc(e.title)+'</div>').join('');
+    document.getElementById('aiPrev').innerHTML=
+      '<div style="font-size:13px;color:var(--mut);margin:8px 0">Understood: <b>'+esc(p.cohort||'?')+'</b> · '+esc(p.subcategory||p.category||'')+' · '+esc(p.date_from||'')+'→'+esc(p.date_to||'')+' · '+(p.per_day||'?')+'/day</div>'+
+      '<div style="font-size:14px;margin-bottom:4px"><b>'+(s.scheduled||0)+'</b> events'+(s.conflicts?' · <span style="color:#ff3b30">'+s.conflicts+' conflict(s)</span>':'')+'</div>'+rows;
+    document.getElementById('aiCommit').disabled=!state.aiProposed.length; aiMsg('');
+  }catch(e){ aiMsg(String(e.message||e),true); }
+  finally{ btn.disabled=false; }
+}
+async function aiCommit(){
+  if(!state.aiProposed||!state.aiProposed.length) return;
+  const btn=document.getElementById('aiCommit'); btn.disabled=true; aiMsg('Adding…');
+  try{ await api('/api/schedule/commit',{method:'POST',body:JSON.stringify({events:state.aiProposed})});
+    hideSheet('aiSheet'); await load(); render();
+  }catch(e){ aiMsg(String(e.message||e),true); btn.disabled=false; }
+}
+
+// event create/edit
+function openEv(id){
+  state.editing=id||null;
+  const ev=id?state.events.find(e=>e.id===id):null;
+  document.getElementById('evTitle').textContent=ev?'Edit event':'New event';
+  document.getElementById('evDelete').style.display=ev?'block':'none';
+  const base=ev?ev.start:(()=>{ const d=new Date(state.cursor); const n=new Date(); d.setHours(n.getHours()+1,0,0,0); return d; })();
+  const end=ev?ev.end:new Date(base.getTime()+3600000);
+  document.getElementById('fTitle').value=ev?ev.title||'':'';
+  document.getElementById('fCat').value=ev?ev.category||'experiments':'experiments';
+  document.getElementById('fDate').value=base.getFullYear()+'-'+pad(base.getMonth()+1)+'-'+pad(base.getDate());
+  document.getElementById('fStart').value=pad(base.getHours())+':'+pad(base.getMinutes());
+  document.getElementById('fEnd').value=pad(end.getHours())+':'+pad(end.getMinutes());
+  document.getElementById('fMice').value=ev?(ev.mice||[]).join(', '):'';
+  fillResSel('fLoc','fLocC',state.resources.locations,ev?ev.location||'':'');
+  fillResSel('fRig','fRigC',state.resources.rigs,ev?ev.rig||'':'');
+  document.getElementById('fNotes').value=ev?ev.notes||'':'';
+  evMsg(''); showSheet('evSheet');
+}
+function evMsg(t,err){ const e=document.getElementById('evMsg'); e.textContent=t||''; e.style.color=err?'#ff3b30':'var(--mut)'; e.style.display=t?'block':'none'; }
+async function evSave(){
+  const date=document.getElementById('fDate').value, st=document.getElementById('fStart').value, en=document.getElementById('fEnd').value;
+  const title=document.getElementById('fTitle').value.trim();
+  if(!date||!st||!en){ evMsg('Date and times are required.',true); return; }
+  const cat=document.getElementById('fCat').value;
+  const mice=document.getElementById('fMice').value.split(',').map(s=>s.trim()).filter(Boolean);
+  const payload={ title:title||(cat+' '+(mice[0]||'')).trim(), category:cat,
+    start:date+'T'+st+':00', end:date+'T'+en+':00', all_day:false,
+    mice, notes:document.getElementById('fNotes').value, status:'planned',
+    location:readRes('fLoc','fLocC'), rig:readRes('fRig','fRigC') };
+  const btn=document.getElementById('evSave'); btn.disabled=true; evMsg('Saving…');
+  try{
+    if(state.editing) await api('/api/events/'+state.editing,{method:'PUT',body:JSON.stringify({...payload,id:state.editing})});
+    else await api('/api/events',{method:'POST',body:JSON.stringify(payload)});
+    hideSheet('evSheet'); await load(); render();
+  }catch(e){ evMsg(String(e.message||e),true); }
+  finally{ btn.disabled=false; }
+}
+async function evDelete(){
+  if(!state.editing) return;
+  if(!confirm('Delete this event?')) return;
+  try{ await api('/api/events/'+state.editing,{method:'DELETE'}); hideSheet('evSheet'); await load(); render(); }
+  catch(e){ evMsg(String(e.message||e),true); }
+}
+
+// ---------- nav + wiring ----------
+function shift(n){
+  if(state.view==='day') state.cursor=addDays(state.cursor,n);
+  else if(state.view==='week') state.cursor=addDays(state.cursor,n*7);
+  else state.cursor=addDays(state.cursor,n*7);
+  render();
+}
+function wire(){
+  document.getElementById('prev').onclick=()=>shift(-1);
+  document.getElementById('next').onclick=()=>shift(1);
+  document.getElementById('today').onclick=()=>{ state.cursor=new Date(); render(); };
+  document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{ state.view=b.dataset.v; render(); });
+  document.getElementById('mineBtn').onclick=function(){ state.mineOnly=!state.mineOnly; this.classList.toggle('on',state.mineOnly); render(); };
+  document.getElementById('aiBtn').onclick=openAi;
+  document.getElementById('menuBtn').onclick=openMenu;
+  document.getElementById('menuSignout').onclick=signOut;
+  document.getElementById('fab').onclick=()=>openEv(null);
+  document.getElementById('aiGen').onclick=aiGenerate;
+  document.getElementById('aiCommit').onclick=aiCommit;
+  document.getElementById('evSave').onclick=evSave;
+  document.getElementById('evDelete').onclick=evDelete;
+  document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>hideSheet(b.dataset.close));
+  document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',e=>{ if(e.target===s) hideSheet(s.id); }));
+}
+
+// menu / identity
+function initials(u){ return String((u&&(u.initials||(u.display_name||u.username||'?')[0]))||'?').toUpperCase(); }
+function setAvatar(){ const b=document.getElementById('menuBtn'); if(!state.me) return;
+  b.textContent=initials(state.me); if(state.me.color) b.style.background=state.me.color; }
+function openMenu(){ const u=state.me||{};
+  const av=document.getElementById('menuAv'); av.textContent=initials(u); if(u.color) av.style.background=u.color;
+  document.getElementById('menuName').textContent=u.display_name||u.username||'—';
+  document.getElementById('menuRole').textContent=(u.effective_role==='admin'?'Admin':'User');
+  showSheet('menuSheet');
+}
+async function signOut(){ try{ await fetch('/api/eln/auth/logout',{method:'POST',credentials:'include'}); }catch(_){ } location.href='/eln/login'; }
+
+async function load(){
+  const [ev,cust]=await Promise.all([api('/api/events'),api('/api/customs').catch(()=>({categories:[]}))]);
+  state.events=(ev.events||[]).map(evFromWire);
+  (cust.categories||[]).forEach(c=>{ if(c.color&&!String(c.color).startsWith('var(')) state.customCols[c.key]=c.color; });
+  try{ state.resources=await api('/api/schedule/resources'); }catch(_){ }
+}
+async function boot(){
+  // Wide screens get the full desktop scheduler. (≥900 vs scheduler's ≤640 = no redirect loop.)
+  if(window.matchMedia('(min-width: 900px)').matches){ location.replace('/scheduler.html'); return; }
+  try{
+    const r=await fetch('/api/eln/auth/me',{credentials:'include'});
+    if(!r.ok){ location.href='/eln/login?next='+encodeURIComponent('/m'); return; }
+    state.me=(await r.json()).user||null;
+    setAvatar();
+  }catch(_){ }
+  try{ await load(); }
+  catch(e){ document.getElementById('main').innerHTML='<div class="empty">Can’t reach the server.<br>'+esc(e.message)+'</div>'; return; }
+  wire(); render();
+}
+boot();
+</script>
+</body>
+</html>

@@ -1,0 +1,553 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Electronic Lab Notebook</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --red: #b91c1c;
+    --red-soft: #fef2f2;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", "Segoe UI", Calibri, sans-serif;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%);
+    color: #1c2333;
+    min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  body::before {
+    content: ""; position: fixed; right: -160px; top: -160px;
+    width: 560px; height: 560px; border-radius: 50%;
+    background: rgba(143, 179, 230, 0.10); pointer-events: none;
+  }
+  body::after {
+    content: ""; position: fixed; left: -120px; bottom: -120px;
+    width: 380px; height: 380px; border-radius: 50%;
+    background: rgba(242, 179, 61, 0.06); pointer-events: none;
+  }
+  .card {
+    background: var(--white);
+    border-radius: 16px;
+    width: 100%; max-width: 460px;
+    box-shadow: 0 20px 60px rgba(15, 23, 42, 0.30);
+    overflow: hidden;
+    position: relative; z-index: 2;
+  }
+  .head {
+    padding: 28px 28px 14px;
+  }
+  .head .brand {
+    color: var(--accent);
+    font-weight: 700; font-size: 12px; letter-spacing: 0.2em;
+    text-transform: uppercase;
+  }
+  .head h1 {
+    margin: 6px 0 2px;
+    font-family: Georgia, serif;
+    color: var(--navy); font-size: 24px;
+  }
+  .head .sub { color: var(--grey); font-size: 13px; margin: 0; }
+
+  .tabs {
+    display: flex;
+    border-bottom: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+  }
+  .tabs button {
+    flex: 1;
+    border: 0; background: transparent;
+    padding: 12px 8px; cursor: pointer;
+    font: inherit; font-size: 12px; font-weight: 600;
+    color: var(--grey);
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s, background 0.15s;
+  }
+  .tabs button:hover { color: var(--navy); background: var(--grey-light); }
+  .tabs button.active {
+    color: var(--navy);
+    border-bottom-color: var(--navy);
+    background: var(--white);
+  }
+
+  .pane { padding: 24px 28px 28px; display: none; }
+  .pane.active { display: block; }
+
+  label {
+    display: block;
+    color: var(--grey); font-size: 12px; font-weight: 600;
+    margin-bottom: 4px; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  input[type="text"], input[type="email"], input[type="password"] {
+    width: 100%;
+    border: 1px solid #d1d5db; border-radius: 9px;
+    padding: 10px 13px;
+    font: inherit; font-size: 15px;
+    background: var(--white);
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  input:focus {
+    outline: none; border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(30, 39, 97, 0.13);
+  }
+  .field { margin-bottom: 14px; }
+  .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  .username-preview {
+    margin-top: 4px; padding: 8px 12px;
+    background: var(--grey-lighter); border-radius: 8px;
+    color: var(--grey); font-size: 13px;
+    display: flex; align-items: center; gap: 8px;
+    min-height: 36px;
+  }
+  .username-preview strong {
+    color: var(--navy); font-family: "SF Mono", Consolas, monospace;
+    font-size: 14px;
+  }
+  .username-preview .hint { color: var(--grey); font-size: 11px; }
+
+  .first-user-note {
+    margin: -4px 0 14px;
+    padding: 10px 12px;
+    background: rgba(242, 179, 61, 0.12);
+    border-left: 3px solid var(--accent);
+    border-radius: 6px;
+    color: #6b4d10; font-size: 12.5px;
+  }
+
+  button.primary {
+    width: 100%;
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 12px;
+    font: inherit; font-size: 15px; font-weight: 600;
+    cursor: pointer;
+    margin-top: 6px;
+    transition: background 0.15s;
+  }
+  button.primary:hover:not(:disabled) { background: var(--navy-deep); }
+  button.primary:disabled { background: #c7d2fe; cursor: progress; }
+
+  button.ghost {
+    background: transparent; color: var(--navy);
+    border: 1px solid var(--ice-deep); border-radius: 8px;
+    padding: 8px 12px; font: inherit; font-size: 13px; cursor: pointer;
+    margin-top: 8px;
+  }
+  button.ghost:hover { background: var(--grey-lighter); }
+
+  .msg {
+    margin-top: 12px;
+    padding: 10px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    display: none;
+  }
+  .msg.error { background: var(--red-soft); color: var(--red); display: block; }
+  .msg.success { background: var(--green-soft); color: var(--green); display: block; }
+  .msg.info { background: #eef2ff; color: var(--navy); display: block; }
+
+  .result-list {
+    margin-top: 12px; padding: 12px;
+    background: var(--grey-lighter); border-radius: 8px;
+    font-size: 14px;
+  }
+  .result-list ul { margin: 6px 0 0 18px; padding: 0; }
+  .result-list li { margin: 2px 0; }
+  .result-list code {
+    background: var(--white); padding: 2px 8px; border-radius: 4px;
+    font-family: "SF Mono", Consolas, monospace; font-size: 13px;
+    color: var(--navy);
+  }
+
+  .footer {
+    text-align: center; padding: 14px 28px;
+    border-top: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    color: var(--grey); font-size: 11px;
+  }
+  .footer a { color: var(--navy); text-decoration: none; }
+  .footer a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="head">
+    <div class="brand">Lab OS · ELN</div>
+    <h1>Electronic Lab Notebook</h1>
+    <p class="sub" id="head-sub">Sign in to continue.</p>
+  </div>
+
+  <nav class="tabs" role="tablist">
+    <button data-tab="signin"  class="active" type="button">Sign in</button>
+    <button data-tab="new"     type="button">New User</button>
+    <button data-tab="forgotid" type="button">Forgot ID</button>
+    <button data-tab="forgotpw" type="button">Forgot password</button>
+  </nav>
+
+  <!-- ── Sign in ───────────────────────────── -->
+  <section class="pane active" data-pane="signin">
+    <form id="form-signin" autocomplete="on">
+      <div class="field">
+        <label for="si-user">Username</label>
+        <input id="si-user" name="username" type="text" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="si-pw">Password / PIN</label>
+        <input id="si-pw" name="password" type="password" autocomplete="current-password" required />
+      </div>
+      <button class="primary" type="submit">Sign in</button>
+      <div class="msg" id="msg-signin"></div>
+    </form>
+  </section>
+
+  <!-- ── New User ──────────────────────────── -->
+  <section class="pane" data-pane="new">
+    <div class="first-user-note" id="first-user-note" style="display:none;">
+      You'll be the <strong>first user</strong> and become the <strong>lab administrator</strong>.
+    </div>
+    <form id="form-new" autocomplete="on">
+      <div class="row2">
+        <div class="field">
+          <label for="nu-first">First name</label>
+          <input id="nu-first" name="first_name" type="text" autocomplete="given-name" required />
+        </div>
+        <div class="field">
+          <label for="nu-last">Last name</label>
+          <input id="nu-last" name="last_name" type="text" autocomplete="family-name" required />
+        </div>
+      </div>
+      <div class="field">
+        <label>Your username (auto-generated)</label>
+        <div class="username-preview" id="username-preview">
+          <strong id="username-display">—</strong>
+          <span class="hint" id="username-hint">First-name initial + last-name (max 6 chars)</span>
+        </div>
+      </div>
+      <div class="field">
+        <label for="nu-email">Email</label>
+        <input id="nu-email" name="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label for="nu-pw">Password / PIN  <span style="color:var(--grey); font-weight:400; text-transform:none; letter-spacing:0;">(min 4 chars)</span></label>
+        <input id="nu-pw" name="password" type="password" autocomplete="new-password" required minlength="4" />
+      </div>
+      <div class="field">
+        <label for="nu-pw2">Confirm password</label>
+        <input id="nu-pw2" name="password2" type="password" autocomplete="new-password" required />
+      </div>
+      <button class="primary" type="submit">Create account</button>
+      <div class="msg" id="msg-new"></div>
+    </form>
+  </section>
+
+  <!-- ── Forgot ID ─────────────────────────── -->
+  <section class="pane" data-pane="forgotid">
+    <form id="form-forgotid">
+      <p style="color: var(--grey); font-size: 13px; margin: 0 0 14px;">
+        Enter the email address used when registering. We'll show the usernames linked to it.
+      </p>
+      <div class="field">
+        <label for="fi-email">Email</label>
+        <input id="fi-email" name="email" type="email" required />
+      </div>
+      <button class="primary" type="submit">Look up usernames</button>
+      <div class="msg" id="msg-forgotid"></div>
+      <div class="result-list" id="forgotid-results" style="display:none;"></div>
+    </form>
+  </section>
+
+  <!-- ── Forgot password ───────────────────── -->
+  <section class="pane" data-pane="forgotpw">
+    <form id="form-forgotpw-step1">
+      <p style="color: var(--grey); font-size: 13px; margin: 0 0 14px;">
+        Enter your username + email. We'll issue a one-time 6-digit reset code.
+      </p>
+      <div class="field">
+        <label for="fp-user">Username</label>
+        <input id="fp-user" name="username" type="text" autocomplete="username" required />
+      </div>
+      <div class="field">
+        <label for="fp-email">Email</label>
+        <input id="fp-email" name="email" type="email" required />
+      </div>
+      <button class="primary" type="submit">Issue reset code</button>
+      <div class="msg" id="msg-forgotpw1"></div>
+    </form>
+
+    <form id="form-forgotpw-step2" style="display:none; margin-top: 18px;">
+      <div class="field">
+        <label for="fp-code">6-digit code</label>
+        <input id="fp-code" name="code" type="text" maxlength="6" inputmode="numeric" pattern="\d{6}" required />
+      </div>
+      <div class="field">
+        <label for="fp-newpw">New password</label>
+        <input id="fp-newpw" name="new_password" type="password" minlength="4" required />
+      </div>
+      <div class="field">
+        <label for="fp-newpw2">Confirm new password</label>
+        <input id="fp-newpw2" name="new_password2" type="password" minlength="4" required />
+      </div>
+      <button class="primary" type="submit">Reset password</button>
+      <div class="msg" id="msg-forgotpw2"></div>
+    </form>
+  </section>
+
+  <div class="footer">
+    Lab OS · Electronic Lab Notebook · <a href="/scheduler.html">↳ Lab Scheduler</a>
+  </div>
+</div>
+
+<script>
+const $ = (sel) => document.querySelector(sel);
+const $$ = (sel) => Array.from(document.querySelectorAll(sel));
+
+// ---------- tab switching ----------
+const TAB_LABELS = {
+  signin:   "Sign in to continue.",
+  new:      "Create a new account.",
+  forgotid: "Look up your username.",
+  forgotpw: "Reset your password.",
+};
+function switchTab(name) {
+  $$(".tabs button").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+  $$(".pane").forEach(p => p.classList.toggle("active", p.dataset.pane === name));
+  $("#head-sub").textContent = TAB_LABELS[name] || "";
+}
+$$(".tabs button").forEach(b => b.addEventListener("click", () => switchTab(b.dataset.tab)));
+
+// ---------- helpers ----------
+async function api(path, body) {
+  const opts = { method: "POST", headers: { "Content-Type": "application/json" }, credentials: "include" };
+  if (body) opts.body = JSON.stringify(body);
+  const resp = await fetch(path, opts);
+  let data = null;
+  try { data = await resp.json(); } catch (_) { data = null; }
+  if (!resp.ok) {
+    const detail = data?.detail || data?.message || `HTTP ${resp.status}`;
+    const err = new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    err.status = resp.status;
+    throw err;
+  }
+  return data;
+}
+
+function setMsg(id, kind, text) {
+  const el = $("#" + id);
+  el.className = "msg " + (kind || "");
+  el.textContent = text || "";
+  if (!text) el.style.display = "none";
+}
+
+function gotoEln() {
+  // Honor ?next=... if present, sanitised to same-origin paths only.
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const raw = params.get("next") || "";
+    if (raw.startsWith("/") && !raw.startsWith("//") && raw !== "/eln/login") {
+      window.location.href = raw;
+      return;
+    }
+  } catch (_) {}
+  window.location.href = "/eln/";
+}
+
+// ---------- initial status ----------
+async function loadStatus() {
+  try {
+    const s = await fetch("/api/eln/auth/status", { credentials: "include" }).then(r => r.json());
+    if (s.signed_in) {
+      // already logged in — go straight to ELN
+      gotoEln();
+      return;
+    }
+    if (s.first_run) {
+      // No users at all — guide them to register
+      switchTab("new");
+      $("#head-sub").textContent = "First-time setup — create the lab administrator account.";
+      $("#first-user-note").style.display = "block";
+    }
+  } catch (e) {
+    // server down or no eln yet — stay on sign in
+  }
+}
+loadStatus();
+
+// ---------- Sign in ----------
+$("#form-signin").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setMsg("msg-signin", "", "");
+  const btn = e.target.querySelector("button");
+  btn.disabled = true;
+  try {
+    await api("/api/eln/auth/login", {
+      username: $("#si-user").value.trim(),
+      password: $("#si-pw").value,
+    });
+    setMsg("msg-signin", "success", "Welcome! Loading your ELN…");
+    setTimeout(gotoEln, 400);
+  } catch (err) {
+    setMsg("msg-signin", "error", err.message);
+    btn.disabled = false;
+  }
+});
+
+// ---------- New User — live preview ----------
+let previewTimer = null;
+async function updatePreview() {
+  const first = $("#nu-first").value.trim();
+  const last = $("#nu-last").value.trim();
+  if (!first || !last) {
+    $("#username-display").textContent = "—";
+    $("#username-hint").textContent = "First-name initial + last-name (max 6 chars)";
+    return;
+  }
+  try {
+    const r = await api("/api/eln/auth/preview-username", { first_name: first, last_name: last });
+    if (!r.ok) {
+      $("#username-display").textContent = "—";
+      $("#username-hint").textContent = r.detail || "Cannot derive ID";
+      return;
+    }
+    $("#username-display").textContent = r.username;
+    if (r.would_suffix) {
+      $("#username-hint").textContent = `(taken — auto-suffixed; base was ${r.root})`;
+    } else {
+      $("#username-hint").textContent = "(available)";
+    }
+  } catch (err) {
+    $("#username-display").textContent = "—";
+    $("#username-hint").textContent = "Preview unavailable";
+  }
+}
+$("#nu-first").addEventListener("input", () => { clearTimeout(previewTimer); previewTimer = setTimeout(updatePreview, 200); });
+$("#nu-last").addEventListener("input", () => { clearTimeout(previewTimer); previewTimer = setTimeout(updatePreview, 200); });
+
+$("#form-new").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setMsg("msg-new", "", "");
+  if ($("#nu-pw").value !== $("#nu-pw2").value) {
+    setMsg("msg-new", "error", "Passwords do not match.");
+    return;
+  }
+  const btn = e.target.querySelector("button.primary");
+  btn.disabled = true;
+  try {
+    const r = await api("/api/eln/auth/register", {
+      first_name: $("#nu-first").value.trim(),
+      last_name:  $("#nu-last").value.trim(),
+      email:      $("#nu-email").value.trim(),
+      password:   $("#nu-pw").value,
+    });
+    if (r.pending) {
+      // Account needs an admin to approve before it can sign in.
+      setMsg("msg-new", "success",
+        `${r.message || "Request submitted."} Your ID will be ${r.username}.`);
+      e.target.reset();
+      if (typeof updatePreview === "function") updatePreview();
+      btn.disabled = false;
+      return;
+    }
+    setMsg("msg-new", "success",
+      `Welcome, ${r.user.display_name}! You're the lab admin. Your ID is ${r.user.username}.`);
+    setTimeout(gotoEln, 1200);
+  } catch (err) {
+    setMsg("msg-new", "error", err.message);
+    btn.disabled = false;
+  }
+});
+
+// ---------- Forgot ID ----------
+$("#form-forgotid").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setMsg("msg-forgotid", "", "");
+  $("#forgotid-results").style.display = "none";
+  try {
+    const r = await api("/api/eln/auth/forgot-username", { email: $("#fi-email").value.trim() });
+    const box = $("#forgotid-results");
+    if (!r.found.length) {
+      setMsg("msg-forgotid", "info", "No account is linked to that email. Try the New User tab if this is your first time.");
+    } else {
+      box.style.display = "block";
+      box.innerHTML = "<strong>Accounts linked to this email:</strong><ul>" +
+        r.found.map(x => `<li><code>${x.username}</code> — ${x.display_name}</li>`).join("") + "</ul>";
+    }
+  } catch (err) {
+    setMsg("msg-forgotid", "error", err.message);
+  }
+});
+
+// ---------- Forgot password — step 1 issue code ----------
+let resetTokenState = null;
+$("#form-forgotpw-step1").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setMsg("msg-forgotpw1", "", "");
+  try {
+    const r = await api("/api/eln/auth/forgot-password", {
+      username: $("#fp-user").value.trim(),
+      email: $("#fp-email").value.trim(),
+    });
+    if (r.code_sent) {
+      resetTokenState = r.reset_token;
+      $("#form-forgotpw-step2").style.display = "block";
+      const msg = r.code
+        ? `Reset code: ${r.code}  (lab-local mode — would be emailed once SMTP is set up)`
+        : "Reset code issued — check your email.";
+      setMsg("msg-forgotpw1", "info", msg);
+    } else {
+      setMsg("msg-forgotpw1", "info", "If that account exists, a reset code has been issued.");
+    }
+  } catch (err) {
+    setMsg("msg-forgotpw1", "error", err.message);
+  }
+});
+
+$("#form-forgotpw-step2").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  setMsg("msg-forgotpw2", "", "");
+  if (!resetTokenState) {
+    setMsg("msg-forgotpw2", "error", "Request a code first.");
+    return;
+  }
+  if ($("#fp-newpw").value !== $("#fp-newpw2").value) {
+    setMsg("msg-forgotpw2", "error", "Passwords do not match.");
+    return;
+  }
+  try {
+    await api("/api/eln/auth/reset-password", {
+      reset_token: resetTokenState,
+      code: $("#fp-code").value.trim(),
+      new_password: $("#fp-newpw").value,
+    });
+    setMsg("msg-forgotpw2", "success", "Password updated. You can now sign in.");
+    setTimeout(() => {
+      resetTokenState = null;
+      $("#form-forgotpw-step1").reset();
+      $("#form-forgotpw-step2").reset();
+      $("#form-forgotpw-step2").style.display = "none";
+      switchTab("signin");
+      $("#si-user").value = $("#fp-user").value.trim();
+      $("#si-pw").focus();
+    }, 1200);
+  } catch (err) {
+    setMsg("msg-forgotpw2", "error", err.message);
+  }
+});
+</script>
+</body>
+</html>

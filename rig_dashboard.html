@@ -1,0 +1,362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Rig Dashboard</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+    --red: #b91c1c;
+    --red-soft: #fef2f2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; height: 100%; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", "Segoe UI", sans-serif;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--navy-deep) 100%);
+    color: var(--white);
+    min-height: 100vh;
+    padding: 30px 20px;
+  }
+  main { max-width: 780px; margin: 0 auto; }
+  header { text-align: center; margin-bottom: 28px; }
+  header h1 {
+    font-family: Georgia, serif;
+    font-size: 32px; margin: 0 0 6px;
+    color: var(--accent);
+  }
+  header .sub { color: var(--ice-deep); font-size: 14px; }
+
+  .status-card {
+    background: rgba(255,255,255,0.07);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 14px;
+    padding: 14px 18px;
+    margin-bottom: 22px;
+    display: flex; align-items: center; gap: 12px;
+    backdrop-filter: blur(6px);
+  }
+  .status-dot {
+    width: 12px; height: 12px; border-radius: 50%;
+    background: var(--grey); transition: background 0.2s;
+    flex-shrink: 0;
+    box-shadow: 0 0 0 0 rgba(255,255,255,0.2);
+  }
+  .status-dot.up   { background: #34c759; box-shadow: 0 0 0 5px rgba(52,199,89,0.18); }
+  .status-dot.down { background: #ff3b30; }
+  .status-text { flex: 1; font-size: 14px; }
+  .status-text .label { font-weight: 700; }
+  .status-text .hint  { color: var(--ice-deep); font-size: 12px; margin-top: 2px; }
+
+  /* Primary "Open Lab Notebook" — biggest button */
+  .open-eln {
+    display: block;
+    background: var(--accent); color: var(--navy-deep);
+    text-decoration: none; border: 0; cursor: pointer;
+    border-radius: 16px;
+    padding: 22px 28px;
+    margin-bottom: 18px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.20);
+    transition: transform 0.15s, box-shadow 0.15s;
+  }
+  .open-eln:hover:not([disabled]) { transform: translateY(-3px); box-shadow: 0 12px 32px rgba(0,0,0,0.32); }
+  .open-eln[disabled] { opacity: 0.55; cursor: not-allowed; }
+  .open-eln .row { display: flex; align-items: center; gap: 16px; }
+  .open-eln .ico { font-size: 36px; line-height: 1; }
+  .open-eln .ttl { font-family: Georgia, serif; font-size: 22px; font-weight: 700; }
+  .open-eln .sub { font-size: 13px; opacity: 0.78; margin-top: 2px; }
+
+  /* Smaller secondary buttons (Start / Stop) */
+  .actions {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    margin-bottom: 20px;
+  }
+  @media (max-width: 520px) { .actions { grid-template-columns: 1fr; } }
+  .action-card {
+    background: var(--white); color: var(--navy);
+    border-radius: 12px;
+    padding: 16px 18px;
+    text-decoration: none; border: 0; font: inherit; text-align: left;
+    cursor: pointer;
+    display: flex; flex-direction: column; gap: 4px;
+    transition: transform 0.15s, box-shadow 0.15s;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+  }
+  .action-card:hover:not([disabled]) { transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.20); }
+  .action-card[disabled] { opacity: 0.45; cursor: not-allowed; }
+  .action-card .ico { font-size: 22px; }
+  .action-card .ttl { font-family: Georgia, serif; font-size: 15px; font-weight: 700; }
+  .action-card .sub { color: var(--grey); font-size: 11.5px; }
+  .action-card.danger .ttl { color: var(--red); }
+
+  .panel {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 14px;
+    padding: 16px 22px;
+    margin-bottom: 16px;
+  }
+  .panel h2 {
+    font-family: Georgia, serif;
+    font-size: 16px; margin: 0 0 10px;
+    color: var(--accent);
+  }
+  .panel ol, .panel ul {
+    margin: 0; padding-left: 20px;
+    font-size: 13px; line-height: 1.7;
+    color: var(--ice);
+  }
+  .panel code {
+    background: rgba(0,0,0,0.25); color: var(--accent);
+    padding: 1px 6px; border-radius: 4px;
+    font-family: Consolas, monospace; font-size: 11.5px;
+  }
+
+  footer {
+    text-align: center; margin-top: 24px;
+    color: rgba(202,220,252,0.5); font-size: 11.5px;
+  }
+  footer code { background: rgba(0,0,0,0.25); padding: 1px 6px; border-radius: 4px; }
+
+  /* Modal */
+  .modal-bk {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.65);
+    display: none; align-items: center; justify-content: center;
+    padding: 20px; z-index: 100;
+  }
+  .modal-bk.open { display: flex; }
+  .modal-bx {
+    background: var(--white); color: var(--navy);
+    border-radius: 14px; padding: 22px 26px;
+    max-width: 540px; width: 100%;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.4);
+  }
+  .modal-bx h3 { margin: 0 0 8px; font-family: Georgia, serif; font-size: 18px; color: var(--navy); }
+  .modal-bx p  { margin: 0 0 10px; font-size: 13.5px; line-height: 1.6; color: var(--grey); }
+  .modal-bx p strong { color: var(--navy-deep); }
+  .modal-bx code { background: var(--grey-lighter); padding: 2px 8px; border-radius: 5px; font-family: Consolas, monospace; font-size: 12px; color: var(--navy-deep); display: inline-block; }
+  .modal-bx button {
+    background: var(--navy); color: var(--white); border: 0;
+    border-radius: 9px; padding: 8px 16px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; margin-top: 4px;
+  }
+  .modal-bx button:hover { background: var(--navy-deep); }
+  .modal-bx button.secondary { background: var(--grey-lighter); color: var(--navy); }
+  .modal-bx button.danger    { background: var(--red); }
+</style>
+</head>
+<body>
+
+<main>
+  <header>
+    <h1>🧪 Lab OS Rig</h1>
+    <div class="sub">Daily-use control panel</div>
+  </header>
+
+  <!-- Status -->
+  <div class="status-card">
+    <div class="status-dot" id="statusDot"></div>
+    <div class="status-text">
+      <div class="label" id="statusLabel">Checking server status…</div>
+      <div class="hint"  id="statusHint">localhost:8766</div>
+    </div>
+  </div>
+
+  <!-- Primary action — most prominent -->
+  <a class="open-eln" id="openEln" href="http://localhost:8766/eln/" target="_blank" rel="noopener">
+    <div class="row">
+      <div class="ico">📓</div>
+      <div>
+        <div class="ttl">Open Lab Notebook</div>
+        <div class="sub">ELN — slice / behavior / colony</div>
+      </div>
+    </div>
+  </a>
+
+  <!-- Server controls -->
+  <div class="actions">
+    <button class="action-card" id="startBtn" type="button">
+      <div class="ico">▶️</div>
+      <div class="ttl">Start server</div>
+      <div class="sub">When the green dot is off</div>
+    </button>
+
+    <button class="action-card danger" id="stopBtn" type="button" disabled>
+      <div class="ico">⏹</div>
+      <div class="ttl">Stop server</div>
+      <div class="sub">Cleanly shut down</div>
+    </button>
+  </div>
+
+  <div class="panel">
+    <h2>Daily workflow</h2>
+    <ol>
+      <li>If the dot is 🟢, click <strong>📓 Open Lab Notebook</strong> and start working.</li>
+      <li>After your experiment, in Lab OS go to <strong>Dashboard → 🔄 Sync → 📤 Push now</strong> to send notes to main.</li>
+      <li>Optionally <strong>⏹ Stop server</strong> when you're completely done for the day.</li>
+    </ol>
+  </div>
+
+  <div class="panel">
+    <h2>Set it and forget it</h2>
+    <ul>
+      <li>Run <code>install_autostart.bat</code> once → the server will launch automatically every time you log into Windows. You'll never need <strong>▶️ Start server</strong> again.</li>
+    </ul>
+  </div>
+
+  <footer>
+    Lab OS · <code id="machineLine">machine: checking…</code>
+  </footer>
+</main>
+
+<!-- Start server modal -->
+<div class="modal-bk" id="startHelpBk">
+  <div class="modal-bx">
+    <h3>▶️ How to start the server</h3>
+    <p>Browsers can't launch <code>.bat</code> files directly. Just open the Lab_OS folder and double-click <code>start_labos.bat</code>:</p>
+    <p style="margin:8px 0;">
+      <strong>Open this folder in File Explorer:</strong><br>
+      <code id="pathFolder" style="margin-top:4px;word-break:break-all;">…</code>
+    </p>
+    <p style="margin:8px 0;"><strong>Then double-click:</strong> <code>start_labos.bat</code></p>
+    <p style="font-size:12.5px; color: var(--grey); margin-top:14px;">
+      💡 To skip this forever, double-click <code>install_autostart.bat</code> in that folder once.
+    </p>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button type="button" id="copyPathBtn">Copy folder path</button>
+      <button type="button" class="secondary" onclick="document.getElementById('startHelpBk').classList.remove('open')">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Stop confirmation modal -->
+<div class="modal-bk" id="stopHelpBk">
+  <div class="modal-bx">
+    <h3>⏹ Stop the server?</h3>
+    <p>This will <strong>cleanly shut down</strong> the local Lab OS server. The black console window will close. You won't be able to open Lab Notebook until you start it again.</p>
+    <p style="font-size:12.5px; color: var(--grey);">Use this when you're done for the day, or before rebooting Windows.</p>
+    <div style="display:flex; gap:8px; margin-top:14px;">
+      <button type="button" class="danger" id="stopConfirmBtn">Yes, stop the server</button>
+      <button type="button" class="secondary" onclick="document.getElementById('stopHelpBk').classList.remove('open')">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Status check — ping local server every 3s ────────────────────────────
+async function checkStatus() {
+  const dot = document.getElementById("statusDot");
+  const lbl = document.getElementById("statusLabel");
+  const hnt = document.getElementById("statusHint");
+  const openBtn = document.getElementById("openEln");
+  const stopBtn = document.getElementById("stopBtn");
+  try {
+    const r = await fetch("http://localhost:8766/api/eln/auth/me", {
+      credentials: "include",
+      signal: AbortSignal.timeout(2000),
+    });
+    if (r.status === 200 || r.status === 401) {
+      dot.className = "status-dot up";
+      lbl.textContent = "✅ Server is running";
+      hnt.textContent = r.status === 200 ? "Signed in · ready to work" : "Server up · sign in to use";
+      openBtn.removeAttribute("disabled");
+      stopBtn.removeAttribute("disabled");
+      return;
+    }
+    throw new Error("HTTP " + r.status);
+  } catch (e) {
+    dot.className = "status-dot down";
+    lbl.textContent = "❌ Server is not running";
+    hnt.textContent = "Click ▶️ Start server below";
+    openBtn.setAttribute("disabled", "");
+    stopBtn.setAttribute("disabled", "");
+  }
+}
+checkStatus();
+setInterval(checkStatus, 3000);
+
+// ── Start button — show modal with the exact path to copy ────────────────
+function buildFolderPath() {
+  let here = decodeURIComponent(window.location.href);
+  here = here.replace(/[^\/]+$/, "");                       // strip filename
+  let p = here.replace(/^file:\/\/\//, "").replace(/\//g, "\\");
+  if (p.endsWith("\\")) p = p.slice(0, -1);
+  return p;
+}
+
+document.getElementById("startBtn").addEventListener("click", (e) => {
+  e.preventDefault();
+  document.getElementById("pathFolder").textContent = buildFolderPath();
+  document.getElementById("startHelpBk").classList.add("open");
+});
+document.getElementById("startHelpBk").addEventListener("click", (e) => {
+  if (e.target.id === "startHelpBk") e.target.classList.remove("open");
+});
+document.getElementById("copyPathBtn").addEventListener("click", function () {
+  navigator.clipboard.writeText(document.getElementById("pathFolder").textContent).then(() => {
+    this.textContent = "Copied ✓";
+    setTimeout(() => this.textContent = "Copy folder path", 1500);
+  });
+});
+
+// ── Stop button — confirm, then POST to /api/admin/shutdown ──────────────
+document.getElementById("stopBtn").addEventListener("click", (e) => {
+  e.preventDefault();
+  document.getElementById("stopHelpBk").classList.add("open");
+});
+document.getElementById("stopHelpBk").addEventListener("click", (e) => {
+  if (e.target.id === "stopHelpBk") e.target.classList.remove("open");
+});
+document.getElementById("stopConfirmBtn").addEventListener("click", async function () {
+  const btn = this;
+  btn.disabled = true; btn.textContent = "Stopping…";
+  try {
+    const r = await fetch("http://localhost:8766/api/admin/shutdown", {
+      method: "POST",
+      credentials: "include",
+    });
+    if (r.status === 401 || r.status === 403) {
+      alert("Sign in as admin first (open Lab Notebook → switch to Admin mode), then try again.");
+      btn.disabled = false; btn.textContent = "Yes, stop the server";
+      return;
+    }
+    // No JSON-needed: if it 2xx, the server process is about to exit.
+    document.getElementById("stopHelpBk").classList.remove("open");
+    btn.disabled = false; btn.textContent = "Yes, stop the server";
+    setTimeout(checkStatus, 800);  // dot should go red shortly
+  } catch (err) {
+    // fetch errors out when the server already shut down — that's actually success
+    document.getElementById("stopHelpBk").classList.remove("open");
+    btn.disabled = false; btn.textContent = "Yes, stop the server";
+    setTimeout(checkStatus, 800);
+  }
+});
+
+// ── Footer info ──────────────────────────────────────────────────────────
+(async () => {
+  try {
+    const r = await fetch("http://localhost:8766/api/sync/config", {
+      credentials: "include", signal: AbortSignal.timeout(1500),
+    });
+    if (!r.ok) return;
+    const d = await r.json();
+    if (d.machine_id) {
+      document.getElementById("machineLine").textContent =
+        "machine: " + d.machine_id + " · role: " + (d.role || "?");
+    }
+  } catch (_) { /* ignored */ }
+})();
+</script>
+</body>
+</html>

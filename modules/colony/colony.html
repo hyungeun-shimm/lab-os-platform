@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Colony · Lab Scheduler</title>
+<style>
+:root {
+  --bg:        #f5f5f7;
+  --bg-card:   #ffffff;
+  --bg-alt:    #e8e8ed;
+  --border:    #d1d1d6;
+  --text:      #1c1c1e;
+  --text-muted:#6e6e73;
+  --accent:    #007aff;
+  --danger:    #ff3b30;
+  --success:   #34c759;
+  --warning:   #ff9500;
+  --radius:    10px;
+}
+[data-theme="dark"] {
+  --bg:        #1c1c1e;
+  --bg-card:   #2c2c2e;
+  --bg-alt:    #3a3a3c;
+  --border:    #48484a;
+  --text:      #f2f2f7;
+  --text-muted:#aeaeb2;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+/* ── Topbar ── */
+#topbar {
+  position: sticky; top: 0; z-index: 200;
+  background: var(--bg-card); border-bottom: 1px solid var(--border);
+  padding: 10px 20px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+#topbar h1 { font-size: 17px; font-weight: 700; white-space: nowrap; }
+#topbar h1 a { color: inherit; text-decoration: none; }
+#topbar h1 a:hover { text-decoration: underline; }
+
+.module-tabs {
+  display: flex; gap: 4px; align-items: center;
+  padding: 7px 20px; background: var(--bg-card); border-bottom: 1px solid var(--border);
+}
+.module-tabs a {
+  text-decoration: none; color: var(--text-muted); padding: 6px 12px; border-radius: 7px;
+  font-size: 12px; font-weight: 650; border: 1px solid transparent;
+}
+.module-tabs a:hover { background: var(--bg-alt); color: var(--text); }
+.module-tabs a.active { background: var(--accent); color: #fff; }
+
+#search {
+  flex: 1; min-width: 140px; max-width: 260px;
+  padding: 6px 12px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-alt); color: var(--text); font-size: 13px;
+}
+#search:focus { outline: none; border-color: var(--accent); }
+
+.filter-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+select.fsel {
+  padding: 5px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-alt); color: var(--text); font-size: 12px; cursor: pointer;
+}
+.toggle-label { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--text-muted); cursor: pointer; user-select: none; }
+.sort-panel {
+  display: flex; gap: 6px; align-items: center; flex-wrap: wrap;
+  padding: 7px 20px; border-bottom: 1px solid var(--border);
+  background: var(--bg-card); font-size: 12px;
+}
+.sort-panel span { color: var(--text-muted); font-weight: 600; }
+.sort-pair { display: inline-flex; gap: 3px; align-items: center; }
+.sort-pair select { max-width: 132px; }
+.bulk-panel {
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+  padding: 7px 20px; border-bottom: 1px solid var(--border);
+  background: var(--bg); font-size: 12px;
+}
+.bulk-panel span { color: var(--text-muted); font-weight: 600; }
+.bulk-panel input { max-width: 220px; }
+.check-cell { width: 34px; text-align: center; }
+.row-check, #check-all { cursor: pointer; }
+
+.tb-right { margin-left: auto; display: flex; gap: 8px; align-items: center; flex-shrink: 0; }
+#sync-info { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+/* ── Buttons ── */
+.btn {
+  padding: 6px 14px; border: none; border-radius: 8px; font-size: 13px;
+  cursor: pointer; font-weight: 500; transition: opacity .15s; white-space: nowrap;
+}
+.btn:hover { opacity: .82; }
+.btn:disabled { opacity: .4; cursor: default; }
+.btn-primary   { background: var(--accent);   color: #fff; }
+.btn-secondary { background: var(--bg-alt);   color: var(--text); border: 1px solid var(--border); }
+.btn-danger    { background: var(--danger);   color: #fff; }
+.btn-sm { padding: 5px 11px; font-size: 12px; }
+
+/* ── Summary bar ── */
+#summary-bar {
+  padding: 6px 20px; font-size: 12px; color: var(--text-muted);
+  display: flex; gap: 20px; border-bottom: 1px solid var(--border);
+  background: var(--bg); flex-wrap: wrap;
+}
+.sum-item strong { color: var(--text); }
+
+/* ── Table ── */
+#table-wrap {
+  overflow: auto;
+  height: calc(100vh - var(--above-table, 90px));
+  padding-bottom: 40px;
+}
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--bg); border-bottom: 2px solid var(--border);
+  padding: 8px 10px; text-align: left; font-size: 11px; font-weight: 600;
+  color: var(--text-muted); white-space: nowrap; user-select: none;
+}
+thead th.sortable { cursor: pointer; }
+thead th.sortable:hover { color: var(--text); }
+thead th.sort-asc::after  { content: " ↑"; color: var(--accent); }
+thead th.sort-desc::after { content: " ↓"; color: var(--accent); }
+tbody tr { border-bottom: 1px solid var(--border); cursor: pointer; transition: background .1s; }
+tbody tr:hover { background: var(--bg-alt); }
+tbody tr.row-sac { opacity: .45; }
+td { padding: 7px 10px; white-space: nowrap; }
+td.td-notes { max-width: 180px; overflow: hidden; text-overflow: ellipsis; }
+
+/* ── Badges ── */
+.badge {
+  display: inline-block; padding: 2px 7px; border-radius: 10px;
+  font-size: 11px; font-weight: 600;
+}
+.b-nr  { background:#e5e5ea; color:#636366; }
+.b-dt  { background:#d1e8ff; color:#0062cc; }
+.b-dlt { background:#fff3cd; color:#92400e; }
+.b-dmr { background:#ede9fe; color:#6d28d9; }
+.b-3   { background:#fce7f3; color:#9d174d; }
+[data-theme="dark"] .b-nr  { background:#48484a; color:#aeaeb2; }
+[data-theme="dark"] .b-dt  { background:#0a3d6b; color:#5ac8fa; }
+[data-theme="dark"] .b-dlt { background:#5c3a00; color:#ffcc00; }
+[data-theme="dark"] .b-dmr { background:#3b1f6b; color:#bf5af2; }
+[data-theme="dark"] .b-3   { background:#5c0f27; color:#ff6b9d; }
+
+.dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:4px; vertical-align:middle; }
+.days-live   { color: var(--accent); font-weight: 500; }
+.days-frozen { color: var(--text-muted); }
+
+/* ── Empty state ── */
+#empty-msg { text-align:center; padding:60px 20px; color:var(--text-muted); display:none; }
+
+/* ── Modal overlay ── */
+#overlay {
+  display: none; position: fixed; inset: 0; z-index: 500;
+  background: rgba(0,0,0,.45); align-items: center; justify-content: center;
+}
+#overlay.open { display: flex; }
+
+/* ── Modal ── */
+#modal {
+  background: var(--bg-card); border-radius: var(--radius);
+  box-shadow: 0 24px 64px rgba(0,0,0,.28);
+  width: 560px; max-width: 96vw; max-height: 92vh; overflow-y: auto;
+}
+.m-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 20px; border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; background: var(--bg-card); z-index: 1;
+}
+.m-head h2 { font-size: 16px; font-weight: 700; flex: 1; }
+.m-body { padding: 16px 20px; display: flex; flex-direction: column; gap: 18px; }
+.m-foot { padding: 12px 20px; border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end; }
+
+.sec-label { font-size: 11px; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px; }
+.fg  { display: flex; flex-direction: column; gap: 4px; }
+.fg label { font-size: 11px; color: var(--text-muted); }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.grid3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.full  { grid-column: 1 / -1; }
+.fc {
+  padding: 7px 10px; border: 1px solid var(--border); border-radius: 8px;
+  background: var(--bg-alt); color: var(--text); font-size: 13px; width: 100%;
+}
+.fc:focus { outline: none; border-color: var(--accent); }
+textarea.fc { resize: vertical; }
+
+/* condition timeline rows */
+.cond-row { display: grid; grid-template-columns: 90px 1fr 72px; gap: 8px; align-items: center; }
+.cond-row-label { font-size: 12px; color: var(--text-muted); }
+.days-chip {
+  font-size: 12px; font-weight: 600; text-align: right;
+  white-space: nowrap; min-width: 64px;
+}
+
+/* quick buttons */
+.q-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.q-btn {
+  padding: 4px 10px; border: 1px solid var(--border); border-radius: 6px;
+  font-size: 11px; cursor: pointer; background: var(--bg-alt); color: var(--text);
+  transition: all .12s;
+}
+.q-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+</style>
+</head>
+<body>
+
+<!-- ── Topbar ────────────────────────────────────────────────── -->
+<div id="topbar">
+  <h1>🐭 Colony &nbsp;<a href="/scheduler.html" title="Go to Scheduler">📅</a></h1>
+  <input id="search" type="search" placeholder="Mouse ID, strain, cohort…">
+  <div class="filter-row">
+    <select id="fp" class="fsel"></select>
+    <select id="fc" class="fsel"></select>
+    <select id="fe" class="fsel"></select>
+    <label class="toggle-label"><input type="checkbox" id="hide-sac" checked> Hide sacrificed</label>
+  </div>
+  <div class="tb-right">
+    <span id="sync-info"></span>
+    <button class="btn btn-secondary btn-sm" id="btn-sync">↻ Sync Excel</button>
+    <button class="btn btn-secondary btn-sm" id="btn-push-excel">⬆ Push DB → Excel</button>
+    <button class="btn btn-primary btn-sm" id="btn-add">+ Add</button>
+    <button id="btn-dark" class="btn btn-secondary btn-sm">🌙</button>
+  </div>
+</div>
+
+<nav class="module-tabs">
+  <a href="/colony.html" class="active">Animal DB</a>
+  <a href="/vor_okr.html">VOR / OKR</a>
+  <a href="/ephys.html">ePhys</a>
+</nav>
+
+<div class="sort-panel" id="sortPanel">
+  <span>Sort</span>
+  <label class="sort-pair">
+    <select id="sort1" class="fsel"></select>
+    <select id="sort1dir" class="fsel"><option value="1">Asc</option><option value="-1">Desc</option></select>
+  </label>
+  <label class="sort-pair">
+    <select id="sort2" class="fsel"></select>
+    <select id="sort2dir" class="fsel"><option value="1">Asc</option><option value="-1">Desc</option></select>
+  </label>
+  <label class="sort-pair">
+    <select id="sort3" class="fsel"></select>
+    <select id="sort3dir" class="fsel"><option value="1">Asc</option><option value="-1">Desc</option></select>
+  </label>
+</div>
+
+<div class="bulk-panel" id="bulkPanel">
+  <span id="selected-count">0 selected</span>
+  <input id="bulk-exp" class="fc" list="exp-options" placeholder="Assigned Exp">
+  <datalist id="exp-options"></datalist>
+  <button class="btn btn-secondary btn-sm" id="btn-bulk-exp" disabled>Apply exp</button>
+  <button class="btn btn-secondary btn-sm" id="btn-clear-selection" disabled>Clear</button>
+</div>
+
+<!-- ── Summary bar ──────────────────────────────────────────── -->
+<div id="summary-bar">
+  <span class="sum-item">Total <strong id="s-total">—</strong></span>
+  <span class="sum-item">Active <strong id="s-active">—</strong></span>
+  <span class="sum-item">DT <strong id="s-dt">—</strong></span>
+  <span class="sum-item">NR (returned) <strong id="s-nr">—</strong></span>
+  <span class="sum-item">DLT <strong id="s-dlt">—</strong></span>
+  <span class="sum-item">Sacrificed <strong id="s-sac">—</strong></span>
+  <span id="s-filtered" style="margin-left:auto;opacity:.6"></span>
+</div>
+
+<!-- ── Table ────────────────────────────────────────────────── -->
+<div id="table-wrap">
+  <table>
+    <thead id="thead"></thead>
+    <tbody id="tbody"></tbody>
+  </table>
+  <div id="empty-msg">No animals to display.</div>
+</div>
+
+<!-- ── Modal ────────────────────────────────────────────────── -->
+<div id="overlay">
+  <div id="modal">
+    <div class="m-head">
+      <h2 id="m-title">Animal Info</h2>
+      <button class="btn btn-danger btn-sm" id="btn-del" style="display:none" onclick="doDelete()">Delete</button>
+      <button class="btn btn-secondary btn-sm" onclick="closeModal()">✕</button>
+    </div>
+
+    <div class="m-body">
+
+      <!-- Basic -->
+      <div>
+        <div class="sec-label">Basic Info</div>
+        <div class="grid2">
+          <div class="fg">
+            <label>Mouse ID *</label>
+            <input class="fc" id="e-mouse_id" placeholder="WT2595">
+          </div>
+          <div class="fg">
+            <label>Strain</label>
+            <input class="fc" id="e-strain" placeholder="WT">
+          </div>
+          <div class="fg">
+            <label>Sex</label>
+            <select class="fc" id="e-sex">
+              <option value="">—</option>
+              <option value="M">M ♂</option>
+              <option value="F">F ♀</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>DOB</label>
+            <input class="fc" id="e-dob" type="date">
+          </div>
+          <div class="fg">
+            <label>Project</label>
+            <select class="fc" id="e-project">
+              <option value="">Not assigned</option>
+              <option value="TeMP_dark">TeMP_dark</option>
+              <option value="TeMP_tuning">TeMP_tuning</option>
+              <option value="Pilot">Pilot</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Cohort</label>
+            <input class="fc" id="e-cohort" placeholder="dB">
+          </div>
+          <div class="fg full">
+            <label>Assigned Exp</label>
+            <input class="fc" id="e-experiment">
+          </div>
+        </div>
+      </div>
+
+      <!-- Surgery -->
+      <div>
+        <div class="sec-label">Surgery</div>
+        <div class="grid2">
+          <div class="fg">
+            <label>Surgery date (DOS)</label>
+            <input class="fc" id="e-dos" type="date">
+          </div>
+          <div class="fg">
+            <label>Barcode</label>
+            <input class="fc" id="e-barcode" placeholder="">
+          </div>
+        </div>
+      </div>
+
+      <!-- Conditions -->
+      <div>
+        <div class="sec-label">Condition Timeline</div>
+        <div class="fg" style="margin-bottom:10px">
+          <label>Current condition label</label>
+          <select class="fc" id="e-condition" style="max-width:180px">
+            <option value="">—</option>
+            <option value="DT">DT</option>
+            <option value="NR">NR</option>
+            <option value="DLT">DLT</option>
+            <option value="23dmr">23dmr</option>
+            <option value="24dmr">24dmr</option>
+          </select>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <div class="cond-row">
+            <span class="cond-row-label">Cond-1 start</span>
+            <input class="fc" id="e-date_cond1" type="date">
+            <span class="days-chip days-live" id="chip1">—</span>
+          </div>
+          <div class="cond-row">
+            <span class="cond-row-label">Cond-2 start</span>
+            <input class="fc" id="e-date_cond2" type="date">
+            <span class="days-chip" id="chip2">—</span>
+          </div>
+          <div class="cond-row">
+            <span class="cond-row-label">Cond-3 start</span>
+            <input class="fc" id="e-date_cond3" type="date">
+            <span class="days-chip days-live" id="chip3">—</span>
+          </div>
+        </div>
+        <div class="q-row">
+          <span style="font-size:11px;color:var(--text-muted);align-self:center">Quick:</span>
+          <button class="q-btn" onclick="setToday('e-date_cond1')">Cond-1 today</button>
+          <button class="q-btn" onclick="setToday('e-date_cond2')">Cond-2 today</button>
+          <button class="q-btn" onclick="setToday('e-date_cond3')">Cond-3 today</button>
+        </div>
+      </div>
+
+      <!-- Sacrificed -->
+      <div>
+        <div class="sec-label">Sacrifice</div>
+        <div class="grid2">
+          <div class="fg">
+            <label>Sacrificed</label>
+            <select class="fc" id="e-sacrificed">
+              <option value="">—</option>
+              <option value="Y">Y</option>
+              <option value="N">N</option>
+            </select>
+          </div>
+          <div class="fg">
+            <label>Sacrifice date</label>
+            <input class="fc" id="e-sacrificed_date" type="date">
+          </div>
+        </div>
+        <div class="q-row">
+          <button class="q-btn" onclick="sacrificeToday()">🪦 Sacrificed today</button>
+        </div>
+      </div>
+
+      <!-- Notes -->
+      <div>
+        <div class="sec-label">Notes</div>
+        <div class="fg">
+          <textarea class="fc" id="e-notes" rows="3"></textarea>
+        </div>
+      </div>
+
+    </div><!-- /m-body -->
+
+    <div class="m-foot">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="btn-save" onclick="saveAnimal()">Save</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ──────────────────────────────────────────────────────────
+const API = '';
+let animals = [];
+let editingId = null;
+const selectedIds = new Set();
+
+let sortCol = 'mouse_id', sortDir = 1;
+const NOT_ASSIGNED_PROJECT = '__not_assigned__';
+const SORT_FIELDS = [
+  ['mouse_id', 'Mouse ID'],
+  ['project', 'Project'],
+  ['condition', 'Condition'],
+  ['experiment', 'Assigned Exp'],
+  ['cohort', 'Cohort'],
+  ['strain', 'Strain'],
+  ['sex', 'Sex'],
+  ['dob', 'DOB'],
+  ['current_age', 'Age'],
+  ['days_in_state', 'Days in state'],
+  ['barcode', 'Cage ID'],
+];
+
+const PROJECT_COLORS = {
+  'TeMP_dark':   '#007aff',
+  'TeMP_tuning': '#34c759',
+  'Pilot':       '#ff9500',
+};
+const pColor = p => PROJECT_COLORS[p] || '#8e8e93';
+const projectLabel = p => p || 'Not assigned';
+
+function ageDays(dob) {
+  if (!dob) return null;
+  const born = new Date(`${dob}T00:00:00`);
+  if (Number.isNaN(born.getTime())) return null;
+  const today = new Date();
+  const localToday = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  return Math.max(0, Math.floor((localToday - born) / 86400000));
+}
+
+function ageLabel(dob) {
+  const days = ageDays(dob);
+  if (days == null) return '—';
+  const weeks = Math.floor(days / 7);
+  const extra = days % 7;
+  return extra ? `${weeks}w ${extra}d` : `${weeks}w`;
+}
+
+function stateClass(s) {
+  if (!s) return 'b-nr';
+  if (s.endsWith('-3')) return 'b-3';
+  const m = { DT:'b-dt', NR:'b-nr', DLT:'b-dlt', '23dmr':'b-dmr', '24dmr':'b-dmr' };
+  return m[s] || 'b-nr';
+}
+
+// ── API ────────────────────────────────────────────────────────────
+async function api(method, path, body) {
+  const opts = { method, headers: {'Content-Type':'application/json'} };
+  if (body !== undefined) opts.body = JSON.stringify(body);
+  const r = await fetch(API + path, opts);
+  if (!r.ok) {
+    const e = await r.json().catch(() => ({ detail: r.statusText }));
+    throw new Error(e.detail || r.statusText);
+  }
+  return r.json();
+}
+
+// ── Load ───────────────────────────────────────────────────────────
+async function loadAll() {
+  const [{ animals: a }, status] = await Promise.all([
+    api('GET', '/api/animals'),
+    api('GET', '/api/animals/sync-status'),
+  ]);
+  animals = a;
+  selectedIds.clear();
+  renderSummary();
+  populateFilters();
+  populateSortControls();
+  renderTable();
+  renderBulkPanel();
+  updateSyncInfo(status);
+}
+
+function updateSyncInfo(s) {
+  const el = document.getElementById('sync-info');
+  if (s.last_synced) {
+    const d = new Date(s.last_synced);
+    el.textContent = `${s.count} mice · synced ${d.toLocaleDateString('en-US')} ${d.toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'})}`;
+  } else {
+    el.textContent = 'Not synced yet';
+  }
+}
+
+// ── Filters / sort ─────────────────────────────────────────────────
+function getFiltered() {
+  const q  = document.getElementById('search').value.toLowerCase();
+  const fp = document.getElementById('fp').value;
+  const fc = document.getElementById('fc').value;
+  const fe = document.getElementById('fe').value;
+  const hs = document.getElementById('hide-sac').checked;
+
+  return animals.filter(a => {
+    if (hs && a.sacrificed === 'Y') return false;
+    if (fp === NOT_ASSIGNED_PROJECT && a.project) return false;
+    if (fp && fp !== NOT_ASSIGNED_PROJECT && a.project !== fp) return false;
+    if (fc && a.condition !== fc) return false;
+    if (fe && a.experiment !== fe) return false;
+    if (q) {
+      const hay = [a.mouse_id, a.strain, a.cohort, projectLabel(a.project), a.condition, a.experiment, a.notes]
+        .map(x => x || '').join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+function sorted(rows) {
+  return [...rows].sort((a, b) => {
+    for (const c of currentSortCriteria()) {
+      const cmp = compareValues(sortValue(a, c.key), sortValue(b, c.key)) * c.dir;
+      if (cmp !== 0) return cmp;
+    }
+    return compareValues(a.mouse_id, b.mouse_id);
+  });
+}
+
+function sortValue(a, key) {
+  if (key === 'current_age') return ageDays(a.dob);
+  return a[key];
+}
+
+function compareValues(a, b) {
+  const av = a ?? '', bv = b ?? '';
+  if (typeof av === 'number' && typeof bv === 'number') return av - bv;
+  return String(av).localeCompare(String(bv), 'en', { numeric: true, sensitivity: 'base' });
+}
+
+function currentSortCriteria() {
+  const out = [];
+  for (let i = 1; i <= 3; i++) {
+    const key = document.getElementById(`sort${i}`)?.value;
+    if (!key) continue;
+    const dir = Number(document.getElementById(`sort${i}dir`)?.value || 1);
+    out.push({ key, dir: dir === -1 ? -1 : 1 });
+  }
+  if (!out.length) out.push({ key: sortCol, dir: sortDir });
+  return out;
+}
+
+function toggleSort(key) {
+  if (sortCol === key) sortDir = -sortDir;
+  else { sortCol = key; sortDir = 1; }
+  setSortControl(1, sortCol, sortDir);
+  setSortControl(2, '', 1);
+  setSortControl(3, '', 1);
+  renderTable();
+}
+
+function populateFilters() {
+  const projs = [...new Set(animals.map(a => a.project).filter(Boolean))].sort();
+  const hasUnassignedProject = animals.some(a => !a.project);
+  const conditions = [...new Set(animals.map(a => a.condition).filter(Boolean))].sort();
+  const exps = [...new Set(animals.map(a => a.experiment).filter(Boolean))].sort();
+
+  const fp = document.getElementById('fp');
+  const saved_fp = fp.value;
+  fp.innerHTML = '<option value="">All projects</option>' +
+    (hasUnassignedProject ? `<option value="${NOT_ASSIGNED_PROJECT}">Not assigned</option>` : '') +
+    projs.map(p => `<option value="${p}">${p}</option>`).join('');
+  if (saved_fp) fp.value = saved_fp;
+
+  const fc = document.getElementById('fc');
+  const saved_fc = fc.value;
+  fc.innerHTML = '<option value="">All conditions</option>' +
+    conditions.map(s => `<option value="${s}">${s}</option>`).join('');
+  if (saved_fc) fc.value = saved_fc;
+
+  const fe = document.getElementById('fe');
+  const saved_fe = fe.value;
+  fe.innerHTML = '<option value="">All assigned exp</option>' +
+    exps.map(s => `<option value="${s}">${s}</option>`).join('');
+  if (saved_fe) fe.value = saved_fe;
+
+  document.getElementById('exp-options').innerHTML =
+    exps.map(s => `<option value="${esc(s)}"></option>`).join('');
+}
+
+function renderBulkPanel() {
+  const n = selectedIds.size;
+  document.getElementById('selected-count').textContent = `${n} selected`;
+  document.getElementById('btn-bulk-exp').disabled = n === 0;
+  document.getElementById('btn-clear-selection').disabled = n === 0;
+}
+
+function populateSortControls() {
+  for (let i = 1; i <= 3; i++) {
+    const sel = document.getElementById(`sort${i}`);
+    const saved = sel.value;
+    sel.innerHTML = '<option value="">Then...</option>' +
+      SORT_FIELDS.map(([key, label]) => `<option value="${key}">${label}</option>`).join('');
+    sel.value = saved;
+  }
+  if (!document.getElementById('sort1').value) setSortControl(1, 'mouse_id', 1);
+}
+
+function setSortControl(i, key, dir) {
+  const sel = document.getElementById(`sort${i}`);
+  const dirSel = document.getElementById(`sort${i}dir`);
+  if (sel) sel.value = key;
+  if (dirSel) dirSel.value = String(dir);
+}
+
+// ── Summary ────────────────────────────────────────────────────────
+function renderSummary() {
+  const total = animals.length;
+  const sac   = animals.filter(a => a.sacrificed === 'Y').length;
+  document.getElementById('s-total').textContent  = total;
+  document.getElementById('s-active').textContent = total - sac;
+  document.getElementById('s-dt').textContent     = animals.filter(a => a.current_state === 'DT').length;
+  document.getElementById('s-nr').textContent     = animals.filter(a => a.current_state === 'NR').length;
+  document.getElementById('s-dlt').textContent    = animals.filter(a => a.current_state === 'DLT').length;
+  document.getElementById('s-sac').textContent    = sac;
+}
+
+// ── Table ──────────────────────────────────────────────────────────
+const COLS = [
+  { key:'mouse_id',      label:'Mouse ID',   s:true },
+  { key:'strain',        label:'Strain',     s:true },
+  { key:'sex',           label:'Sex',        s:true },
+  { key:'dob',           label:'DOB',        s:true },
+  { key:'current_age',   label:'Age',        s:true },
+  { key:'project',       label:'Project',    s:true },
+  { key:'experiment',    label:'Assigned Exp', s:true },
+  { key:'cohort',        label:'Cohort',     s:true },
+  { key:'current_state', label:'State',      s:true },
+  { key:'days_in_state', label:'Days',       s:true },
+  { key:'dos',           label:'Surgery',    s:true },
+  { key:'date_cond1',    label:'Cond-1',     s:true },
+  { key:'days_cond1',    label:'D1',         s:true },
+  { key:'date_cond2',    label:'Cond-2',     s:true },
+  { key:'days_cond2',    label:'D2',         s:true },
+  { key:'date_cond3',    label:'Cond-3',     s:true },
+  { key:'days_cond3',    label:'D3',         s:true },
+  { key:'sacrificed',    label:'Sac',         s:true },
+  { key:'notes',         label:'Notes',      s:false },
+];
+
+function renderTable() {
+  const filtered = sorted(getFiltered());
+  const sfEl = document.getElementById('s-filtered');
+  sfEl.textContent = filtered.length < animals.length ? `(filtered: ${filtered.length} shown)` : '';
+  const primarySort = currentSortCriteria()[0] || { key: sortCol, dir: sortDir };
+
+  // Header
+  const thCls = c => {
+    let cls = c.s ? 'sortable' : '';
+    if (c.s && c.key === primarySort.key) cls += primarySort.dir === 1 ? ' sort-asc' : ' sort-desc';
+    return cls;
+  };
+  document.getElementById('thead').innerHTML =
+    '<tr><th class="check-cell"><input type="checkbox" id="check-all"></th>' + COLS.map(c =>
+      `<th class="${thCls(c)}"${c.s ? ` onclick="toggleSort('${c.key}')"` : ''}>${c.label}</th>`
+    ).join('') + '</tr>';
+
+  // Body
+  const tbody = document.getElementById('tbody');
+  const empty = document.getElementById('empty-msg');
+  if (!filtered.length) {
+    tbody.innerHTML = '';
+    empty.style.display = 'block';
+    renderBulkPanel();
+    return;
+  }
+  empty.style.display = 'none';
+
+  tbody.innerHTML = filtered.map(a => {
+    const sac     = a.sacrificed === 'Y';
+    const d1frzn  = a.date_cond2 != null;
+    const d2frzn  = a.date_cond3 != null;
+
+    const sexIcon = a.sex === 'M' ? '♂' : a.sex === 'F' ? '♀' : '—';
+    const projBadge = `<span class="dot" style="background:${pColor(a.project)}"></span>${projectLabel(a.project)}`;
+    const stateBadge = `<span class="badge ${stateClass(a.current_state)}">${a.current_state || '—'}</span>`;
+
+    const d1Cell = a.days_cond1 != null
+      ? `<span class="${d1frzn ? 'days-frozen' : 'days-live'}">${a.days_cond1}${d1frzn ? ' ✓' : ''}</span>`
+      : '—';
+    const d2Cell = a.days_cond2 != null
+      ? `<span class="${d2frzn ? 'days-frozen' : 'days-live'}">${a.days_cond2}${d2frzn ? ' ✓' : ''}</span>`
+      : '—';
+    const d3Cell = a.days_cond3 != null
+      ? `<span class="days-live">${a.days_cond3}</span>`
+      : '—';
+
+    const daysInState = a.days_in_state != null
+      ? `<span class="days-live">${a.days_in_state}</span>`
+      : '—';
+
+    const checked = selectedIds.has(a.mouse_id) ? 'checked' : '';
+    return `<tr class="${sac ? 'row-sac' : ''}" onclick="openModal('${esc(a.mouse_id)}')">
+      <td class="check-cell"><input type="checkbox" class="row-check" data-id="${esc(a.mouse_id)}" ${checked} onclick="event.stopPropagation()"></td>
+      <td><strong>${esc(a.mouse_id)}</strong></td>
+      <td>${esc(a.strain||'—')}</td>
+      <td>${sexIcon}</td>
+      <td>${a.dob||'—'}</td>
+      <td>${ageLabel(a.dob)}</td>
+      <td>${projBadge}</td>
+      <td>${esc(a.experiment||'—')}</td>
+      <td>${esc(a.cohort||'—')}</td>
+      <td>${stateBadge}</td>
+      <td>${daysInState}</td>
+      <td>${a.dos||'—'}</td>
+      <td>${a.date_cond1||'—'}</td>
+      <td>${d1Cell}</td>
+      <td>${a.date_cond2||'—'}</td>
+      <td>${d2Cell}</td>
+      <td>${a.date_cond3||'—'}</td>
+      <td>${d3Cell}</td>
+      <td>${sac ? '🪦' : ''}</td>
+      <td class="td-notes" title="${esc(a.notes||'')}">${esc(a.notes||'')}</td>
+    </tr>`;
+  }).join('');
+  wireSelectionControls(filtered);
+  renderBulkPanel();
+}
+
+function wireSelectionControls(filtered) {
+  const visibleIds = filtered.map(a => a.mouse_id);
+  const all = document.getElementById('check-all');
+  if (all) {
+    all.checked = visibleIds.length > 0 && visibleIds.every(id => selectedIds.has(id));
+    all.indeterminate = visibleIds.some(id => selectedIds.has(id)) && !all.checked;
+    all.addEventListener('change', () => {
+      visibleIds.forEach(id => all.checked ? selectedIds.add(id) : selectedIds.delete(id));
+      renderTable();
+    });
+  }
+  document.querySelectorAll('.row-check').forEach(cb => {
+    cb.addEventListener('change', e => {
+      const id = e.currentTarget.dataset.id;
+      if (e.currentTarget.checked) selectedIds.add(id);
+      else selectedIds.delete(id);
+      renderBulkPanel();
+      const allNow = document.getElementById('check-all');
+      if (allNow) {
+        allNow.checked = visibleIds.length > 0 && visibleIds.every(x => selectedIds.has(x));
+        allNow.indeterminate = visibleIds.some(x => selectedIds.has(x)) && !allNow.checked;
+      }
+    });
+  });
+}
+
+function esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Modal ──────────────────────────────────────────────────────────
+function openModal(mouseId) {
+  editingId = mouseId || null;
+  const a = mouseId ? animals.find(x => x.mouse_id === mouseId) : null;
+
+  document.getElementById('m-title').textContent = a ? `Edit: ${a.mouse_id}` : 'Add Animal';
+  document.getElementById('btn-del').style.display = a ? '' : 'none';
+  const saveBtn = document.getElementById('btn-save');
+  saveBtn.disabled = false;
+  saveBtn.textContent = a ? 'Save' : 'Add';
+  document.getElementById('e-mouse_id').disabled   = !!a;
+
+  const fields = ['mouse_id','strain','sex','dob','project','cohort','experiment',
+                  'dos','barcode','condition','date_cond1','date_cond2','date_cond3',
+                  'sacrificed','sacrificed_date','notes'];
+  fields.forEach(k => {
+    const el = document.getElementById('e-' + k);
+    if (el) el.value = (a && a[k] != null) ? a[k] : '';
+  });
+
+  refreshChips(a);
+  document.getElementById('overlay').classList.add('open');
+}
+
+function refreshChips(a) {
+  if (!a) {
+    ['chip1','chip2','chip3'].forEach(id => {
+      document.getElementById(id).textContent = '—';
+      document.getElementById(id).className = 'days-chip';
+    });
+    return;
+  }
+  const c1 = document.getElementById('chip1');
+  const c2 = document.getElementById('chip2');
+  const c3 = document.getElementById('chip3');
+
+  c1.textContent = a.days_cond1 != null ? `${a.days_cond1}d${a.date_cond2 ? ' ✓' : ''}` : '—';
+  c1.className   = 'days-chip ' + (a.date_cond2 ? 'days-frozen' : 'days-live');
+
+  c2.textContent = a.days_cond2 != null ? `${a.days_cond2}d${a.date_cond3 ? ' ✓' : ''}` : '—';
+  c2.className   = 'days-chip ' + (a.date_cond3 ? 'days-frozen' : 'days-live');
+
+  c3.textContent = a.days_cond3 != null ? `${a.days_cond3}d` : '—';
+  c3.className   = 'days-chip days-live';
+}
+
+function closeModal() {
+  document.getElementById('overlay').classList.remove('open');
+  editingId = null;
+}
+
+function setToday(fieldId) {
+  document.getElementById(fieldId).value = new Date().toISOString().slice(0,10);
+}
+
+function sacrificeToday() {
+  document.getElementById('e-sacrificed').value = 'Y';
+  setToday('e-sacrificed_date');
+}
+
+async function saveAnimal() {
+  const mouseId = document.getElementById('e-mouse_id').value.trim();
+  if (!mouseId) { alert('Mouse ID is required.'); return; }
+
+  const editables = ['strain','sex','dob','project','cohort','experiment',
+                     'dos','barcode','condition','date_cond1','date_cond2','date_cond3',
+                     'sacrificed','sacrificed_date','notes'];
+  const payload = {};
+  editables.forEach(k => {
+    const el = document.getElementById('e-' + k);
+    if (el) payload[k] = el.value || null;
+  });
+
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    if (editingId) {
+      await api('PUT', `/api/animals/${encodeURIComponent(editingId)}`, payload);
+    } else {
+      payload.mouse_id = mouseId;
+      await api('POST', '/api/animals', payload);
+    }
+    closeModal();
+    await loadAll();
+  } catch (e) {
+    alert('Save failed: ' + e.message);
+    btn.disabled = false;
+    btn.textContent = editingId ? 'Save' : 'Add';
+  }
+}
+
+async function bulkAssignExperiment() {
+  const ids = [...selectedIds];
+  const exp = document.getElementById('bulk-exp').value.trim();
+  if (!ids.length) return;
+  if (!exp && !confirm(`Clear Assigned Exp for ${ids.length} selected mice?`)) return;
+  const btn = document.getElementById('btn-bulk-exp');
+  btn.disabled = true;
+  btn.textContent = 'Applying…';
+  try {
+    await api('PATCH', '/api/animals/bulk', {
+      mouse_ids: ids,
+      fields: { experiment: exp || null },
+    });
+    selectedIds.clear();
+    document.getElementById('bulk-exp').value = '';
+    await loadAll();
+  } catch (e) {
+    alert('Bulk update failed: ' + e.message);
+    renderBulkPanel();
+  } finally {
+    btn.textContent = 'Apply exp';
+  }
+}
+
+function clearSelection() {
+  selectedIds.clear();
+  renderTable();
+}
+
+async function doDelete() {
+  if (!editingId) return;
+  if (!confirm(`Delete "${editingId}"?\nThis cannot be undone.`)) return;
+  try {
+    await api('DELETE', `/api/animals/${encodeURIComponent(editingId)}`);
+    closeModal();
+    await loadAll();
+  } catch (e) {
+    alert('Delete failed: ' + e.message);
+  }
+}
+
+// ── Excel sync ─────────────────────────────────────────────────────
+async function syncExcel() {
+  const btn = document.getElementById('btn-sync');
+  btn.disabled = true; btn.textContent = 'Syncing…';
+  try {
+    const r = await api('POST', '/api/animals/sync', {});
+    await loadAll();
+    btn.textContent = `✓ ${r.count} mice`;
+    setTimeout(() => { btn.textContent = '↻ Sync Excel'; btn.disabled = false; }, 3000);
+  } catch (e) {
+    alert('Sync failed: ' + e.message);
+    btn.textContent = '↻ Sync Excel';
+    btn.disabled = false;
+  }
+}
+
+async function pushDbToExcel() {
+  const btn = document.getElementById('btn-push-excel');
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = 'Checking…';
+  try {
+    const diff = await api('GET', '/api/animals/excel-diff');
+    const { summary, adds, updates } = diff;
+    if (!summary.adds && !summary.updates) {
+      alert('No DB → Excel changes. Excel is already up to date.');
+      return;
+    }
+    const lines = [
+      'Excel push preview',
+      `Rows to ADD: ${summary.adds}`,
+      `Rows to UPDATE: ${summary.updates}`,
+      `Excel-only rows left untouched: ${summary.excel_only}`,
+      '',
+    ];
+    if (adds.length) {
+      lines.push('New rows:');
+      adds.slice(0, 12).forEach(a => lines.push(`+ ${a.mouse_id}`));
+      if (adds.length > 12) lines.push(`... and ${adds.length - 12} more`);
+      lines.push('');
+    }
+    if (updates.length) {
+      lines.push('Updates:');
+      updates.slice(0, 12).forEach(u => lines.push(`~ ${u.mouse_id}: ${u.changes.map(c => c.field).join(', ')}`));
+      if (updates.length > 12) lines.push(`... and ${updates.length - 12} more`);
+      lines.push('');
+    }
+    lines.push('Write these DB changes to Excel?');
+    if (!confirm(lines.join('\n'))) return;
+
+    btn.textContent = 'Writing…';
+    const res = await api('POST', '/api/animals/excel-push', {});
+    await loadAll();
+    alert(`Excel updated\nAdded rows: ${res.added_rows}\nUpdated rows: ${res.updated_rows}\nFields changed: ${res.fields_changed}`);
+  } catch (e) {
+    alert('Push failed: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = old;
+  }
+}
+
+// ── Dark mode ──────────────────────────────────────────────────────
+function initTheme() {
+  const saved = localStorage.getItem('colony-theme');
+  const dark  = saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme:dark)').matches);
+  document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+  document.getElementById('btn-dark').textContent = dark ? '☀️' : '🌙';
+}
+function toggleDark() {
+  const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  document.getElementById('btn-dark').textContent = isDark ? '🌙' : '☀️';
+  localStorage.setItem('colony-theme', isDark ? 'light' : 'dark');
+}
+
+// ── Wire ───────────────────────────────────────────────────────────
+function wire() {
+  document.getElementById('search').addEventListener('input', renderTable);
+  document.getElementById('fp').addEventListener('change', renderTable);
+  document.getElementById('fc').addEventListener('change', renderTable);
+  document.getElementById('fe').addEventListener('change', renderTable);
+  for (let i = 1; i <= 3; i++) {
+    document.getElementById(`sort${i}`).addEventListener('change', renderTable);
+    document.getElementById(`sort${i}dir`).addEventListener('change', renderTable);
+  }
+  document.getElementById('hide-sac').addEventListener('change', renderTable);
+  document.getElementById('btn-sync').addEventListener('click', syncExcel);
+  document.getElementById('btn-push-excel').addEventListener('click', pushDbToExcel);
+  document.getElementById('btn-add').addEventListener('click', () => openModal(null));
+  document.getElementById('btn-bulk-exp').addEventListener('click', bulkAssignExperiment);
+  document.getElementById('btn-clear-selection').addEventListener('click', clearSelection);
+  document.getElementById('btn-dark').addEventListener('click', toggleDark);
+  document.getElementById('overlay').addEventListener('click', e => {
+    if (e.target === document.getElementById('overlay')) closeModal();
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+}
+
+// ── Table height ───────────────────────────────────────────────────
+// #table-wrap is the scroll container; its height fills the remaining viewport.
+// thead th sticks at top:0 within that container — no overlap issues.
+function updateTableHeight() {
+  const topbar  = document.getElementById('topbar');
+  const tabs = document.querySelector('.module-tabs');
+  const sortPanel = document.getElementById('sortPanel');
+  const bulkPanel = document.getElementById('bulkPanel');
+  const summary = document.getElementById('summary-bar');
+  const offset  = (topbar?.offsetHeight || 0) + (tabs?.offsetHeight || 0) +
+    (sortPanel?.offsetHeight || 0) + (bulkPanel?.offsetHeight || 0) + (summary?.offsetHeight || 0);
+  document.documentElement.style.setProperty('--above-table', offset + 'px');
+}
+
+// ── Boot ───────────────────────────────────────────────────────────
+initTheme();
+wire();
+updateTableHeight();
+loadAll().then(() => {
+  updateTableHeight();
+  setTimeout(updateTableHeight, 200);
+});
+window.addEventListener('resize', updateTableHeight);
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>

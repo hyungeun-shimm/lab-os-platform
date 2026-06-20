@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Permissions</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+    --red: #b91c1c;
+    --red-soft: #fef2f2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter); color: #1c2333; min-height: 100vh;
+  }
+  main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+  .page-head {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .page-head h1 { margin: 0 0 4px; font-family: Georgia, serif; color: var(--navy); font-size: 22px; }
+  .page-head .desc { color: var(--grey); font-size: 13px; }
+
+  .section {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .section h2 { margin: 0 0 12px; font-family: Georgia, serif; color: var(--navy); font-size: 16px; }
+
+  table.t { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  table.t th {
+    text-align: left; padding: 10px 12px;
+    background: var(--grey-lighter);
+    color: var(--grey); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--grey-light);
+  }
+  table.t td { padding: 10px 12px; border-bottom: 1px solid var(--grey-lighter); vertical-align: middle; }
+  table.t tbody tr:last-child td { border-bottom: 0; }
+
+  .who { display: flex; align-items: center; gap: 8px; }
+  .who .av {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 11.5px;
+  }
+  .who .nm { font-weight: 600; color: var(--navy); }
+  .who .un { font-size: 12px; color: var(--grey); font-family: 'SF Mono', Consolas, monospace; }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 9px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .pill.admin   { background: var(--green-soft); color: var(--green); }
+  .pill.member  { background: var(--grey-lighter); color: var(--grey); }
+  .pill.granted { background: rgba(99,102,241,0.13); color: #4338ca; }
+
+  /* simple toggle */
+  .toggle {
+    appearance: none; -webkit-appearance: none;
+    width: 38px; height: 22px; border-radius: 999px;
+    background: var(--grey-light); position: relative; cursor: pointer;
+    transition: background 0.15s;
+    border: 0; outline: none;
+  }
+  .toggle::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--white);
+    transition: transform 0.15s;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+  }
+  .toggle:checked { background: var(--navy); }
+  .toggle:checked::after { transform: translateX(16px); }
+  .toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .empty { color: var(--grey); font-style: italic; padding: 30px 0; text-align: center; }
+  .err { color: var(--red); padding: 12px 16px; background: var(--red-soft); border-radius: 8px; }
+
+  .saving-pill {
+    display: inline-block; margin-left: 8px;
+    font-size: 11px; color: var(--grey); font-style: italic;
+  }
+  .saving-pill.ok { color: var(--green); font-style: normal; }
+</style>
+</head>
+<body>
+
+<main>
+  <div class="page-head">
+    <h1>🔐 Permissions</h1>
+    <div class="desc">Grant or revoke per-user edit access to the colony (Animal DB). Admins always have edit access.</div>
+  </div>
+
+  <div id="content">
+    <div class="section"><p class="empty">Loading…</p></div>
+  </div>
+</main>
+
+<script src="/labos-nav.js" defer></script>
+<script>
+const $  = (s) => document.querySelector(s);
+
+let currentUser = null;
+let users = [];
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+async function boot() {
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    if (currentUser.effective_role !== "admin") {
+      $("#content").innerHTML = `<div class="section"><div class="err">🔐 Admin only. Switch to Admin mode (top-right) to view this page.</div></div>`;
+      return;
+    }
+    const d = await api("GET", "/api/eln/users");
+    users = d.users || [];
+    render();
+  } catch (e) {
+    if (e.status === 401) { window.location.href = "/eln/login"; return; }
+    $("#content").innerHTML = `<div class="section"><div class="err">${escapeHtml(e.message)}</div></div>`;
+  }
+}
+
+function render() {
+  const active = users.filter(u => u.active);
+  $("#content").innerHTML = `
+    <div class="section">
+      <h2>Colony edit access</h2>
+      ${active.length ? renderTable(active) : `<p class="empty">No active users.</p>`}
+    </div>`;
+  active.forEach((u) => {
+    const cb = document.getElementById(`tg-${u.id}`);
+    if (cb) cb.addEventListener("change", () => toggle(u.id, cb));
+  });
+}
+
+function renderTable(rows) {
+  return `
+    <table class="t">
+      <thead>
+        <tr><th>User</th><th>Role</th><th>Can edit colony?</th><th></th></tr>
+      </thead>
+      <tbody>
+        ${rows.map(u => {
+          const initials = u.initials || (u.display_name || "?")[0];
+          const isAdmin = u.role === "admin";
+          return `
+            <tr>
+              <td>
+                <div class="who">
+                  <div class="av" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${escapeHtml(initials)}</div>
+                  <div>
+                    <div class="nm">${escapeHtml(u.display_name)}</div>
+                    <div class="un">${escapeHtml(u.username || u.email || u.id)}</div>
+                  </div>
+                </div>
+              </td>
+              <td><span class="pill ${isAdmin ? 'admin' : 'member'}">${isAdmin ? 'Admin' : 'Member'}</span></td>
+              <td>
+                <input type="checkbox" class="toggle"
+                  id="tg-${u.id}"
+                  ${u.can_edit_colony || isAdmin ? "checked" : ""}
+                  ${isAdmin ? "disabled" : ""} />
+                ${isAdmin ? `<span class="pill granted" style="margin-left:8px;">always</span>` : ""}
+              </td>
+              <td><span class="saving-pill" id="sv-${u.id}"></span></td>
+            </tr>`;
+        }).join("")}
+      </tbody>
+    </table>`;
+}
+
+async function toggle(userId, cb) {
+  const save = document.getElementById(`sv-${userId}`);
+  save.className = "saving-pill";
+  save.textContent = "saving…";
+  try {
+    await api("PATCH", `/api/eln/users/${userId}`, { can_edit_colony: cb.checked });
+    save.className = "saving-pill ok";
+    save.textContent = "saved ✓";
+    setTimeout(() => { save.textContent = ""; }, 1500);
+  } catch (e) {
+    save.className = "saving-pill";
+    save.textContent = "failed: " + e.message;
+    cb.checked = !cb.checked;
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

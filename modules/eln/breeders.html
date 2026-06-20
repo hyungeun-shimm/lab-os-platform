@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Breeders</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --red: #b91c1c;
+    --red-soft: #fef2f2;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter); color: #1c2333; min-height: 100vh;
+  }
+  header.app-top {
+    background: var(--navy); color: var(--white);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  header.app-top .brand { font-family: Georgia, serif; font-size: 18px; font-weight: 700; }
+  header.app-top .brand-sub {
+    color: var(--accent); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; margin-left: 4px;
+  }
+  header.app-top a.back { color: var(--ice); text-decoration: none; font-size: 13px; }
+  header.app-top a.back:hover { color: var(--white); }
+  header.app-top .crumbs { color: var(--ice-deep); font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+  header.app-top .crumbs strong { color: var(--white); }
+  header.app-top .spacer { flex: 1; }
+  header.app-top .me { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  header.app-top .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  header.app-top .mode-pill {
+    background: var(--accent); color: var(--navy-deep);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  header.app-top .mode-pill.member { background: var(--ice-deep); color: var(--navy-deep); }
+
+  main { max-width: 1300px; margin: 0 auto; padding: 24px; }
+
+  .page-head {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .page-head h1 { margin: 0 0 4px; font-family: Georgia, serif; color: var(--navy); font-size: 22px; }
+  .page-head .desc { color: var(--grey); font-size: 13px; }
+  .page-head .actions { margin-left: auto; display: flex; gap: 8px; }
+  .btn-primary {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 9px 16px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary:hover { background: var(--navy-deep); }
+
+  .filters {
+    background: var(--white); border-radius: 12px;
+    padding: 10px 14px; margin-bottom: 12px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .filter-btn {
+    background: var(--grey-lighter); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 999px;
+    padding: 4px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .filter-btn:hover { background: var(--ice); }
+  .filter-btn.active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+  .filter-label {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  .breeders-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 14px;
+  }
+  .breeder-card {
+    background: var(--white); border-radius: 12px;
+    padding: 14px 16px; box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    border: 1px solid var(--grey-light);
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .breeder-card:hover { border-color: var(--ice-deep); }
+  .bc-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
+  .bc-label {
+    font-family: Georgia, serif; color: var(--navy); font-size: 16px; font-weight: 700;
+  }
+  .bc-strain {
+    font-size: 12px; color: var(--grey); font-family: 'SF Mono', Consolas, monospace;
+  }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 9px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .pill.active      { background: var(--green-soft);              color: var(--green); }
+  .pill.maintenance { background: rgba(143,179,230,0.30);         color: var(--navy); }
+  .pill.trio        { background: rgba(168,85,247,0.13);          color: #6b21a8; }
+  .pill.retired     { background: var(--grey-lighter);            color: var(--grey); }
+  .pill.jax         { background: rgba(242,179,61,0.20);          color: #8a5b00; }
+  .pill.preg        { background: rgba(244,114,182,0.18);         color: #9d174d; }
+  .pill.rate-bad      { background: var(--red-soft);              color: var(--red); }
+  .pill.rate-moderate { background: rgba(245,158,11,0.20);        color: #92400e; }
+  .pill.rate-high     { background: var(--green-soft);            color: var(--green); }
+  .pill.rate-unknown  { background: var(--grey-lighter);          color: var(--grey); }
+
+  .bc-meta { font-size: 12px; color: var(--grey); display: flex; flex-wrap: wrap; gap: 12px; }
+  .bc-meta strong { color: var(--navy-deep); }
+
+  .bc-parents { display: flex; flex-direction: column; gap: 4px; padding-top: 6px; border-top: 1px solid var(--grey-light); }
+  .bc-parent-row { display: flex; align-items: center; gap: 6px; font-size: 12.5px; }
+  .bc-parent-role {
+    background: var(--grey-lighter); color: var(--navy);
+    border-radius: 6px; padding: 1px 7px;
+    font-family: 'SF Mono', Consolas, monospace; font-weight: 700; font-size: 11px;
+    min-width: 60px; text-align: center;
+  }
+  .bc-parent-role.male   { background: rgba(59,130,246,0.18);  color: #1d4ed8; }
+  .bc-parent-role.female { background: rgba(236,72,153,0.18);  color: #be185d; }
+  .bc-pups {
+    background: var(--grey-lighter); border-radius: 8px;
+    padding: 6px 10px; font-size: 12px; color: var(--grey);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .bc-pups strong { color: var(--navy); }
+
+  .bc-actions {
+    display: flex; gap: 6px; margin-top: auto; padding-top: 8px; border-top: 1px solid var(--grey-light);
+  }
+  .btn-mini {
+    background: var(--white); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 7px;
+    padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-mini:hover { background: var(--grey-lighter); }
+  .btn-mini.danger { color: var(--red); border-color: rgba(185,28,28,0.3); }
+  .btn-mini.danger:hover { background: var(--red-soft); }
+
+  .empty {
+    background: var(--white); border-radius: 12px;
+    padding: 40px 20px; text-align: center;
+    color: var(--grey); font-style: italic;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .err { background: var(--red-soft); color: var(--red); padding: 12px 16px; border-radius: 10px; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.45);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 32px 16px; z-index: 800;
+    overflow-y: auto;
+  }
+  .modal {
+    background: var(--white); border-radius: 14px;
+    width: 100%; max-width: 760px;
+    box-shadow: 0 24px 60px rgba(15,23,42,0.30);
+  }
+  .modal-head {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; align-items: center; justify-content: space-between;
+    border-radius: 14px 14px 0 0;
+    cursor: move; user-select: none;
+  }
+  .modal-head h3 { margin: 0; font-family: Georgia, serif; color: var(--navy); font-size: 17px; }
+  .modal-close { background: transparent; border: 0; cursor: pointer; font-size: 22px; color: var(--grey); padding: 0 4px; }
+  .modal-body { padding: 18px 22px 22px; }
+  .modal-foot {
+    padding: 14px 22px;
+    border-top: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; justify-content: space-between; align-items: center; gap: 8px;
+    border-radius: 0 0 14px 14px;
+  }
+  .modal-foot .right { display: flex; gap: 8px; }
+  .modal-foot button {
+    border: 0; border-radius: 9px;
+    padding: 8px 16px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .modal-foot .cancel { background: var(--white); border: 1px solid var(--grey-light); color: var(--navy); }
+  .modal-foot .save { background: var(--navy); color: var(--white); }
+  .modal-foot .delete { background: var(--white); border: 1px solid rgba(185,28,28,0.3); color: var(--red); }
+
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block; color: var(--grey); font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .field input[type="text"], .field input[type="date"], .field input[type="url"], .field select, .field textarea {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 7px 10px; font: inherit; font-size: 14px;
+    background: var(--white);
+  }
+  .field textarea { resize: vertical; min-height: 56px; }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    outline: none; border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(30,39,97,0.13);
+  }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .row.three { grid-template-columns: 1fr 1fr 1fr; }
+
+  .section-title {
+    font-size: 11px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.07em;
+    margin: 18px 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--grey-light);
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title button {
+    margin-left: auto;
+    background: var(--white); color: var(--navy);
+    border: 1px dashed var(--ice-deep); border-radius: 7px;
+    padding: 3px 10px; font: inherit; font-size: 11px; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.04em; text-transform: uppercase;
+  }
+  .section-title button:hover { background: var(--ice); border-style: solid; }
+
+  .parent-block, .pup-block {
+    background: var(--grey-lighter); border-radius: 10px;
+    padding: 10px 12px; margin-bottom: 8px;
+    position: relative;
+  }
+  .block-head {
+    display: flex; align-items: center; gap: 8px; margin-bottom: 8px;
+  }
+  .block-head select.role-sel {
+    flex: 0 0 110px;
+    border: 1px solid #d1d5db; border-radius: 6px;
+    padding: 3px 8px; font: inherit; font-size: 12.5px; background: var(--white);
+  }
+  .block-head .block-spacer { flex: 1; }
+  .block-head .del-btn {
+    background: transparent; color: var(--red); border: 0; cursor: pointer;
+    font: inherit; font-size: 13px; font-weight: 700; padding: 2px 8px;
+  }
+  .block-fields { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .block-fields.three { grid-template-columns: repeat(3, 1fr); }
+  .block-fields .field { margin-bottom: 0; }
+  .block-fields .field input, .block-fields .field select, .block-fields .field textarea {
+    font-size: 13px; padding: 5px 8px;
+  }
+  .block-fields .field label { font-size: 10px; }
+  .block-fields .field.full { grid-column: 1 / -1; }
+  .block-fields .field.cb-row { grid-column: 1 / -1; }
+  .cb-row label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; font-size: 12.5px; color: var(--navy); }
+
+  .empty-inline {
+    color: var(--grey); font-style: italic; font-size: 12.5px; padding: 6px 0;
+  }
+
+  .modal-msg {
+    margin-top: 10px; padding: 9px 12px; border-radius: 7px;
+    font-size: 12.5px; display: none;
+  }
+  .modal-msg.error { background: var(--red-soft); color: var(--red); display: block; }
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div>
+    <span class="brand">Lab OS</span><span class="brand-sub">ELN</span>
+  </div>
+  <a class="back" href="/eln/">← Projects</a>
+  <div class="crumbs">
+    <span>/</span><strong>Breeders</strong>
+  </div>
+  <div class="spacer"></div>
+  <div class="me" id="me-area">Loading…</div>
+</header>
+
+<main>
+  <div class="page-head">
+    <div>
+      <h1>🧬 Breeder colony</h1>
+      <div class="desc">Active strain pairs, TRIO setups, maintenance lines, and Jax availability.</div>
+    </div>
+    <div class="actions">
+      <button class="btn-primary" id="btn-new">+ Add breeder</button>
+    </div>
+  </div>
+
+  <div class="filters">
+    <span class="filter-label">Status</span>
+    <button class="filter-btn active" data-fs="all">All</button>
+    <button class="filter-btn" data-fs="active">Active</button>
+    <button class="filter-btn" data-fs="trio">TRIO</button>
+    <button class="filter-btn" data-fs="maintenance">Maintenance</button>
+    <button class="filter-btn" data-fs="retired">Retired</button>
+    <span class="filter-label" style="margin-left:14px;">Strain</span>
+    <input type="text" id="f-strain" placeholder="e.g. L7-Ai95D" style="border:1px solid #d1d5db;border-radius:7px;padding:5px 9px;font:inherit;font-size:13px;width:160px;" />
+  </div>
+
+  <div id="content"><div class="empty">Loading…</div></div>
+</main>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="modal-edit" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="edit-title">New breeder pair</h3>
+      <button class="modal-close" data-close="modal-edit" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="row">
+        <div class="field">
+          <label>Label / name *</label>
+          <input id="ef-label" type="text" placeholder="e.g. L7-Ai95D #3" autocomplete="off" required />
+        </div>
+        <div class="field">
+          <label>Strain</label>
+          <input id="ef-strain" type="text" placeholder="e.g. L7-Ai95D" autocomplete="off" />
+        </div>
+      </div>
+      <div class="row three">
+        <div class="field">
+          <label>Status</label>
+          <select id="ef-status">
+            <option value="active">Active strain</option>
+            <option value="trio">TRIO</option>
+            <option value="maintenance">Maintenance</option>
+            <option value="retired">Retired</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Setup date</label>
+          <input id="ef-setup" type="date" />
+        </div>
+        <div class="field">
+          <label>Expected retire date</label>
+          <input id="ef-retire" type="date" />
+        </div>
+      </div>
+      <div class="row">
+        <div class="field" style="grid-column:1/-1;">
+          <label>
+            <input id="ef-jax" type="checkbox" style="vertical-align:-2px;margin-right:6px;" />
+            Available on Jackson Labs
+          </label>
+          <input id="ef-jax-url" type="url" placeholder="https://www.jax.org/strain/…" style="margin-top:4px;" />
+        </div>
+      </div>
+      <div class="field">
+        <label>Notes</label>
+        <textarea id="ef-notes" placeholder="General notes about this pair…"></textarea>
+      </div>
+
+      <!-- Parents -->
+      <div class="section-title">
+        Parent animals
+        <button id="add-parent" type="button">+ Add parent</button>
+      </div>
+      <div id="parents-wrap"></div>
+
+      <!-- Pup rounds -->
+      <div class="section-title">
+        Pup rounds (history)
+        <button id="add-pup" type="button">+ Add round</button>
+      </div>
+      <div id="pups-wrap"></div>
+
+      <div class="modal-msg" id="ef-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="delete" id="ef-delete" type="button" style="display:none;">Delete</button>
+      <div class="right">
+        <button class="cancel" data-close="modal-edit" type="button">Cancel</button>
+        <button class="save" id="ef-save" type="button">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const $  = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+let currentUser = null;
+let breeders = [];
+let editing = null;       // { id?, parents, pup_rounds } working copy
+let filter = { status: "all", strain: "" };
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function fmtDate(iso) { return iso || "—"; }
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+async function boot() {
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    renderHeader();
+    await load();
+  } catch (e) {
+    if (e.status === 401) { window.location.href = "/eln/login"; return; }
+    $("#content").innerHTML = `<div class="err">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function renderHeader() {
+  const u = currentUser;
+  const initials = u.initials || (u.display_name || "?")[0];
+  const eff = u.effective_role;
+  const badge = `<span class="mode-pill ${eff === "admin" ? "" : "member"}">${eff === "admin" ? "Admin mode" : "User mode"}</span>`;
+  $("#me-area").innerHTML =
+    `<div class="avatar" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${initials}</div>` +
+    `<div>${u.display_name} ${badge}</div>`;
+}
+
+async function load() {
+  $("#content").innerHTML = `<div class="empty">Loading…</div>`;
+  try {
+    const d = await api("GET", "/api/eln/breeders");
+    breeders = d.breeders || [];
+    render();
+  } catch (e) {
+    $("#content").innerHTML = `<div class="err">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+function filteredBreeders() {
+  const s = filter.strain.toLowerCase();
+  return breeders.filter(b =>
+    (filter.status === "all" || b.status === filter.status) &&
+    (!s || (b.strain || "").toLowerCase().includes(s) || (b.label || "").toLowerCase().includes(s))
+  );
+}
+
+function render() {
+  const list = filteredBreeders();
+  if (!breeders.length) {
+    $("#content").innerHTML = `<div class="empty">No breeders yet. Click <strong>+ Add breeder</strong> to start.</div>`;
+    return;
+  }
+  if (!list.length) {
+    $("#content").innerHTML = `<div class="empty">No breeders match these filters.</div>`;
+    return;
+  }
+  $("#content").innerHTML = `<div class="breeders-grid">${list.map(renderCard).join("")}</div>`;
+  $$(".breeder-card [data-action='edit']").forEach(b => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      openEdit(breeders.find(x => x.id === b.dataset.id));
+    });
+  });
+}
+
+function statusLabel(s) {
+  return { active: "Active strain", trio: "TRIO", maintenance: "Maintenance", retired: "Retired" }[s] || s;
+}
+
+function renderCard(b) {
+  const males   = (b.parents || []).filter(p => (p.sex || "").toUpperCase() === "M" || (p.role || "").toLowerCase().includes("male") && !(p.role || "").toLowerCase().includes("female"));
+  const females = (b.parents || []).filter(p => (p.sex || "").toUpperCase() === "F" || (p.role || "").toLowerCase().includes("female"));
+  const pups = b.pup_rounds || [];
+  const lastPup  = pups[0];
+  const totalPups   = pups.reduce((s, r) => s + (r.pup_count || 0), 0);
+  const totalWeanedM = pups.reduce((s, r) => s + (r.male_count_weaned || 0), 0);
+  const totalWeanedF = pups.reduce((s, r) => s + (r.female_count_weaned || 0), 0);
+  const isTrio = b.status === "trio";
+
+  return `
+    <div class="breeder-card">
+      <div class="bc-head">
+        <div>
+          <div class="bc-label">${escapeHtml(b.label)}</div>
+          <div class="bc-strain">${escapeHtml(b.strain || "—")}</div>
+        </div>
+        <div style="text-align:right;display:flex;flex-direction:column;gap:3px;align-items:flex-end;">
+          <span class="pill ${b.status}">${escapeHtml(statusLabel(b.status))}</span>
+          ${b.jax_available ? `<span class="pill jax" title="${escapeHtml(b.jax_url || '')}">JAX available</span>` : ""}
+          <span class="pill rate-${b.breeding_rate}" title="Average pup count: ${pups.length ? (totalPups/pups.length).toFixed(1) : "—"}/round">rate: ${b.breeding_rate}</span>
+        </div>
+      </div>
+      <div class="bc-meta">
+        ${b.setup_date          ? `<span>Setup <strong>${escapeHtml(b.setup_date)}</strong></span>` : ""}
+        ${b.expected_retire_date? `<span>Retire <strong>${escapeHtml(b.expected_retire_date)}</strong></span>` : ""}
+        ${pups.length           ? `<span>${pups.length} round${pups.length>1?"s":""}</span>` : ""}
+      </div>
+
+      ${(b.parents || []).length ? `
+      <div class="bc-parents">
+        ${b.parents.map(p => renderParentRow(p, isTrio)).join("")}
+      </div>` : ""}
+
+      ${pups.length ? `
+      <div class="bc-pups">
+        <span>Last: ${escapeHtml(lastPup.birth_date || "—")} · <strong>${lastPup.pup_count || 0}</strong> pups</span>
+        <span>Total: <strong>${totalPups}</strong> · weaned ♂${totalWeanedM} ♀${totalWeanedF}</span>
+      </div>` : ""}
+
+      <div class="bc-actions">
+        <button class="btn-mini" data-action="edit" data-id="${b.id}">Edit</button>
+      </div>
+    </div>`;
+}
+
+function renderParentRow(p, isTrio) {
+  const isMale   = (p.sex || "").toUpperCase() === "M";
+  const isFemale = (p.sex || "").toUpperCase() === "F";
+  const roleCls  = isMale ? "male" : (isFemale ? "female" : "");
+  const roleLbl  = p.role || (isMale ? "♂" : (isFemale ? "♀" : "?"));
+  const pregBadge = p.pregnant ? `<span class="pill preg" style="font-size:9px;">pregnant</span>` : "";
+  const locBadge  = (isTrio && isMale && p.current_location)
+    ? `<span class="pill" style="background:var(--grey-lighter);color:var(--navy);font-size:9px;">📍 ${escapeHtml(p.current_location)}</span>`
+    : (isTrio && isFemale && p.current_location)
+    ? `<span class="pill" style="background:var(--grey-lighter);color:var(--navy);font-size:9px;">📍 ${escapeHtml(p.current_location)}</span>`
+    : "";
+  const idTxt = p.mouse_id
+    ? `<a href="/eln/mouse/${encodeURIComponent(p.mouse_id)}" style="color:var(--navy);font-family:'SF Mono',Consolas,monospace;font-weight:700;text-decoration:none;">${escapeHtml(p.mouse_id)}</a>`
+    : `<span style="color:var(--grey);font-style:italic;">(unset)</span>`;
+  const geno = p.genotype ? `<span style="color:var(--grey);">${escapeHtml(p.genotype)}</span>` : "";
+  const dob  = p.dob ? `<span style="color:var(--grey);font-size:11.5px;">DOB ${escapeHtml(p.dob)}</span>` : "";
+  return `
+    <div class="bc-parent-row">
+      <span class="bc-parent-role ${roleCls}">${escapeHtml(roleLbl)}</span>
+      ${idTxt}
+      ${geno}
+      ${dob}
+      ${pregBadge}
+      ${locBadge}
+    </div>`;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Edit modal
+// ─────────────────────────────────────────────────────────────
+$("#btn-new").addEventListener("click", () => openEdit(null));
+
+function openEdit(b) {
+  editing = b ? JSON.parse(JSON.stringify(b)) : {
+    label: "", strain: "", status: "active", jax_available: false, jax_url: "",
+    setup_date: "", expected_retire_date: "", notes: "",
+    parents: [], pup_rounds: [],
+  };
+  $("#edit-title").textContent = b ? "Edit breeder pair" : "New breeder pair";
+  $("#ef-label").value  = editing.label || "";
+  $("#ef-strain").value = editing.strain || "";
+  $("#ef-status").value = editing.status || "active";
+  $("#ef-setup").value  = editing.setup_date || "";
+  $("#ef-retire").value = editing.expected_retire_date || "";
+  $("#ef-jax").checked  = !!editing.jax_available;
+  $("#ef-jax-url").value = editing.jax_url || "";
+  $("#ef-notes").value  = editing.notes || "";
+  $("#ef-delete").style.display = b ? "" : "none";
+  $("#ef-msg").style.display = "none";
+  renderParents();
+  renderPups();
+  $("#modal-edit").style.display = "flex";
+  setTimeout(() => $("#ef-label").focus(), 30);
+}
+
+$("#ef-setup").addEventListener("change", () => {
+  // Auto-populate retire if empty: setup + 365d
+  if (!$("#ef-retire").value && $("#ef-setup").value) {
+    const d = new Date($("#ef-setup").value);
+    d.setDate(d.getDate() + 365);
+    $("#ef-retire").value = d.toISOString().slice(0, 10);
+  }
+});
+
+function renderParents() {
+  const wrap = $("#parents-wrap");
+  if (!editing.parents.length) {
+    wrap.innerHTML = `<div class="empty-inline">No parents added. Click <strong>+ Add parent</strong> above.</div>`;
+    return;
+  }
+  wrap.innerHTML = editing.parents.map((p, i) => `
+    <div class="parent-block" data-i="${i}">
+      <div class="block-head">
+        <select class="role-sel" data-field="role">
+          <option value="male"     ${p.role === "male" ? "selected" : ""}>♂ Male</option>
+          <option value="female_a" ${p.role === "female_a" ? "selected" : ""}>♀ Female A</option>
+          <option value="female_b" ${p.role === "female_b" ? "selected" : ""}>♀ Female B</option>
+          <option value="female"   ${p.role === "female" ? "selected" : ""}>♀ Female</option>
+        </select>
+        <div class="block-spacer"></div>
+        <button type="button" class="del-btn" data-del-parent="${i}">× Remove</button>
+      </div>
+      <div class="block-fields">
+        <div class="field">
+          <label>Mouse ID</label>
+          <input type="text" data-field="mouse_id" value="${escapeHtml(p.mouse_id || "")}" placeholder="WT…" />
+        </div>
+        <div class="field">
+          <label>DOB</label>
+          <input type="date" data-field="dob" value="${escapeHtml(p.dob || "")}" />
+        </div>
+        <div class="field">
+          <label>Strain</label>
+          <input type="text" data-field="strain" value="${escapeHtml(p.strain || "")}" />
+        </div>
+        <div class="field">
+          <label>Sex</label>
+          <select data-field="sex">
+            <option value="" ${!p.sex ? "selected" : ""}>—</option>
+            <option value="M" ${p.sex === "M" ? "selected" : ""}>M</option>
+            <option value="F" ${p.sex === "F" ? "selected" : ""}>F</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Genotype</label>
+          <input type="text" data-field="genotype" value="${escapeHtml(p.genotype || "")}" placeholder="WT/Het/Hom…" />
+        </div>
+        <div class="field">
+          <label>Current location</label>
+          <input type="text" data-field="current_location" value="${escapeHtml(p.current_location || "")}" placeholder="e.g. with female_a, isolated" />
+        </div>
+        <div class="field cb-row">
+          <label><input type="checkbox" data-field="pregnant" ${p.pregnant ? "checked" : ""} /> Pregnant (females only)</label>
+        </div>
+        <div class="field full">
+          <label>Notes</label>
+          <input type="text" data-field="notes" value="${escapeHtml(p.notes || "")}" />
+        </div>
+      </div>
+    </div>`).join("");
+
+  // Wire field changes
+  $$(".parent-block").forEach(blk => {
+    const i = parseInt(blk.dataset.i);
+    blk.querySelectorAll("[data-field]").forEach(el => {
+      el.addEventListener("input", () => {
+        const f = el.dataset.field;
+        editing.parents[i][f] = el.type === "checkbox" ? el.checked : el.value;
+      });
+      el.addEventListener("change", () => {
+        const f = el.dataset.field;
+        editing.parents[i][f] = el.type === "checkbox" ? el.checked : el.value;
+      });
+    });
+    blk.querySelector("[data-del-parent]").addEventListener("click", () => {
+      editing.parents.splice(i, 1);
+      renderParents();
+    });
+  });
+}
+
+$("#add-parent").addEventListener("click", () => {
+  editing.parents.push({
+    role: "male", mouse_id: "", dob: "", strain: editing.strain || "",
+    genotype: "", sex: "", current_location: "", pregnant: false, notes: "",
+    sort_order: editing.parents.length,
+  });
+  renderParents();
+});
+
+function renderPups() {
+  const wrap = $("#pups-wrap");
+  if (!editing.pup_rounds.length) {
+    wrap.innerHTML = `<div class="empty-inline">No pup rounds recorded.</div>`;
+    return;
+  }
+  // Female options for "which female birthed"
+  const femaleOpts = editing.parents.filter(p => (p.sex || "").toUpperCase() === "F" || (p.role || "").includes("female"));
+  wrap.innerHTML = editing.pup_rounds.map((r, i) => `
+    <div class="pup-block" data-i="${i}">
+      <div class="block-head">
+        <strong style="color:var(--navy);font-size:13px;">Round ${i + 1}</strong>
+        <div class="block-spacer"></div>
+        <button type="button" class="del-btn" data-del-pup="${i}">× Remove</button>
+      </div>
+      <div class="block-fields three">
+        <div class="field">
+          <label>Birth date</label>
+          <input type="date" data-field="birth_date" value="${escapeHtml(r.birth_date || "")}" />
+        </div>
+        <div class="field">
+          <label>Pup count (at birth)</label>
+          <input type="text" data-field="pup_count" value="${escapeHtml(r.pup_count ?? "")}" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label>Birthed by (female)</label>
+          <select data-field="female_id">
+            <option value="">—</option>
+            ${femaleOpts.map(f => `<option value="${escapeHtml(f.id || "")}" ${f.id && r.female_id === f.id ? "selected" : ""}>${escapeHtml(f.role || "")} ${f.mouse_id ? "· " + escapeHtml(f.mouse_id) : ""}</option>`).join("")}
+          </select>
+        </div>
+        <div class="field">
+          <label>Weaning date</label>
+          <input type="date" data-field="weaning_date" value="${escapeHtml(r.weaning_date || "")}" />
+        </div>
+        <div class="field">
+          <label>♂ weaned</label>
+          <input type="text" data-field="male_count_weaned" value="${escapeHtml(r.male_count_weaned ?? "")}" inputmode="numeric" />
+        </div>
+        <div class="field">
+          <label>♀ weaned</label>
+          <input type="text" data-field="female_count_weaned" value="${escapeHtml(r.female_count_weaned ?? "")}" inputmode="numeric" />
+        </div>
+        <div class="field full">
+          <label>Notes (AAV inj., genotyping results, …)</label>
+          <textarea data-field="notes" rows="2">${escapeHtml(r.notes || "")}</textarea>
+        </div>
+      </div>
+    </div>`).join("");
+
+  $$(".pup-block").forEach(blk => {
+    const i = parseInt(blk.dataset.i);
+    blk.querySelectorAll("[data-field]").forEach(el => {
+      const update = () => {
+        const f = el.dataset.field;
+        let v = el.value;
+        if (["pup_count","male_count_weaned","female_count_weaned"].includes(f)) {
+          v = parseInt(v) || 0;
+        }
+        editing.pup_rounds[i][f] = v;
+      };
+      el.addEventListener("input", update);
+      el.addEventListener("change", update);
+    });
+    blk.querySelector("[data-del-pup]").addEventListener("click", () => {
+      editing.pup_rounds.splice(i, 1);
+      renderPups();
+    });
+  });
+}
+
+$("#add-pup").addEventListener("click", () => {
+  editing.pup_rounds.unshift({
+    female_id: "", birth_date: "", pup_count: 0,
+    weaning_date: "", male_count_weaned: 0, female_count_weaned: 0,
+    notes: "",
+  });
+  renderPups();
+});
+
+$("#ef-save").addEventListener("click", async () => {
+  if (!$("#ef-label").value.trim()) {
+    $("#ef-msg").className = "modal-msg error";
+    $("#ef-msg").textContent = "Label is required.";
+    return;
+  }
+  const payload = {
+    label:                $("#ef-label").value.trim(),
+    strain:               $("#ef-strain").value.trim(),
+    status:               $("#ef-status").value,
+    jax_available:        $("#ef-jax").checked,
+    jax_url:              $("#ef-jax-url").value.trim(),
+    setup_date:           $("#ef-setup").value || null,
+    expected_retire_date: $("#ef-retire").value || null,
+    notes:                $("#ef-notes").value.trim(),
+    parents: editing.parents.map(p => ({
+      id: p.id || null,
+      role: p.role || "male",
+      mouse_id: p.mouse_id || null,
+      dob: p.dob || null,
+      strain: p.strain || null,
+      genotype: p.genotype || null,
+      sex: p.sex || null,
+      current_location: p.current_location || null,
+      pregnant: !!p.pregnant,
+      notes: p.notes || null,
+      sort_order: p.sort_order || 0,
+    })),
+    pup_rounds: editing.pup_rounds.map(r => ({
+      id: r.id || null,
+      female_id: r.female_id || null,
+      birth_date: r.birth_date || null,
+      pup_count: parseInt(r.pup_count) || 0,
+      weaning_date: r.weaning_date || null,
+      male_count_weaned: parseInt(r.male_count_weaned) || 0,
+      female_count_weaned: parseInt(r.female_count_weaned) || 0,
+      notes: r.notes || null,
+    })),
+  };
+  $("#ef-save").disabled = true;
+  try {
+    if (editing.id) {
+      await api("PUT", `/api/eln/breeders/${editing.id}`, payload);
+    } else {
+      await api("POST", "/api/eln/breeders", payload);
+    }
+    $("#modal-edit").style.display = "none";
+    await load();
+  } catch (e) {
+    $("#ef-msg").className = "modal-msg error";
+    $("#ef-msg").textContent = e.message;
+  } finally {
+    $("#ef-save").disabled = false;
+  }
+});
+
+$("#ef-delete").addEventListener("click", async () => {
+  if (!editing.id) return;
+  if (!confirm("Delete this breeder pair and all its history?")) return;
+  try {
+    await api("DELETE", `/api/eln/breeders/${editing.id}`);
+    $("#modal-edit").style.display = "none";
+    await load();
+  } catch (e) {
+    $("#ef-msg").className = "modal-msg error";
+    $("#ef-msg").textContent = e.message;
+  }
+});
+
+// Filters
+$$(".filter-btn[data-fs]").forEach(b => {
+  b.addEventListener("click", () => {
+    $$(".filter-btn[data-fs]").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    filter.status = b.dataset.fs;
+    render();
+  });
+});
+$("#f-strain").addEventListener("input", () => { filter.strain = $("#f-strain").value; render(); });
+
+// Modal close + drag
+$$("[data-close]").forEach(el => {
+  el.addEventListener("click", () => { $("#" + el.dataset.close).style.display = "none"; });
+});
+$$(".modal-overlay").forEach(ov => {
+  ov.addEventListener("click", (e) => { if (e.target === ov) ov.style.display = "none"; });
+});
+(function dragModals() {
+  document.querySelectorAll(".modal-head").forEach(head => {
+    head.addEventListener("mousedown", (e) => {
+      if (e.target.closest("button")) return;
+      const modal = head.closest(".modal");
+      if (!modal) return;
+      const m = (modal.style.transform || "").match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      const sx = m ? parseFloat(m[1]) : 0, sy = m ? parseFloat(m[2]) : 0;
+      const startX = e.clientX, startY = e.clientY;
+      const onMove = (ev) => { modal.style.transform = `translate(${sx + ev.clientX - startX}px, ${sy + ev.clientY - startY}px)`; };
+      const onUp = () => { document.removeEventListener("mousemove", onMove); document.removeEventListener("mouseup", onUp); };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      e.preventDefault();
+    });
+  });
+  document.querySelectorAll(".modal-overlay").forEach(ov => {
+    const modal = ov.querySelector(".modal");
+    const reset = () => { if (modal) modal.style.transform = ""; };
+    ov.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", reset));
+    ov.addEventListener("click", (e) => { if (e.target === ov) reset(); });
+  });
+})();
+
+boot();
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Audit log</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+    --red: #b91c1c;
+    --red-soft: #fef2f2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter); color: #1c2333; min-height: 100vh;
+  }
+  header.app-top {
+    background: var(--navy); color: var(--white);
+    padding: 12px 20px; display: flex; align-items: center; gap: 14px;
+  }
+  header.app-top .brand { font-family: Georgia, serif; font-size: 18px; font-weight: 700; }
+  header.app-top .brand-sub {
+    color: var(--accent); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; margin-left: 4px;
+  }
+  header.app-top a.back { color: var(--ice); text-decoration: none; font-size: 13px; }
+  header.app-top a.back:hover { color: var(--white); }
+  header.app-top .crumbs { color: var(--ice-deep); font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+  header.app-top .crumbs strong { color: var(--white); }
+  header.app-top .spacer { flex: 1; }
+  header.app-top .me { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  header.app-top .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  header.app-top .mode-pill {
+    background: var(--accent); color: var(--navy-deep);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  header.app-top .mode-pill.member { background: var(--ice-deep); color: var(--navy-deep); }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  .page-head {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .page-head h1 { margin: 0; font-family: Georgia, serif; color: var(--navy); font-size: 22px; }
+  .page-head .desc { color: var(--grey); font-size: 13px; margin-top: 4px; }
+
+  .filters {
+    background: var(--white); border-radius: 12px;
+    padding: 10px 14px; margin-bottom: 12px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .filter-label {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .filters input, .filters select {
+    border: 1px solid #d1d5db; border-radius: 7px;
+    padding: 5px 9px; font: inherit; font-size: 13px; background: var(--white);
+  }
+  .filters .spacer { flex: 1; }
+  .filters .reset {
+    background: transparent; color: var(--grey); border: 0; cursor: pointer;
+    font: inherit; font-size: 12.5px; text-decoration: underline;
+  }
+
+  .table-wrap {
+    background: var(--white); border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    overflow: hidden;
+  }
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th {
+    text-align: left; padding: 10px 12px;
+    background: var(--grey-lighter);
+    color: var(--grey); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--grey-light);
+    white-space: nowrap;
+  }
+  table.t td {
+    padding: 9px 12px; border-bottom: 1px solid var(--grey-lighter);
+    vertical-align: middle;
+  }
+  table.t tbody tr:last-child td { border-bottom: 0; }
+  table.t tbody tr:hover { background: var(--grey-lighter); }
+
+  .who { display: flex; align-items: center; gap: 7px; }
+  .who .av {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 10.5px;
+  }
+  .who .nm { font-weight: 600; font-size: 12.5px; }
+
+  .action-tag {
+    display: inline-block;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+    font-family: 'SF Mono', Consolas, monospace;
+    background: var(--grey-lighter); color: var(--navy);
+  }
+  .action-tag.fail   { background: var(--red-soft); color: var(--red); }
+  .action-tag.write  { background: rgba(99,102,241,0.13); color: #4338ca; }
+  .action-tag.lock   { background: var(--green-soft); color: var(--green); }
+  .action-tag.delete { background: var(--red-soft); color: var(--red); }
+  .action-tag.admin  { background: rgba(242,179,61,0.20); color: #8a5b00; }
+
+  .res {
+    font-family: 'SF Mono', Consolas, monospace; font-size: 12px;
+    color: var(--grey);
+  }
+  .res .rtype { color: var(--navy); font-weight: 600; }
+  .details {
+    font-family: 'SF Mono', Consolas, monospace; font-size: 11.5px;
+    color: var(--grey); max-width: 380px; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .details:hover { white-space: normal; overflow: visible; }
+  .ts {
+    white-space: nowrap; color: var(--navy); font-weight: 600;
+    font-family: 'SF Mono', Consolas, monospace; font-size: 12px;
+  }
+  .ts-rel { color: var(--grey); font-size: 11px; }
+
+  .empty {
+    color: var(--grey); font-style: italic; padding: 40px 20px; text-align: center;
+  }
+  .err {
+    color: var(--red); padding: 16px; background: var(--red-soft); border-radius: 10px;
+  }
+
+  .pager {
+    background: var(--white); border-radius: 12px;
+    padding: 10px 16px; margin-top: 12px;
+    display: flex; align-items: center; gap: 12px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    font-size: 13px;
+  }
+  .pager button {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 7px;
+    padding: 5px 12px; font: inherit; font-size: 12.5px; font-weight: 600;
+    cursor: pointer;
+  }
+  .pager button:disabled { background: var(--ice-deep); cursor: not-allowed; }
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div>
+    <span class="brand">Lab OS</span><span class="brand-sub">ELN</span>
+  </div>
+  <a class="back" href="/eln/">← Projects</a>
+  <div class="crumbs">
+    <span>/</span><strong>Audit log</strong>
+  </div>
+  <div class="spacer"></div>
+  <div class="me" id="me-area">Loading…</div>
+</header>
+
+<main>
+  <div class="page-head">
+    <h1>🛡 Audit log</h1>
+    <div class="desc">Every action recorded by the ELN backend — admin only.</div>
+  </div>
+
+  <div class="filters">
+    <span class="filter-label">User</span>
+    <select id="f-user"><option value="">— all —</option></select>
+    <span class="filter-label">Action</span>
+    <select id="f-action"><option value="">— all —</option></select>
+    <span class="filter-label">Search</span>
+    <input type="text" id="f-q" placeholder="resource, details…" style="width:200px;" />
+    <div class="spacer"></div>
+    <button class="reset" id="btn-reset">Reset</button>
+  </div>
+
+  <div id="content">
+    <div class="table-wrap"><p class="empty">Loading…</p></div>
+  </div>
+</main>
+
+<script>
+const $  = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+let currentUser = null;
+let filter = { user_id: "", action: "", q: "" };
+let page = { limit: 100, offset: 0, total: 0 };
+let debounceId = null;
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function fmtTs(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  return d.toLocaleString();
+}
+function fmtRel(iso) {
+  if (!iso) return "";
+  const t = new Date(iso).getTime();
+  if (isNaN(t)) return "";
+  const diff = Date.now() - t;
+  const m = Math.floor(diff / 60000);
+  if (m < 1)  return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  const d = Math.floor(h / 24);
+  if (d < 30) return `${d}d ago`;
+  return iso.slice(0, 10);
+}
+function actionClass(a) {
+  if (!a) return "";
+  if (a.includes("fail"))     return "fail";
+  if (a.includes("delete"))   return "delete";
+  if (a.includes("approve") || a.includes("submit") || a.includes("return")) return "lock";
+  if (a.includes("create") || a.includes("update") || a.includes("upsert")) return "write";
+  if (a.includes("assign") || a.includes("set_mode") || a.includes("register")) return "admin";
+  return "";
+}
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+async function boot() {
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    renderHeader();
+    if (currentUser.effective_role !== "admin") {
+      $("#content").innerHTML = `<div class="table-wrap"><div class="err" style="margin:12px;">🛡 Admin only. Switch to Admin mode (top-right badge) to view this page.</div></div>`;
+      return;
+    }
+    await load();
+  } catch (e) {
+    if (e.status === 401) { window.location.href = "/eln/login"; return; }
+    $("#content").innerHTML = `<div class="table-wrap"><div class="err" style="margin:12px;">${escapeHtml(e.message)}</div></div>`;
+  }
+}
+
+function renderHeader() {
+  const u = currentUser;
+  const initials = u.initials || (u.display_name || "?")[0];
+  const eff = u.effective_role;
+  const badge = `<span class="mode-pill ${eff === "admin" ? "" : "member"}">${eff === "admin" ? "Admin mode" : "User mode"}</span>`;
+  $("#me-area").innerHTML =
+    `<div class="avatar" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${initials}</div>` +
+    `<div>${u.display_name} ${badge}</div>`;
+}
+
+async function load() {
+  $("#content").innerHTML = `<div class="table-wrap"><p class="empty">Loading…</p></div>`;
+  const params = new URLSearchParams();
+  params.set("limit", page.limit);
+  params.set("offset", page.offset);
+  if (filter.user_id) params.set("user_id", filter.user_id);
+  if (filter.action)  params.set("action",  filter.action);
+  if (filter.q)       params.set("q",       filter.q);
+  try {
+    const d = await api("GET", `/api/eln/audit?${params.toString()}`);
+    page.total = d.total;
+    populateFilters(d);
+    render(d);
+  } catch (e) {
+    $("#content").innerHTML = `<div class="table-wrap"><div class="err" style="margin:12px;">${escapeHtml(e.message)}</div></div>`;
+  }
+}
+
+function populateFilters(d) {
+  if ($("#f-user").options.length <= 1 && d.users?.length) {
+    $("#f-user").innerHTML = '<option value="">— all —</option>' +
+      d.users.map(u => `<option value="${escapeHtml(u.id)}" ${u.id === filter.user_id ? "selected" : ""}>${escapeHtml(u.display_name || u.username || u.id)}</option>`).join("");
+  }
+  if ($("#f-action").options.length <= 1 && d.actions?.length) {
+    $("#f-action").innerHTML = '<option value="">— all —</option>' +
+      d.actions.map(a => `<option value="${escapeHtml(a)}" ${a === filter.action ? "selected" : ""}>${escapeHtml(a)}</option>`).join("");
+  }
+}
+
+function render(d) {
+  const rows = (d.entries || []).map(e => {
+    const who = e.author ? `
+      <div class="who">
+        <div class="av" style="${e.author.color ? `background:${e.author.color};color:#fff;` : ""}">${escapeHtml(e.author.initials || (e.author.display_name || "?")[0])}</div>
+        <span class="nm">${escapeHtml(e.author.display_name || e.author.username || e.user_id)}</span>
+      </div>` : `<span class="who"><span class="nm" style="color:var(--grey);">(system)</span></span>`;
+    const actionCls = actionClass(e.action);
+    return `
+      <tr>
+        <td><div class="ts">${escapeHtml(e.ts.slice(0,16).replace("T"," "))}</div><div class="ts-rel">${fmtRel(e.ts)}</div></td>
+        <td>${who}</td>
+        <td><span class="action-tag ${actionCls}">${escapeHtml(e.action)}</span></td>
+        <td><span class="res">${e.resource_type ? `<span class="rtype">${escapeHtml(e.resource_type)}</span> · ${escapeHtml(e.resource_id || "—")}` : "—"}</span></td>
+        <td><div class="details" title="${escapeHtml(e.details || '')}">${escapeHtml(e.details || "")}</div></td>
+      </tr>`;
+  }).join("");
+
+  const empty = !d.entries?.length ? `<p class="empty">No audit entries match these filters.</p>` : "";
+  const table = d.entries?.length ? `
+    <table class="t">
+      <thead>
+        <tr><th>When</th><th>Who</th><th>Action</th><th>Resource</th><th>Details</th></tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>
+  ` : "";
+
+  const fromN = d.entries?.length ? page.offset + 1 : 0;
+  const toN   = d.entries?.length ? page.offset + d.entries.length : 0;
+  const pager = `
+    <div class="pager">
+      <span>${fromN}–${toN} of <strong>${page.total}</strong></span>
+      <div style="flex:1;"></div>
+      <button id="pg-prev" ${page.offset === 0 ? "disabled" : ""}>← Prev</button>
+      <button id="pg-next" ${toN >= page.total ? "disabled" : ""}>Next →</button>
+    </div>`;
+
+  $("#content").innerHTML = `<div class="table-wrap">${table}${empty}</div>${pager}`;
+  $("#pg-prev")?.addEventListener("click", () => { page.offset = Math.max(0, page.offset - page.limit); load(); });
+  $("#pg-next")?.addEventListener("click", () => { page.offset = page.offset + page.limit; load(); });
+}
+
+$("#f-user").addEventListener("change", () => { filter.user_id = $("#f-user").value; page.offset = 0; load(); });
+$("#f-action").addEventListener("change", () => { filter.action = $("#f-action").value; page.offset = 0; load(); });
+$("#f-q").addEventListener("input", () => {
+  clearTimeout(debounceId);
+  debounceId = setTimeout(() => { filter.q = $("#f-q").value.trim(); page.offset = 0; load(); }, 200);
+});
+$("#btn-reset").addEventListener("click", () => {
+  filter = { user_id: "", action: "", q: "" };
+  page.offset = 0;
+  $("#f-user").value = ""; $("#f-action").value = ""; $("#f-q").value = "";
+  load();
+});
+
+boot();
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>

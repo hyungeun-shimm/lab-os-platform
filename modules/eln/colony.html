@@ -1,0 +1,1374 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Animal DB</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+    --red: #b91c1c;
+    --red-soft: #fef2f2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter); color: #1c2333; min-height: 100vh;
+  }
+  header.app-top {
+    background: var(--navy); color: var(--white);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  header.app-top .brand { font-family: Georgia, serif; font-size: 18px; font-weight: 700; }
+  header.app-top .brand-sub {
+    color: var(--accent); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; margin-left: 4px;
+  }
+  header.app-top a.back { color: var(--ice); text-decoration: none; font-size: 13px; }
+  header.app-top a.back:hover { color: var(--white); }
+  header.app-top .crumbs { color: var(--ice-deep); font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+  header.app-top .crumbs strong { color: var(--white); }
+  header.app-top .spacer { flex: 1; }
+  header.app-top .me { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  header.app-top .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  header.app-top .mode-pill {
+    background: var(--accent); color: var(--navy-deep);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  header.app-top .mode-pill.member { background: var(--ice-deep); color: var(--navy-deep); }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  .page-head {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  }
+  .page-head h1 { margin: 0 0 4px; font-family: Georgia, serif; color: var(--navy); font-size: 22px; }
+  .page-head .desc { color: var(--grey); font-size: 13px; }
+  .page-head .sync-area {
+    margin-left: auto; display: flex; align-items: center; gap: 10px;
+  }
+  .sync-info { font-size: 12px; color: var(--grey); text-align: right; }
+  .sync-info strong { color: var(--navy); }
+  .btn-sync {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 9px 16px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  }
+  .btn-sync:hover { background: var(--navy-deep); }
+  .btn-sync:disabled { background: var(--ice-deep); cursor: progress; }
+  .btn-sync .spin {
+    width: 12px; height: 12px;
+    border: 2px solid rgba(255,255,255,0.5); border-top-color: var(--white);
+    border-radius: 50%; animation: spin 0.8s linear infinite; display: none;
+  }
+  .btn-sync.loading .spin { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .scope-bar {
+    background: var(--white); border-radius: 12px;
+    padding: 10px 16px; margin-bottom: 12px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .scope-label {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .scope-toggle {
+    background: var(--grey-lighter); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 999px;
+    padding: 4px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .scope-toggle.active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+  .scope-toggle:hover:not(.active) { background: var(--ice); }
+
+  .section {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .section h2 {
+    margin: 0 0 12px; font-family: Georgia, serif; color: var(--navy); font-size: 16px;
+  }
+
+  .stats-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px; margin-bottom: 14px;
+  }
+  .stat-card {
+    background: var(--white); border-radius: 12px;
+    padding: 12px 16px; border: 1px solid var(--grey-light);
+  }
+  .stat-card .stat-label {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+  }
+  .stat-card .stat-value { font-size: 26px; font-weight: 700; color: var(--navy); line-height: 1; }
+  .stat-card .stat-sub { font-size: 11.5px; color: var(--grey); margin-top: 3px; }
+
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th {
+    text-align: left; padding: 10px 12px;
+    background: var(--grey-lighter);
+    color: var(--grey); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--grey-light);
+    white-space: nowrap;
+  }
+  table.t td { padding: 9px 12px; border-bottom: 1px solid var(--grey-lighter); vertical-align: middle; }
+  table.t tbody tr:last-child td { border-bottom: 0; }
+  table.t .num { font-family: 'SF Mono', Consolas, monospace; font-weight: 700; color: var(--navy); }
+  table.t .num.dim { color: var(--grey); font-weight: 400; }
+
+  .small-mute { color: var(--grey); font-size: 11.5px; }
+  .small-chip {
+    display: inline-block;
+    background: var(--grey-lighter); color: var(--navy);
+    border-radius: 999px; padding: 2px 9px;
+    font-size: 11.5px; margin-right: 4px; margin-bottom: 3px;
+  }
+
+  .grp-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 14px 18px;
+  }
+  .grp-block { background: var(--grey-lighter); border-radius: 10px; padding: 10px 12px 6px; }
+  .grp-title {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 6px;
+  }
+  table.t.grp-t th, table.t.grp-t td { padding: 4px 6px; }
+  table.t.grp-t { font-size: 12.5px; }
+  table.t.grp-t tbody tr { background: transparent !important; }
+  .grp-bar {
+    height: 6px; background: var(--white); border-radius: 999px; overflow: hidden;
+    min-width: 60px;
+  }
+  .grp-fill { display: block; height: 100%; }
+
+  /* Cage cards */
+  .cage-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 10px;
+  }
+  .cage-card {
+    background: var(--grey-lighter); border-radius: 10px;
+    padding: 10px 12px; border: 1px solid var(--grey-light);
+  }
+  .cage-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .cage-barcode {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-weight: 700; color: var(--navy); font-size: 13px;
+  }
+  .cage-count {
+    background: var(--white); color: var(--navy);
+    border-radius: 999px; padding: 1px 8px;
+    font-size: 11px; font-weight: 700;
+  }
+  .cage-mice { margin-bottom: 6px; line-height: 1.7; }
+  .cage-mid-wrap { display: inline-flex; align-items: center; gap: 2px; margin-right: 4px; }
+  .cage-mid {
+    display: inline-block;
+    background: var(--white); color: var(--navy);
+    border-radius: 6px; padding: 1px 7px;
+    font-family: 'SF Mono', Consolas, monospace; font-size: 11.5px; font-weight: 600;
+    text-decoration: none;
+  }
+  .cage-mid:hover { background: var(--ice); }
+  .cage-xfer {
+    background: var(--white); color: var(--grey);
+    border: 1px solid var(--grey-light); border-radius: 5px;
+    padding: 0 4px; font-size: 10.5px; font-weight: 700; line-height: 1.4;
+    cursor: pointer;
+  }
+  .cage-xfer:hover { background: var(--ice); color: var(--navy); border-color: var(--ice-deep); }
+  .cage-meta { display: flex; flex-wrap: wrap; gap: 2px; }
+
+  .empty { color: var(--grey); font-style: italic; padding: 30px 20px; text-align: center; }
+  .err { color: var(--red); padding: 12px 16px; background: var(--red-soft); border-radius: 8px; }
+
+  /* Modal */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.45);
+    display: none; align-items: flex-start; justify-content: center;
+    padding: 60px 16px; z-index: 800;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--white); border-radius: 14px;
+    width: 100%; max-width: 460px;
+    box-shadow: 0 24px 60px rgba(15,23,42,0.30);
+  }
+  .modal-head {
+    padding: 14px 22px; border-bottom: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; align-items: center; justify-content: space-between;
+    border-radius: 14px 14px 0 0;
+  }
+  .modal-head h3 { margin: 0; font-family: Georgia, serif; color: var(--navy); font-size: 16px; }
+  .modal-close { background: transparent; border: 0; cursor: pointer; font-size: 22px; color: var(--grey); padding: 0 4px; }
+  .modal-body { padding: 18px 22px; }
+  .modal-foot {
+    padding: 12px 22px; border-top: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; justify-content: flex-end; gap: 8px;
+    border-radius: 0 0 14px 14px;
+  }
+  .modal-foot button {
+    border: 0; border-radius: 9px;
+    padding: 8px 16px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .modal-foot .cancel { background: var(--white); border: 1px solid var(--grey-light); color: var(--navy); }
+  .modal-foot .go { background: var(--navy); color: var(--white); }
+  .field-label {
+    display: block; font-size: 10.5px; color: var(--grey); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; margin: 8px 0 4px;
+  }
+  .field-input {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 8px 11px; font: inherit; font-size: 14px; background: var(--white);
+    box-sizing: border-box;
+  }
+  .modal-msg {
+    margin-top: 10px; padding: 9px 12px; border-radius: 7px;
+    font-size: 12.5px; display: none;
+  }
+  .modal-msg.error { background: var(--red-soft); color: var(--red); }
+
+  /* Tabs */
+  .tab-bar {
+    background: var(--white); border-radius: 12px 12px 0 0;
+    padding: 6px 6px 0; margin-bottom: 0;
+    display: flex; gap: 2px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    border-bottom: 1px solid var(--grey-light);
+  }
+  .tab-btn {
+    background: transparent; color: var(--grey);
+    border: 0; border-radius: 8px 8px 0 0;
+    padding: 9px 16px; font: inherit; font-size: 13.5px; font-weight: 600;
+    cursor: pointer;
+    display: inline-flex; align-items: center; gap: 5px;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .tab-btn:hover { color: var(--navy); background: var(--grey-lighter); }
+  .tab-btn.active {
+    color: var(--navy); background: var(--white);
+    border-bottom-color: var(--navy);
+  }
+  .tab-panel-wrap {
+    background: var(--white); border-radius: 0 0 12px 12px;
+    margin-bottom: 16px;
+  }
+
+  /* Browse-tab specifics */
+  .toolbar {
+    padding: 12px 18px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    border-bottom: 1px solid var(--grey-light);
+  }
+  .toolbar input[type=search], .toolbar select {
+    border: 1px solid #d1d5db; border-radius: 7px;
+    padding: 6px 10px; font: inherit; font-size: 13px; background: var(--white);
+  }
+  .toolbar .spacer { flex: 1; }
+  .toolbar .perm-warn {
+    font-size: 12px; color: var(--grey); font-style: italic;
+  }
+  .btn-add, .btn-tool {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 8px;
+    padding: 7px 14px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-add:hover, .btn-tool:hover { background: var(--navy-deep); }
+  .btn-tool.secondary { background: var(--white); color: var(--navy); border: 1px solid var(--grey-light); }
+  .btn-tool.secondary:hover { background: var(--grey-lighter); }
+  .btn-tool:disabled { background: var(--ice-deep); cursor: not-allowed; }
+
+  table.browse {
+    width: 100%; border-collapse: collapse; font-size: 12.5px;
+  }
+  table.browse th {
+    text-align: left; padding: 8px 10px;
+    background: var(--grey-lighter);
+    color: var(--grey); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    border-bottom: 1px solid var(--grey-light);
+    cursor: pointer; user-select: none;
+    position: sticky; top: 0;
+  }
+  table.browse th:hover { background: var(--grey-light); }
+  table.browse th .arrow { color: var(--navy); font-size: 10px; margin-left: 3px; }
+  table.browse td { padding: 7px 10px; border-bottom: 1px solid var(--grey-lighter); vertical-align: middle; white-space: nowrap; }
+  table.browse tbody tr { cursor: default; }
+  table.browse tbody tr.edit-able { cursor: pointer; }
+  table.browse tbody tr.edit-able:hover { background: var(--grey-lighter); }
+  table.browse .mid { font-family: 'SF Mono', Consolas, monospace; font-weight: 700; color: var(--navy); }
+  table.browse .dim { color: var(--grey); }
+  .browse-wrap { max-height: 70vh; overflow: auto; }
+  .browse-footer {
+    padding: 10px 18px; font-size: 12px; color: var(--grey);
+    border-top: 1px solid var(--grey-light);
+  }
+
+  /* Owner chips in Browse */
+  .owner-chip {
+    display: inline-flex; align-items: center; gap: 5px;
+    background: var(--grey-lighter); color: var(--navy);
+    border-radius: 999px; padding: 1px 9px 1px 1px;
+    font-size: 11.5px; font-weight: 600;
+    white-space: nowrap;
+  }
+  .owner-chip.none { color: var(--grey); font-style: italic; padding: 1px 9px; }
+  .owner-chip .oc-av {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9.5px; font-weight: 700;
+  }
+
+  /* Bulk-select column */
+  table.browse th.col-sel, table.browse td.col-sel {
+    width: 32px; cursor: default; padding: 6px 0 6px 8px;
+  }
+  table.browse th.col-sel:hover { background: var(--grey-lighter); }
+  .sel-bar {
+    background: var(--ice); color: var(--navy);
+    padding: 7px 18px; font-size: 12.5px; font-weight: 600;
+    border-bottom: 1px solid var(--ice-deep);
+    display: flex; align-items: center; gap: 10px;
+  }
+  .sel-bar button { background: var(--navy); color: var(--white); border: 0;
+    border-radius: 7px; padding: 5px 12px; font: inherit; font-size: 12.5px;
+    font-weight: 600; cursor: pointer; }
+  .sel-bar button:hover { background: var(--navy-deep); }
+  .sel-bar .clr { background: transparent; color: var(--navy); }
+
+  /* Edit/Add modal — wider */
+  .modal.wide { max-width: 640px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+  .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .form-row .field-label { margin: 0 0 4px; }
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div>
+    <span class="brand">Lab OS</span><span class="brand-sub">ELN</span>
+  </div>
+  <a class="back" href="/eln/">← Projects</a>
+  <div class="crumbs">
+    <span>/</span><strong>Animal DB</strong>
+  </div>
+  <div class="spacer"></div>
+  <div class="me" id="me-area">Loading…</div>
+</header>
+
+<main>
+  <div class="page-head">
+    <div>
+      <h1>🐭 Animal DB</h1>
+      <div class="desc">Mouse colony — cage cards, distributions, and assignments.</div>
+    </div>
+    <div class="sync-area">
+      <div class="sync-info">
+        <div>Last sync: <strong id="sync-time">—</strong></div>
+      </div>
+      <button class="btn-sync" id="btn-sync">
+        <span class="spin"></span>
+        <span class="lbl">🔄 Sync now</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="scope-bar">
+    <span class="scope-label">View</span>
+    <button class="scope-toggle active" data-scope="mine">🐭 My mice</button>
+    <button class="scope-toggle" data-scope="all" id="btn-scope-all" style="display:none;">🌐 Lab-wide</button>
+    <span class="scope-label" id="scope-hint" style="margin-left:8px;color:var(--grey);text-transform:none;letter-spacing:0;font-weight:400;font-size:12px;">— mice currently assigned to you</span>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="overview">📊 Overview</button>
+    <button class="tab-btn" data-tab="browse">📋 Browse data</button>
+  </div>
+
+  <div id="content"><div class="section"><p class="empty">Loading…</p></div></div>
+</main>
+
+<div class="modal-overlay" id="modal-bulk-assign">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>⇄ Assign mice</h3>
+      <button class="modal-close" id="ba-close" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--grey);">Reassign <strong id="ba-count" style="color:var(--navy);">0</strong> selected mice.</div>
+      <label class="field-label">Assign to</label>
+      <select id="ba-to" class="field-input"></select>
+      <label class="field-label">Note (optional)</label>
+      <input type="text" id="ba-note" class="field-input" placeholder="e.g. for tuning cohort" />
+      <div id="ba-msg" class="modal-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" id="ba-cancel" type="button">Cancel</button>
+      <button class="go" id="ba-go" type="button">Assign</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal wide">
+    <div class="modal-head">
+      <h3 id="edit-title">Edit mouse</h3>
+      <button class="modal-close" id="edit-close" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div>
+          <label class="field-label">Mouse ID *</label>
+          <input type="text" id="ef-mid" class="field-input" placeholder="e.g. WT3479" autocomplete="off" />
+        </div>
+        <div>
+          <label class="field-label">Owner</label>
+          <select id="ef-assigned_to" class="field-input"></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="field-label">Strain</label>
+          <input type="text" id="ef-strain" class="field-input" placeholder="WT, L7-Ai95D…" />
+        </div>
+        <div></div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label class="field-label">Sex</label>
+          <select id="ef-sex" class="field-input">
+            <option value="">—</option><option>M</option><option>F</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">DOB</label>
+          <input type="date" id="ef-dob" class="field-input" />
+        </div>
+        <div>
+          <label class="field-label">Cohort</label>
+          <input type="text" id="ef-cohort" class="field-input" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="field-label">Project</label>
+          <input type="text" id="ef-project" class="field-input" />
+        </div>
+        <div>
+          <label class="field-label">Experiment</label>
+          <input type="text" id="ef-experiment" class="field-input" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="field-label">Condition</label>
+          <input type="text" id="ef-condition" class="field-input" />
+        </div>
+        <div>
+          <label class="field-label">Barcode</label>
+          <input type="text" id="ef-barcode" class="field-input" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label class="field-label">DOS</label>
+          <input type="date" id="ef-dos" class="field-input" />
+        </div>
+        <div>
+          <label class="field-label">Date cond-1</label>
+          <input type="date" id="ef-date_cond1" class="field-input" />
+        </div>
+        <div>
+          <label class="field-label">Date cond-2</label>
+          <input type="date" id="ef-date_cond2" class="field-input" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="field-label">Sacrificed (Y/N)</label>
+          <input type="text" id="ef-sacrificed" class="field-input" />
+        </div>
+        <div>
+          <label class="field-label">Sacrificed date</label>
+          <input type="date" id="ef-sacrificed_date" class="field-input" />
+        </div>
+      </div>
+      <div>
+        <label class="field-label">Notes</label>
+        <input type="text" id="ef-notes" class="field-input" />
+      </div>
+      <div id="ef-msg" class="modal-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" id="edit-cancel" type="button">Cancel</button>
+      <button class="go" id="edit-delete" type="button" style="background:var(--white);color:var(--red);border:1px solid rgba(185,28,28,0.3);display:none;">Delete</button>
+      <button class="go" id="edit-save" type="button">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-xfer">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>⇄ Transfer mouse</h3>
+      <button class="modal-close" id="xfer-close" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--grey);">Mouse <strong id="xfer-mid" style="color:var(--navy);font-family:'SF Mono',Consolas,monospace;">—</strong></div>
+      <label class="field-label">Transfer to</label>
+      <select id="xfer-to" class="field-input"></select>
+      <label class="field-label">Note (optional)</label>
+      <input type="text" id="xfer-note" class="field-input" placeholder="e.g. for tuning project, ready for behavior" />
+      <div id="xfer-msg" class="modal-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" id="xfer-cancel" type="button">Cancel</button>
+      <button class="go" id="xfer-go" type="button">Transfer</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+let currentUser = null;
+let colonyData = null;
+let colonyScope = "mine";   // 'mine' | 'all'
+let currentTab = "overview"; // 'overview' | 'browse'
+let usersLight = [];        // for transfer modal
+let browseRows = [];        // /api/animals payload for Browse tab
+let browseSort = { col: "mouse_id", dir: "asc" };
+let browseQuery = "";
+let browseFilter = { project: "", condition: "", sex: "", strain: "" };
+let editingMid = null;      // mouse_id being edited (null = adding new)
+let selectedMids = new Set();  // Browse table multi-select
+let userById = {};             // id -> user object (display_name, color, initials)
+function canEdit() { return !!(currentUser && currentUser.can_edit_colony); }
+
+async function loadUsersLight() {
+  if (!usersLight.length) {
+    try {
+      const d = await api("GET", "/api/eln/users-light");
+      usersLight = d.users || [];
+    } catch (_) { /* ignore */ }
+  }
+  userById = Object.fromEntries(usersLight.map(u => [u.id, u]));
+}
+
+function ownerChipHtml(uid) {
+  if (!uid) return `<span class="owner-chip none">— unassigned —</span>`;
+  const u = userById[uid];
+  if (!u) return `<span class="owner-chip" title="${escapeHtml(uid)}">${escapeHtml(uid.slice(0,6))}…</span>`;
+  const initials = u.initials || (u.display_name || u.username || "?")[0];
+  const me = uid === currentUser?.id ? " (me)" : "";
+  return `<span class="owner-chip" title="${escapeHtml(u.username || '')}">
+    <span class="oc-av" ${u.color ? `style="background:${u.color};color:#fff;"` : ""}>${escapeHtml(initials)}</span>
+    ${escapeHtml(u.display_name || u.username || uid)}${me}
+  </span>`;
+}
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function fmtTime(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleString();
+}
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+async function boot() {
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    renderHeader();
+    if (currentUser.effective_role === "admin") {
+      $("#btn-scope-all").style.display = "";
+    }
+    await Promise.all([sync(), loadUsersLight()]);
+  } catch (e) {
+    if (e.status === 401) { window.location.href = "/eln/login"; return; }
+    $("#content").innerHTML = `<div class="section"><div class="err">${escapeHtml(e.message)}</div></div>`;
+  }
+}
+
+function renderHeader() {
+  const u = currentUser;
+  const initials = u.initials || (u.display_name || "?")[0];
+  const eff = u.effective_role;
+  const badge = `<span class="mode-pill ${eff === "admin" ? "" : "member"}">${eff === "admin" ? "Admin mode" : "User mode"}</span>`;
+  $("#me-area").innerHTML =
+    `<div class="avatar" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${initials}</div>` +
+    `<div>${u.display_name} ${badge}</div>`;
+}
+
+async function sync() {
+  const btn = $("#btn-sync");
+  btn.disabled = true; btn.classList.add("loading");
+  btn.querySelector(".lbl").textContent = "Syncing…";
+  try {
+    const d = await api("GET", `/api/eln/colony-stats?scope=${colonyScope}`);
+    colonyData = d;
+    render();
+  } catch (e) {
+    $("#content").innerHTML = `<div class="section"><div class="err">${escapeHtml(e.message)}</div></div>`;
+  } finally {
+    btn.disabled = false; btn.classList.remove("loading");
+    btn.querySelector(".lbl").textContent = "🔄 Sync now";
+  }
+}
+$("#btn-sync").addEventListener("click", sync);
+
+// Scope toggle
+$$(".scope-toggle").forEach(b => {
+  b.addEventListener("click", async () => {
+    const s = b.dataset.scope;
+    if (s === colonyScope) return;
+    colonyScope = s;
+    $$(".scope-toggle").forEach(x => x.classList.toggle("active", x.dataset.scope === s));
+    $("#scope-hint").textContent = s === "all" ? "— every mouse in the colony" : "— mice currently assigned to you";
+    await sync();
+  });
+});
+
+function render() {
+  if (currentTab === "browse") { renderBrowse(); return; }
+  renderOverview();
+}
+
+function renderOverview() {
+  const c = colonyData;
+  if (!c) return;
+  $("#sync-time").textContent = fmtTime(new Date().toISOString());
+
+  if (!c.total) {
+    $("#content").innerHTML = `<div class="section"><p class="empty">${
+      colonyScope === "mine"
+        ? "No mice currently assigned to you. If you expected some, check with the colony manager — they may need to assign them."
+        : "No animals in the colony DB."
+    }</p></div>`;
+    return;
+  }
+
+  const groupTable = (items, title, colorFn) => {
+    if (!items || !items.length) return "";
+    const max = Math.max(1, ...items.map(x => x.count));
+    return `
+      <div class="grp-block">
+        <div class="grp-title">${escapeHtml(title)}</div>
+        <table class="t grp-t">
+          <tbody>
+            ${items.map(x => {
+              const pct = Math.round((x.count / max) * 100);
+              const fill = colorFn ? colorFn(x.key) : "var(--ice-deep)";
+              return `
+                <tr>
+                  <td style="width:35%;font-weight:600;color:var(--navy);">${escapeHtml(x.key)}</td>
+                  <td><div class="grp-bar"><span class="grp-fill" style="width:${pct}%;background:${fill};"></span></div></td>
+                  <td class="num" style="width:50px;text-align:right;">${x.count}</td>
+                </tr>`;
+            }).join("")}
+          </tbody>
+        </table>
+      </div>`;
+  };
+
+  const strainColor = () => "rgb(99,102,241)";
+  const projColor   = () => "rgb(16,185,129)";
+  const condColor   = () => "rgb(245,158,11)";
+  const sexColor    = (k) => k === "F" ? "#ec4899" : (k === "M" ? "#3b82f6" : "var(--ice-deep)");
+  const ageColor    = () => "rgb(168,85,247)";
+
+  const projXStrainHtml = renderProjectStrainCross(c.project_x_strain);
+  const cageHtml = renderCageCardsBlock(c);
+
+  const recentHtml = (c.recent || []).length
+    ? `
+      <table class="t">
+        <thead>
+          <tr><th>Mouse ID</th><th>Strain</th><th>Sex</th><th>Project</th><th>Condition</th><th>DOB</th><th>Synced</th></tr>
+        </thead>
+        <tbody>
+          ${c.recent.map(r => `
+            <tr>
+              <td><a href="/eln/mouse/${encodeURIComponent(r.mouse_id)}" style="color:var(--navy);font-weight:700;font-family:'SF Mono',Consolas,monospace;text-decoration:none;">${escapeHtml(r.mouse_id)}</a></td>
+              <td>${escapeHtml(r.strain || "—")}</td>
+              <td>${escapeHtml(r.sex || "—")}</td>
+              <td>${escapeHtml(r.project || "—")}</td>
+              <td>${escapeHtml(r.condition || "—")}</td>
+              <td>${escapeHtml(r.dob || "—")}</td>
+              <td class="small-mute">${escapeHtml((r.synced_at || "").slice(0,10))}</td>
+            </tr>`).join("")}
+        </tbody>
+      </table>`
+    : `<p class="empty">No animals to show.</p>`;
+
+  $("#content").innerHTML = `
+    <div class="section">
+      <div class="stats-row">
+        <div class="stat-card"><div class="stat-label">Total mice</div><div class="stat-value">${c.total}</div></div>
+        <div class="stat-card"><div class="stat-label">Alive</div><div class="stat-value" style="color:var(--green);">${c.alive}</div></div>
+        <div class="stat-card"><div class="stat-label">Sacrificed</div><div class="stat-value" style="color:var(--grey);">${c.sacrificed}</div></div>
+        <div class="stat-card"><div class="stat-label">Strains</div><div class="stat-value">${(c.by_strain || []).length}</div></div>
+        <div class="stat-card"><div class="stat-label">Projects</div><div class="stat-value">${(c.by_project || []).length}</div></div>
+        <div class="stat-card">
+          <div class="stat-label">Cages</div>
+          <div class="stat-value">${c.cage_count != null ? c.cage_count : "—"}</div>
+          <div class="stat-sub">${c.mice_no_cage ? c.mice_no_cage + " mice w/o barcode" : (c.mice_with_cage + " mice carded")}</div>
+        </div>
+      </div>
+
+      <div class="grp-grid">
+        ${groupTable(c.by_strain,    "By strain",    strainColor)}
+        ${groupTable(c.by_project,   "By project",   projColor)}
+        ${groupTable(c.by_condition, "By condition", condColor)}
+        ${groupTable(c.by_sex,       "By sex",       sexColor)}
+        ${groupTable(c.age_buckets,  "Age (alive only)", ageColor)}
+        ${groupTable(c.by_cohort,    "By cohort",    strainColor)}
+      </div>
+
+      ${projXStrainHtml ? `
+        <div style="margin-top:18px;">
+          <div class="grp-title" style="margin-bottom:8px;">Project × Strain</div>
+          ${projXStrainHtml}
+        </div>` : ""}
+
+      ${cageHtml}
+
+      <div style="margin-top:18px;">
+        <div class="grp-title" style="margin-bottom:8px;">Recently added (last 10 by sync)</div>
+        ${recentHtml}
+      </div>
+    </div>`;
+
+  wireCageButtons();
+}
+
+function renderCageCardsBlock(c) {
+  const cages = c.cages || [];
+  if (!cages.length) {
+    return `
+      <div style="margin-top:18px;">
+        <div class="grp-title" style="margin-bottom:8px;">🏷 Cage cards <span class="small-mute" style="text-transform:none;letter-spacing:0;font-weight:400;">— grouped by shared barcode</span></div>
+        <p class="empty" style="padding:14px;">No cage barcodes in this view.</p>
+      </div>`;
+  }
+  const bucketsHtml = (c.cage_size_buckets || []).filter(b => b.count > 0).map(b =>
+    `<span class="small-chip">${escapeHtml(b.key)}: <strong>${b.count}</strong></span>`
+  ).join(" ");
+  return `
+    <div style="margin-top:18px;">
+      <div class="grp-title" style="margin-bottom:6px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span>🏷 Cage cards (${cages.length})</span>
+        <span class="small-mute" style="text-transform:none;letter-spacing:0;font-weight:400;">grouped by shared barcode</span>
+      </div>
+      <div style="margin-bottom:8px;">${bucketsHtml}</div>
+      <div class="cage-grid">
+        ${cages.map(g => renderCageCard(g)).join("")}
+      </div>
+    </div>`;
+}
+
+function renderCageCard(g) {
+  const sexes    = (g.sexes || []).join(" / ");
+  const strains  = (g.strains || []).join(", ");
+  const projects = (g.projects || []).join(", ");
+  const conds    = (g.conditions || []).join(", ");
+  const showXfer = colonyScope === "mine";
+  const miceLinks = (g.mouse_ids || []).slice(0, 10).map(mid => `
+    <span class="cage-mid-wrap">
+      <a href="/eln/mouse/${encodeURIComponent(mid)}" class="cage-mid">${escapeHtml(mid)}</a>
+      ${showXfer ? `<button class="cage-xfer" title="Transfer to another user" data-mid="${escapeHtml(mid)}">⇄</button>` : ""}
+    </span>`).join(" ");
+  const extra = (g.mouse_ids || []).length > 10 ? `<span class="small-mute"> +${g.mouse_ids.length - 10} more</span>` : "";
+  return `
+    <div class="cage-card">
+      <div class="cage-head">
+        <div class="cage-barcode">🏷 ${escapeHtml(g.barcode)}</div>
+        <div class="cage-count">${g.mouse_count} ${g.mouse_count === 1 ? "mouse" : "mice"}</div>
+      </div>
+      <div class="cage-mice">${miceLinks}${extra}</div>
+      <div class="cage-meta">
+        ${strains ? `<span class="small-chip">${escapeHtml(strains)}</span>` : ""}
+        ${sexes   ? `<span class="small-chip">${escapeHtml(sexes)}</span>` : ""}
+        ${projects? `<span class="small-chip">${escapeHtml(projects)}</span>` : ""}
+        ${conds   ? `<span class="small-chip">${escapeHtml(conds)}</span>` : ""}
+      </div>
+    </div>`;
+}
+
+function renderProjectStrainCross(pivot) {
+  if (!pivot || !Object.keys(pivot).length) return "";
+  const projects = Object.keys(pivot);
+  const strainsSet = new Set();
+  projects.forEach(p => Object.keys(pivot[p]).forEach(s => strainsSet.add(s)));
+  const strains = Array.from(strainsSet);
+  return `
+    <table class="t">
+      <thead>
+        <tr>
+          <th>Project</th>
+          ${strains.map(s => `<th>${escapeHtml(s)}</th>`).join("")}
+          <th>Total</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${projects.map(p => {
+          let rowTotal = 0;
+          const cells = strains.map(s => {
+            const v = pivot[p][s] || 0;
+            rowTotal += v;
+            return `<td class="num">${v || `<span class="num dim">·</span>`}</td>`;
+          }).join("");
+          return `
+            <tr>
+              <td style="font-weight:600;color:var(--navy);">${escapeHtml(p)}</td>
+              ${cells}
+              <td class="num"><strong>${rowTotal}</strong></td>
+            </tr>`;
+        }).join("")}
+      </tbody>
+    </table>`;
+}
+
+function wireCageButtons() {
+  document.querySelectorAll(".cage-xfer").forEach(b => {
+    b.addEventListener("click", (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      openTransferModal(b.dataset.mid);
+    });
+  });
+}
+
+async function openTransferModal(mouseId) {
+  if (!usersLight.length) {
+    try {
+      const r = await api("GET", "/api/eln/users-light");
+      usersLight = (r.users || []).filter(u => u.id !== currentUser.id);
+    } catch (e) { alert("Failed to load users: " + e.message); return; }
+  }
+  if (!usersLight.length) {
+    alert("No other users to transfer to.");
+    return;
+  }
+  $("#xfer-mid").textContent = mouseId;
+  $("#xfer-to").innerHTML = '<option value="">— pick a user —</option>' +
+    usersLight.map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.display_name || u.username || u.id)}</option>`).join("");
+  $("#xfer-note").value = "";
+  $("#xfer-msg").style.display = "none";
+  $("#modal-xfer").classList.add("open");
+  $("#modal-xfer").dataset.mid = mouseId;
+}
+
+async function doTransfer() {
+  const mid = $("#modal-xfer").dataset.mid;
+  const toId = $("#xfer-to").value;
+  const note = $("#xfer-note").value.trim();
+  const msg = $("#xfer-msg");
+  if (!toId) {
+    msg.className = "modal-msg error";
+    msg.textContent = "Pick a recipient.";
+    msg.style.display = "block";
+    return;
+  }
+  $("#xfer-go").disabled = true;
+  try {
+    await api("POST", `/api/eln/mice/${encodeURIComponent(mid)}/transfer`, { to_user_id: toId, note });
+    $("#modal-xfer").classList.remove("open");
+    await sync();
+  } catch (e) {
+    msg.className = "modal-msg error";
+    msg.textContent = e.message;
+    msg.style.display = "block";
+  } finally {
+    $("#xfer-go").disabled = false;
+  }
+}
+
+// ───── Browse tab ─────
+const BROWSE_COLS = [
+  { key: "mouse_id",    label: "Mouse ID" },
+  { key: "assigned_to", label: "Owner" },
+  { key: "strain",      label: "Strain" },
+  { key: "sex",         label: "Sex" },
+  { key: "dob",         label: "DOB" },
+  { key: "project",     label: "Project" },
+  { key: "experiment",  label: "Experiment" },
+  { key: "cohort",      label: "Cohort" },
+  { key: "condition",   label: "Condition" },
+  { key: "barcode",     label: "Barcode" },
+  { key: "sacrificed",  label: "Sac" },
+];
+
+async function fetchBrowse() {
+  try {
+    const r = await fetch("/api/animals", { credentials: "include" });
+    const d = await r.json();
+    browseRows = d.animals || d.rows || (Array.isArray(d) ? d : []);
+  } catch (_) { browseRows = []; }
+}
+
+function filteredBrowseRows() {
+  const q = browseQuery.toLowerCase().trim();
+  const out = browseRows.filter(r => {
+    if (colonyScope === "mine" && r.assigned_to && r.assigned_to !== currentUser.id) return false;
+    if (colonyScope === "mine" && !r.assigned_to) return false;
+    if (q && !Object.values(r).some(v => String(v ?? "").toLowerCase().includes(q))) return false;
+    if (browseFilter.project   && r.project   !== browseFilter.project)   return false;
+    if (browseFilter.condition && r.condition !== browseFilter.condition) return false;
+    if (browseFilter.sex       && r.sex       !== browseFilter.sex)       return false;
+    if (browseFilter.strain    && r.strain    !== browseFilter.strain)    return false;
+    return true;
+  });
+  out.sort((a, b) => {
+    const va = (a[browseSort.col] ?? "").toString().toLowerCase();
+    const vb = (b[browseSort.col] ?? "").toString().toLowerCase();
+    if (va < vb) return browseSort.dir === "asc" ? -1 : 1;
+    if (va > vb) return browseSort.dir === "asc" ?  1 : -1;
+    return 0;
+  });
+  return out;
+}
+
+function uniqueVals(col) {
+  return Array.from(new Set(browseRows.map(r => r[col]).filter(v => v != null && v !== "")))
+    .sort();
+}
+
+function renderBrowse() {
+  const editable = canEdit();
+  const rows = filteredBrowseRows();
+
+  const filterSelect = (col, label) => {
+    const opts = uniqueVals(col).map(v =>
+      `<option value="${escapeHtml(v)}" ${browseFilter[col] === v ? "selected" : ""}>${escapeHtml(v)}</option>`
+    ).join("");
+    return `<select data-fcol="${col}"><option value="">${label}</option>${opts}</select>`;
+  };
+
+  // Drop any stale selections (rows currently out of view)
+  if (selectedMids.size) {
+    const visible = new Set(rows.map(r => r.mouse_id));
+    [...selectedMids].forEach(m => { if (!visible.has(m)) selectedMids.delete(m); });
+  }
+  const allSelected = rows.length > 0 && rows.every(r => selectedMids.has(r.mouse_id));
+  const selBar = (editable && selectedMids.size) ? `
+    <div class="sel-bar">
+      <span><strong>${selectedMids.size}</strong> selected</span>
+      <button id="bs-assign-sel">⇄ Assign to…</button>
+      <button id="bs-unassign-sel">↩ Unassign</button>
+      <span style="flex:1;"></span>
+      <button class="clr" id="bs-clear-sel">Clear</button>
+    </div>` : "";
+
+  const totalCols = BROWSE_COLS.length + (editable ? 1 : 0);
+  $("#content").innerHTML = `
+    <div class="tab-panel-wrap">
+      <div class="toolbar">
+        <input type="search" id="bs-q" placeholder="Search…" value="${escapeHtml(browseQuery)}" style="width:200px;" />
+        ${filterSelect("project",   "All projects")}
+        ${filterSelect("condition", "All conditions")}
+        ${filterSelect("sex",       "All sexes")}
+        ${filterSelect("strain",    "All strains")}
+        <div class="spacer"></div>
+        ${editable ? `
+          <button class="btn-tool secondary" id="bs-sync" title="Pull from Excel">⤓ Sync Excel</button>
+          <button class="btn-tool secondary" id="bs-push" title="Push DB → Excel">⤒ Push to Excel</button>
+          <button class="btn-add" id="bs-add">+ Add mouse</button>
+        ` : `<span class="perm-warn">Read-only — ask an admin for colony edit access.</span>`}
+      </div>
+      ${selBar}
+      <div class="browse-wrap">
+        <table class="browse">
+          <thead>
+            <tr>
+              ${editable ? `<th class="col-sel"><input type="checkbox" id="bs-sel-all" ${allSelected ? "checked" : ""} /></th>` : ""}
+              ${BROWSE_COLS.map(c => `
+                <th data-sort="${c.key}">
+                  ${escapeHtml(c.label)}
+                  ${browseSort.col === c.key ? `<span class="arrow">${browseSort.dir === "asc" ? "↑" : "↓"}</span>` : ""}
+                </th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.length ? rows.map(r => `
+              <tr ${editable ? `class="edit-able" data-mid="${escapeHtml(r.mouse_id)}"` : ""}>
+                ${editable ? `<td class="col-sel"><input type="checkbox" class="bs-row-sel" data-mid="${escapeHtml(r.mouse_id)}" ${selectedMids.has(r.mouse_id) ? "checked" : ""} /></td>` : ""}
+                ${BROWSE_COLS.map(c => {
+                  if (c.key === "assigned_to") return `<td>${ownerChipHtml(r.assigned_to)}</td>`;
+                  const v = r[c.key];
+                  const cls = c.key === "mouse_id" ? "mid" : ((v == null || v === "") ? "dim" : "");
+                  const txt = (v == null || v === "") ? "—" : v;
+                  return `<td class="${cls}">${escapeHtml(txt)}</td>`;
+                }).join("")}
+              </tr>`).join("") : `<tr><td colspan="${totalCols}" class="empty" style="padding:30px;">No matches.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="browse-footer">
+        Showing ${rows.length} of ${browseRows.length} animals${colonyScope === "mine" ? " (filtered: assigned to you)" : ""}.
+        ${editable ? `· Click a row to edit ${selectedMids.size ? "· checkboxes to bulk-assign" : "· check rows to bulk-assign"}.` : ""}
+      </div>
+    </div>`;
+
+  // Wire interactions
+  document.querySelectorAll("table.browse th[data-sort]").forEach(th => {
+    th.addEventListener("click", () => {
+      const k = th.dataset.sort;
+      if (browseSort.col === k) browseSort.dir = browseSort.dir === "asc" ? "desc" : "asc";
+      else { browseSort.col = k; browseSort.dir = "asc"; }
+      renderBrowse();
+    });
+  });
+  document.querySelectorAll(".toolbar select[data-fcol]").forEach(sel => {
+    sel.addEventListener("change", () => {
+      browseFilter[sel.dataset.fcol] = sel.value;
+      renderBrowse();
+    });
+  });
+  const q = document.getElementById("bs-q");
+  if (q) {
+    let debounce = null;
+    q.addEventListener("input", () => {
+      clearTimeout(debounce);
+      debounce = setTimeout(() => { browseQuery = q.value; renderBrowse(); }, 150);
+    });
+  }
+  if (editable) {
+    document.getElementById("bs-add")?.addEventListener("click", () => openEditModal(null));
+    document.getElementById("bs-sync")?.addEventListener("click", doSyncExcel);
+    document.getElementById("bs-push")?.addEventListener("click", doPushExcel);
+    document.querySelectorAll("table.browse tr.edit-able").forEach(tr => {
+      tr.addEventListener("click", (ev) => {
+        if (ev.target.closest("input, button, label")) return;
+        const row = browseRows.find(r => r.mouse_id === tr.dataset.mid);
+        if (row) openEditModal(row);
+      });
+    });
+    // Multi-select wiring
+    const selAll = document.getElementById("bs-sel-all");
+    if (selAll) {
+      selAll.addEventListener("change", () => {
+        if (selAll.checked) rows.forEach(r => selectedMids.add(r.mouse_id));
+        else                rows.forEach(r => selectedMids.delete(r.mouse_id));
+        renderBrowse();
+      });
+    }
+    document.querySelectorAll(".bs-row-sel").forEach(cb => {
+      cb.addEventListener("change", () => {
+        const mid = cb.dataset.mid;
+        if (cb.checked) selectedMids.add(mid); else selectedMids.delete(mid);
+        renderBrowse();
+      });
+    });
+    document.getElementById("bs-clear-sel")?.addEventListener("click", () => {
+      selectedMids.clear(); renderBrowse();
+    });
+    document.getElementById("bs-assign-sel")?.addEventListener("click", () =>
+      openBulkAssignModal(Array.from(selectedMids))
+    );
+    document.getElementById("bs-unassign-sel")?.addEventListener("click", () =>
+      doBulkAssign(Array.from(selectedMids), null)
+    );
+  }
+}
+
+// ───── Bulk assign ─────
+function openBulkAssignModal(mids) {
+  if (!mids.length) return;
+  $("#ba-count").textContent = mids.length;
+  $("#ba-to").innerHTML = '<option value="">— pick a user —</option>' +
+    usersLight.map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.display_name || u.username || u.id)}${u.id === currentUser.id ? " (me)" : ""}</option>`).join("");
+  $("#ba-note").value = "";
+  $("#ba-msg").style.display = "none";
+  $("#modal-bulk-assign").dataset.mids = JSON.stringify(mids);
+  $("#modal-bulk-assign").classList.add("open");
+}
+
+async function doBulkAssign(mids, toUserId, note) {
+  if (!mids.length) return;
+  if (toUserId === null && !confirm(`Unassign ${mids.length} mouse${mids.length>1?"s":""} (return to pool)?`)) return;
+  try {
+    const r = await fetch("/api/animals/assign", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mouse_ids: mids, to_user_id: toUserId, note: note || null }),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || `HTTP ${r.status}`);
+    }
+    const out = await r.json();
+    selectedMids.clear();
+    $("#modal-bulk-assign").classList.remove("open");
+    await fetchBrowse(); await sync();
+    // (No alert if it was triggered from the modal — modal close is feedback enough.)
+    if (toUserId === null) {
+      // Quick toast-like feedback for unassign
+      console.log(`Unassigned ${out.assigned} (skipped ${out.skipped})`);
+    }
+  } catch (e) {
+    if ($("#modal-bulk-assign").classList.contains("open")) {
+      $("#ba-msg").className = "modal-msg error";
+      $("#ba-msg").textContent = e.message;
+      $("#ba-msg").style.display = "block";
+    } else {
+      alert("Failed: " + e.message);
+    }
+  }
+}
+
+// ───── Edit / Add modal ─────
+const EDIT_FIELDS = ["mid","strain","sex","dob","cohort","project","experiment",
+                     "condition","barcode","dos","date_cond1","date_cond2",
+                     "sacrificed","sacrificed_date","notes"];
+
+function openEditModal(row) {
+  editingMid = row ? row.mouse_id : null;
+  $("#edit-title").textContent = row ? `Edit ${row.mouse_id}` : "Add new mouse";
+  $("#ef-mid").value = row?.mouse_id ?? "";
+  $("#ef-mid").disabled = !!row;  // can't rename existing
+  ["strain","sex","dob","cohort","project","experiment","condition",
+   "barcode","dos","date_cond1","date_cond2","sacrificed","sacrificed_date","notes"]
+    .forEach(f => { const el = $("#ef-" + f); if (el) el.value = row?.[f] ?? ""; });
+  // Owner dropdown
+  const curOwner = row?.assigned_to || "";
+  $("#ef-assigned_to").innerHTML =
+    `<option value="">— unassigned —</option>` +
+    usersLight.map(u => `<option value="${escapeHtml(u.id)}" ${u.id === curOwner ? "selected" : ""}>${escapeHtml(u.display_name || u.username || u.id)}${u.id === currentUser.id ? " (me)" : ""}</option>`).join("");
+  $("#ef-assigned_to").dataset.original = curOwner;
+  $("#ef-msg").style.display = "none";
+  $("#edit-delete").style.display = row ? "" : "none";
+  $("#modal-edit").classList.add("open");
+  setTimeout(() => $(row ? "#ef-strain" : "#ef-mid").focus(), 30);
+}
+
+async function doSaveEdit() {
+  const mid = $("#ef-mid").value.trim();
+  if (!mid) {
+    $("#ef-msg").className = "modal-msg error";
+    $("#ef-msg").textContent = "Mouse ID required.";
+    $("#ef-msg").style.display = "block";
+    return;
+  }
+  const payload = { mouse_id: mid };
+  ["strain","sex","dob","cohort","project","experiment","condition",
+   "barcode","dos","date_cond1","date_cond2","sacrificed","sacrificed_date","notes"]
+    .forEach(f => { payload[f] = $("#ef-" + f).value.trim() || null; });
+
+  $("#edit-save").disabled = true;
+  try {
+    const url = editingMid
+      ? `/api/animals/${encodeURIComponent(editingMid)}`
+      : "/api/animals";
+    const method = editingMid ? "PUT" : "POST";
+    const r = await fetch(url, {
+      method, credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || `HTTP ${r.status}`);
+    }
+
+    // Apply owner change if dropdown differs from original (handles both Add and Edit).
+    const ownerSel = $("#ef-assigned_to");
+    const newOwner = ownerSel.value || null;
+    const origOwner = ownerSel.dataset.original || "";
+    if ((newOwner || "") !== origOwner) {
+      const ar = await fetch("/api/animals/assign", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mouse_ids: [mid], to_user_id: newOwner }),
+      });
+      if (!ar.ok) {
+        const d = await ar.json().catch(() => ({}));
+        throw new Error("Saved fields but owner change failed: " + (d.detail || `HTTP ${ar.status}`));
+      }
+    }
+
+    $("#modal-edit").classList.remove("open");
+    await fetchBrowse();
+    await sync();   // refresh stats
+  } catch (e) {
+    $("#ef-msg").className = "modal-msg error";
+    $("#ef-msg").textContent = e.message;
+    $("#ef-msg").style.display = "block";
+  } finally {
+    $("#edit-save").disabled = false;
+  }
+}
+
+async function doDeleteEdit() {
+  if (!editingMid) return;
+  if (!confirm(`Delete mouse ${editingMid}? This cannot be undone.`)) return;
+  try {
+    const r = await fetch(`/api/animals/${encodeURIComponent(editingMid)}`,
+      { method: "DELETE", credentials: "include" });
+    if (!r.ok) {
+      const d = await r.json().catch(() => ({}));
+      throw new Error(d.detail || `HTTP ${r.status}`);
+    }
+    $("#modal-edit").classList.remove("open");
+    await fetchBrowse();
+    await sync();
+  } catch (e) {
+    $("#ef-msg").className = "modal-msg error";
+    $("#ef-msg").textContent = e.message;
+    $("#ef-msg").style.display = "block";
+  }
+}
+
+async function doSyncExcel() {
+  if (!confirm("Pull animals from the configured source? Validated, non-destructive: bad rows are rejected, vanished mice are soft-removed (recoverable), and a snapshot is taken first.")) return;
+  const btn = $("#bs-sync");
+  btn.disabled = true; btn.textContent = "Syncing…";
+  try {
+    const r = await fetch("/api/animals/sync", { method: "POST", credentials: "include" });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || `HTTP ${r.status}`); }
+    const data = await r.json().catch(() => ({}));
+    await fetchBrowse(); await sync();
+    const rep = data.report;
+    if (rep && rep.counts) {
+      const c = rep.counts;
+      let msg = `Sync complete — +${c.added} added, ~${c.modified} modified, ${c.unchanged} unchanged` +
+        (c.merged ? `, ${c.merged} duplicate(s) merged` : "") + ` (${data.count} live).`;
+      if (rep.rejected?.length) {
+        msg += `\n\n⚠️ ${rep.rejected.length} row(s) REJECTED (not written — fix in the source):\n` +
+          rep.rejected.slice(0, 15).map(x => `  • ${x.mouse_id || "(no id)"}: ${x.errors.join("; ")}`).join("\n") +
+          (rep.rejected.length > 15 ? `\n  …and ${rep.rejected.length - 15} more` : "");
+      }
+      if (rep.conflicts?.length) {
+        msg += `\n\n❓ ${rep.conflicts.length} conflicting duplicate ID(s) (same id, different data — resolve manually):\n  ` +
+          rep.conflicts.slice(0, 25).join(", ");
+      }
+      if (rep.removed?.length) {
+        msg += `\n\n🗑 ${rep.removed.length} soft-removed (gone from source, recoverable):\n  ` +
+          rep.removed.slice(0, 25).join(", ") + (rep.removed.length > 25 ? "…" : "");
+      }
+      alert(msg);
+    }
+  } catch (e) {
+    alert("Sync failed: " + e.message);
+  } finally { btn.disabled = false; btn.textContent = "⤓ Sync Excel"; }
+}
+
+async function doPushExcel() {
+  if (!confirm("Push DB rows to the configured Excel file?")) return;
+  const btn = $("#bs-push");
+  btn.disabled = true; btn.textContent = "Pushing…";
+  try {
+    const r = await fetch("/api/animals/excel-push", { method: "POST", credentials: "include" });
+    if (!r.ok) { const d = await r.json().catch(() => ({})); throw new Error(d.detail || `HTTP ${r.status}`); }
+    alert("Pushed to Excel.");
+  } catch (e) {
+    alert("Push failed: " + e.message);
+  } finally { btn.disabled = false; btn.textContent = "⤒ Push to Excel"; }
+}
+
+// ───── Tab switching ─────
+document.querySelectorAll(".tab-btn").forEach(b => {
+  b.addEventListener("click", async () => {
+    if (b.classList.contains("active")) return;
+    document.querySelectorAll(".tab-btn").forEach(x => x.classList.toggle("active", x === b));
+    currentTab = b.dataset.tab;
+    if (currentTab === "browse" && !browseRows.length) await fetchBrowse();
+    render();
+  });
+});
+
+// ───── Edit modal wiring ─────
+["edit-close", "edit-cancel"].forEach(id => {
+  $("#" + id).addEventListener("click", () => $("#modal-edit").classList.remove("open"));
+});
+$("#modal-edit").addEventListener("click", (e) => {
+  if (e.target.id === "modal-edit") $("#modal-edit").classList.remove("open");
+});
+$("#edit-save").addEventListener("click", doSaveEdit);
+$("#edit-delete").addEventListener("click", doDeleteEdit);
+
+// Modal close (transfer)
+["xfer-close", "xfer-cancel"].forEach(id => {
+  $("#" + id).addEventListener("click", () => $("#modal-xfer").classList.remove("open"));
+});
+$("#modal-xfer").addEventListener("click", (e) => {
+  if (e.target.id === "modal-xfer") $("#modal-xfer").classList.remove("open");
+});
+
+// Bulk assign modal wiring
+["ba-close", "ba-cancel"].forEach(id => {
+  $("#" + id).addEventListener("click", () => $("#modal-bulk-assign").classList.remove("open"));
+});
+$("#modal-bulk-assign").addEventListener("click", (e) => {
+  if (e.target.id === "modal-bulk-assign") $("#modal-bulk-assign").classList.remove("open");
+});
+$("#ba-go").addEventListener("click", () => {
+  const mids = JSON.parse($("#modal-bulk-assign").dataset.mids || "[]");
+  const to   = $("#ba-to").value || null;
+  const note = $("#ba-note").value.trim();
+  if (!to) {
+    $("#ba-msg").className = "modal-msg error";
+    $("#ba-msg").textContent = "Pick a recipient (use 'Unassign' button instead to clear ownership).";
+    $("#ba-msg").style.display = "block";
+    return;
+  }
+  doBulkAssign(mids, to, note);
+});
+$("#xfer-go").addEventListener("click", doTransfer);
+
+boot();
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>

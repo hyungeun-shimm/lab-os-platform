@@ -1,0 +1,2847 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Slice Recording</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --red: #b91c1c;
+    --red-soft: #fef2f2;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter);
+    color: #1c2333;
+    min-height: 100vh;
+  }
+  header.app-top {
+    background: var(--navy); color: var(--white);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  header.app-top .brand { font-family: Georgia, serif; font-size: 18px; font-weight: 700; }
+  header.app-top .brand-sub {
+    color: var(--accent); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; margin-left: 4px;
+  }
+  header.app-top a.back {
+    color: var(--ice); text-decoration: none; font-size: 13px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  header.app-top a.back:hover { color: var(--white); }
+  header.app-top .crumbs {
+    color: var(--ice-deep); font-size: 12.5px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  header.app-top .crumbs strong { color: var(--white); }
+  header.app-top .spacer { flex: 1; }
+  header.app-top .me { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  header.app-top .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  header.app-top .mode-pill {
+    background: var(--accent); color: var(--navy-deep);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  header.app-top .mode-pill.member { background: var(--ice-deep); color: var(--navy-deep); }
+
+  /* ── two-column layout ── */
+  .shell {
+    display: grid;
+    /* minmax(0, 1fr) on the main column prevents its content from blowing the grid wider
+       than the viewport — without it, long titles or wide notes could push the sidebar
+       around. Sidebar gets an explicit width AND a max-width as belt-and-suspenders. */
+    grid-template-columns: 280px minmax(0, 1fr);
+    max-width: 1280px; margin: 0 auto;
+    padding: 24px;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 880px) { .shell { grid-template-columns: 1fr; } }
+
+  /* ── sidebar ── */
+  aside.sidebar {
+    background: var(--white); border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    position: sticky; top: 16px;
+    width: 280px; max-width: 280px;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .cal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .cal-title { font-weight: 700; color: var(--navy); font-size: 14px; }
+  .cal-nav { display: flex; gap: 4px; }
+  .cal-nav button {
+    background: var(--grey-lighter); color: var(--navy);
+    border: 0; border-radius: 7px;
+    padding: 4px 8px; font: inherit; font-size: 13px; cursor: pointer;
+    line-height: 1;
+  }
+  .cal-nav button:hover { background: var(--grey-light); }
+
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
+  }
+  .cal-dow {
+    text-align: center; font-size: 10px; color: var(--grey);
+    padding: 2px 0; font-weight: 700;
+    letter-spacing: 0.04em;
+    min-width: 0;
+  }
+  .cal-cell {
+    height: 34px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-radius: 6px;
+    font-size: 12px; color: var(--navy-deep);
+    cursor: pointer;
+    position: relative;
+    border: 1px solid transparent;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .cal-cell.empty { opacity: 0.2; cursor: default; pointer-events: none; }
+  .cal-cell:not(.empty):hover { background: var(--grey-lighter); }
+  .cal-cell.today {
+    border-color: var(--navy);
+    font-weight: 700;
+  }
+  .cal-cell.selected {
+    background: var(--navy); color: var(--white);
+  }
+  .cal-cell.selected.today { background: var(--navy); }
+  .cal-cell .dots {
+    display: flex; gap: 2px;
+    margin-top: 1px;
+  }
+  .cal-cell .dot {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--ice-deep);
+  }
+  .cal-cell .dot.submitted { background: var(--accent); }
+  .cal-cell .dot.approved { background: var(--green); }
+  .cal-cell.selected .dot { background: var(--white); }
+
+  .cal-legend {
+    margin-top: 14px;
+    display: flex; flex-wrap: wrap; gap: 8px 10px;
+    font-size: 10.5px; color: var(--grey);
+  }
+  .cal-legend .lg {
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .cal-legend .lg .swatch {
+    width: 7px; height: 7px; border-radius: 50%;
+  }
+  .cal-foot {
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--grey-light);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .cal-foot button {
+    background: var(--white); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 9px;
+    padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    text-align: left;
+    width: 100%;
+  }
+  .cal-foot button:hover { background: var(--grey-lighter); }
+  .cal-foot .hint { font-size: 10.5px; color: var(--grey); margin-top: 2px; }
+
+  /* ── main ── */
+  main.day {
+    background: var(--white); border-radius: 14px;
+    padding: 24px 28px 28px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    min-height: 400px;
+  }
+  .day-head {
+    display: flex; align-items: baseline; gap: 14px;
+    margin-bottom: 10px;
+    flex-wrap: wrap;
+  }
+  .day-head h2 {
+    margin: 0;
+    font-family: Georgia, serif; color: var(--navy); font-size: 22px;
+  }
+  .status-pill {
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .status-pill.draft     { background: var(--grey-lighter); color: var(--grey); }
+  .status-pill.submitted { background: rgba(242, 179, 61, 0.20); color: #8a5b00; }
+  .status-pill.approved  { background: var(--green-soft); color: var(--green); }
+  .day-head .spacer { flex: 1; }
+  .day-head .day-actions { display: flex; gap: 8px; }
+
+  .author-row {
+    color: var(--grey); font-size: 12.5px;
+    margin: -4px 0 16px;
+  }
+
+  .entries { display: flex; flex-direction: column; gap: 12px; }
+  .entry {
+    background: var(--white);
+    border: 1px solid var(--grey-light); border-radius: 10px;
+    padding: 14px 16px;
+    transition: border-color 0.15s;
+  }
+  .entry:hover { border-color: var(--ice-deep); }
+  .entry-top { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; margin-bottom: 6px; }
+  .entry-id {
+    font-family: "SF Mono", Consolas, monospace;
+    font-weight: 700; color: var(--navy); font-size: 14px;
+  }
+  .chip {
+    background: var(--grey-lighter); color: var(--navy);
+    border-radius: 999px; padding: 2px 9px;
+    font-size: 11px; font-weight: 600;
+  }
+  .chip.warn { background: rgba(242, 179, 61, 0.18); color: #8a5b00; }
+  .chip.man  { background: rgba(143, 179, 230, 0.20); color: var(--navy); }
+  .entry-filename {
+    font-family: "SF Mono", Consolas, monospace;
+    color: var(--grey); font-size: 11.5px;
+    margin: 4px 0 6px;
+    word-break: break-all;
+  }
+  .entry-notes {
+    color: var(--navy-deep); font-size: 13px; white-space: pre-wrap;
+    margin: 6px 0 0;
+  }
+  .entry-actions {
+    margin-top: 10px;
+    display: flex; gap: 6px; flex-wrap: wrap;
+  }
+  .btn-mini {
+    background: var(--white); border: 1px solid var(--grey-light); border-radius: 7px;
+    padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 600;
+    cursor: pointer; color: var(--navy);
+  }
+  .btn-mini:hover { background: var(--grey-lighter); }
+  .btn-mini.danger { color: #b91c1c; }
+  .btn-mini.danger:hover { background: var(--red-soft); border-color: #fecaca; }
+
+  .add-row {
+    margin-top: 16px;
+  }
+  .btn-add {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 10px 18px;
+    font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-add:hover { background: var(--navy-deep); }
+  .btn-finalize {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 9px 16px; font: inherit; font-size: 13px; font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.04em;
+  }
+  .btn-finalize:hover { background: var(--navy-deep); }
+  .btn-return {
+    background: var(--white); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 10px;
+    padding: 9px 14px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-return:hover { background: var(--grey-lighter); }
+
+  .empty {
+    color: var(--grey); font-style: italic; padding: 30px 0;
+    text-align: center;
+  }
+
+  /* ── modal (entry form + day popup) ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.45);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 40px 16px; z-index: 800;
+    overflow-y: auto;
+  }
+  .modal {
+    background: var(--white); border-radius: 14px;
+    width: 100%; max-width: 600px;
+    box-shadow: 0 24px 60px rgba(15,23,42,0.30);
+    margin: auto 0;
+  }
+  .modal.wide { max-width: 800px; }
+  .modal-head {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; align-items: center; justify-content: space-between;
+    border-radius: 14px 14px 0 0;
+  }
+  .modal-head h3 {
+    margin: 0;
+    font-family: Georgia, serif; color: var(--navy); font-size: 17px;
+  }
+  .modal-close {
+    background: transparent; border: 0; cursor: pointer;
+    font-size: 22px; color: var(--grey); padding: 0 4px;
+  }
+  .modal-body { padding: 18px 22px 22px; }
+  .form-row {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+  .form-row.one { grid-template-columns: 1fr; }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block; color: var(--grey); font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .field input[type="text"], .field input[type="number"], .field textarea {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 8px 11px; font: inherit; font-size: 14px;
+    background: var(--white);
+  }
+  .field input:focus, .field textarea:focus {
+    outline: none; border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(30, 39, 97, 0.13);
+  }
+  .field textarea { min-height: 80px; resize: vertical; font-family: inherit; }
+  .field .hint {
+    color: var(--grey); font-size: 10.5px;
+    margin-top: 3px;
+  }
+
+  .mouse-info {
+    background: var(--grey-lighter); border-radius: 10px;
+    padding: 12px 14px;
+    margin: 6px 0 12px;
+    font-size: 12.5px;
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 6px 12px;
+  }
+  .mouse-info .l { color: var(--grey); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .mouse-info .v { color: var(--navy-deep); font-weight: 600; }
+  .mouse-info.manual {
+    background: rgba(242, 179, 61, 0.10);
+    grid-template-columns: 1fr;
+  }
+  .mouse-info .src-note {
+    grid-column: 1 / -1;
+    color: var(--grey); font-size: 11px; font-style: italic;
+    margin-top: 4px;
+  }
+
+  .filename-preview {
+    background: rgba(30, 39, 97, 0.06); border-radius: 8px;
+    padding: 8px 12px; margin: 10px 0;
+    font-family: "SF Mono", Consolas, monospace;
+    font-size: 12.5px; color: var(--navy);
+  }
+  .filename-preview .l { font-size: 10.5px; color: var(--grey); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px; }
+
+  .modal-foot {
+    padding: 14px 22px;
+    border-top: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; justify-content: flex-end; gap: 8px;
+    border-radius: 0 0 14px 14px;
+  }
+  .modal-foot button {
+    border: 0; border-radius: 9px;
+    padding: 8px 16px;
+    font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .modal-foot .cancel { background: var(--white); border: 1px solid var(--grey-light); color: var(--navy); }
+  .modal-foot .save { background: var(--navy); color: var(--white); }
+  .modal-foot .save:disabled { background: #c7d2fe; cursor: progress; }
+
+  .modal-msg {
+    margin-top: 10px;
+    padding: 9px 12px; border-radius: 7px;
+    font-size: 12.5px;
+    display: none;
+  }
+  .modal-msg.error { background: var(--red-soft); color: var(--red); display: block; }
+  .modal-msg.info  { background: #eef2ff; color: var(--navy); display: block; }
+  .modal-msg.success { background: var(--green-soft); color: var(--green); display: block; }
+
+  /* day viewer popup — re-uses .entry */
+  .day-popup-meta {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 12px;
+    color: var(--grey); font-size: 12.5px;
+  }
+
+  /* ── inline recordings table ── */
+  .entry-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px; }
+  .entry-header-left { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .entry-header-right { display: flex; gap: 6px; flex-shrink: 0; }
+  .entry-meta { font-size: 11.5px; color: var(--grey); margin: 2px 0 10px; }
+  .rec-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }
+  .rec-table th {
+    text-align: left; color: var(--grey); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 4px 8px 6px; border-bottom: 1px solid var(--grey-light);
+  }
+  .rec-table td { padding: 5px 8px; border-bottom: 1px solid var(--grey-lighter); vertical-align: top; }
+  .rec-table tbody tr:last-child td { border-bottom: 0; }
+  .rec-fn { font-family: "SF Mono", Consolas, monospace; font-size: 11.5px; color: var(--grey); }
+  .rec-empty { color: var(--grey); font-size: 12.5px; font-style: italic; margin: 4px 0 6px; }
+  .rec-row-excluded td { opacity: 0.45; }
+  .rec-row-excluded .rec-fn { text-decoration: line-through; }
+  .rec-excl-btn { font-size: 11px !important; padding: 2px 6px !important; opacity: 0.7; }
+  .rec-excl-btn.is-excluded { background: var(--red) !important; color: #fff !important; opacity: 1; border-color: var(--red) !important; }
+  .raf-suffix-wrap { margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .raf-sfx-btn { font-size: 12px !important; padding: 4px 10px !important; font-family: "SF Mono", Consolas, monospace !important; }
+  .raf-sfx-btn.raf-sfx-active { background: var(--navy) !important; color: #fff !important; border-color: var(--navy) !important; }
+  .raf-interval { padding: 5px 8px; font-size: 13px; border: 1px solid var(--border); border-radius: 6px; width: 110px; font-family: "SF Mono", Consolas, monospace; }
+  .rec-add-wrap {
+    border-top: 1px dashed var(--grey-light); margin-top: 10px; padding-top: 12px;
+    background: var(--grey-lighter); border-radius: 0 0 8px 8px; padding: 12px 12px 10px;
+    margin-left: -1px; margin-right: -1px; margin-bottom: -1px; border-radius: 0 0 10px 10px;
+  }
+  .rec-form-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 8px; }
+  .rf-cell { flex: 0 0 84px; }
+  .rf-proto { flex: 1; min-width: 110px; }
+  .rf-notes { flex: 2; min-width: 130px; }
+  .rf-label {
+    display: block; font-size: 10.5px; color: var(--grey); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px;
+  }
+  .rec-form-row input {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 7px 10px; font: inherit; font-size: 14px;
+    background: var(--white); box-sizing: border-box;
+  }
+  .rec-form-row input:focus {
+    outline: none; border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(30,39,97,0.13);
+  }
+  .rec-fn-preview {
+    font-family: "SF Mono", Consolas, monospace; font-size: 11.5px;
+    color: var(--navy); background: rgba(30,39,97,0.06);
+    border-radius: 7px; padding: 5px 10px; margin-bottom: 8px;
+  }
+  .rec-form-actions { display: flex; gap: 8px; align-items: center; }
+  .btn-add-rec {
+    background: transparent; color: var(--navy);
+    border: 1px dashed var(--ice-deep); border-radius: 8px;
+    padding: 6px 14px; font: inherit; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; margin-top: 8px; display: inline-block;
+  }
+  .btn-add-rec:hover { background: var(--white); border-style: solid; }
+
+  /* ── Data folder section ── */
+  .entry-folder { border-top: 1px solid var(--border); padding: 10px 16px 12px; background: var(--off-white, #f8f9fb); }
+  .folder-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .folder-icon { font-size: 14px; flex-shrink: 0; }
+  .folder-name-code {
+    font-family: 'SF Mono', Consolas, monospace; font-size: 11.5px;
+    background: var(--grey-lighter, #eef0f3); padding: 3px 8px; border-radius: 5px;
+    color: var(--navy); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .folder-files-panel { margin-top: 10px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .folder-files-panel .ff-empty { padding: 10px 14px; color: var(--grey); font-size: 12px; }
+  .folder-file-row { display: flex; align-items: center; gap: 10px; padding: 6px 14px; border-bottom: 1px solid var(--border); font-size: 12px; }
+  .folder-file-row:last-child { border-bottom: none; }
+  .folder-file-row:nth-child(even) { background: var(--grey-lighter, #eef0f3); }
+  .ff-name { font-family: 'SF Mono', Consolas, monospace; flex: 1; }
+  .ff-size { color: var(--grey); white-space: nowrap; }
+  .ff-date { color: var(--grey); white-space: nowrap; font-size: 11px; }
+  .folder-path-hint { font-size: 11px; color: var(--grey); margin-top: 6px; }
+  .folder-path-hint code { font-size: 11px; background: none; color: var(--grey); }
+  /* ── Naming conventions ── */
+  .nc-tab-active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .nc-item { display:flex; align-items:center; justify-content:space-between; padding:6px 10px; border-radius:6px; font-size:13px; }
+  .nc-item:nth-child(even) { background: var(--grey-lighter,#eef0f3); }
+  .nc-item-val { font-family:'SF Mono',Consolas,monospace; }
+  /* ── Folder picker modal ── */
+  #fp-list .fp-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 7px 10px; border-radius: 6px; cursor: pointer;
+    font-size: 13px; user-select: none;
+  }
+  #fp-list .fp-item:hover { background: var(--grey-lighter, #eef0f3); }
+  #fp-list .fp-item.fp-selected { background: var(--ice-light, #dce8f5); font-weight: 600; }
+  #fp-list .fp-up { color: var(--grey); font-size: 12px; }
+  /* ── Data root admin setting ── */
+  .data-root-setting { padding: 10px 12px; border-top: 1px solid var(--border); display: none; }
+  .data-root-setting label { font-size: 11px; color: var(--grey); display: block; margin-bottom: 4px; text-transform: uppercase; letter-spacing: .04em; }
+  .data-root-setting input { width: 100%; box-sizing: border-box; padding: 6px 8px; font-size: 12px; border: 1px solid var(--border); border-radius: 5px; font-family: 'SF Mono', Consolas, monospace; }
+  .data-root-setting .dr-actions { display: flex; gap: 6px; margin-top: 6px; align-items: center; }
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div>
+    <span class="brand">Lab OS</span><span class="brand-sub">ELN</span>
+  </div>
+  <a class="back" id="back-link" href="/eln/">← Projects</a>
+  <div class="crumbs">
+    <span>/</span><span id="crumb-proj">…</span>
+    <span>/</span><strong>Slice recording</strong>
+  </div>
+  <div class="spacer"></div>
+  <div class="me" id="me-area">Loading…</div>
+</header>
+
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="cal-head">
+      <div class="cal-title" id="cal-title">…</div>
+      <div class="cal-nav">
+        <button id="cal-prev" type="button" title="Previous month">‹</button>
+        <button id="cal-today" type="button" title="Jump to today">Today</button>
+        <button id="cal-next" type="button" title="Next month">›</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="cal-legend">
+      <span class="lg"><span class="swatch" style="background:var(--ice-deep);"></span>Draft</span>
+      <span class="lg"><span class="swatch" style="background:var(--green);"></span>Finalized</span>
+    </div>
+    <div class="cal-foot">
+      <button id="btn-export" type="button">📄 Export Lab notes</button>
+      <span class="hint">Generates a date-sorted, locked PDF.</span>
+      <button id="btn-manage-lists" type="button" style="display:none;margin-top:8px;width:100%;">⚙ Manage lists</button>
+    </div>
+    <!-- Admin-only: data root setting -->
+    <div class="data-root-setting" id="data-root-setting">
+      <label>Data folder root (server path)</label>
+      <input type="text" id="data-root-input" placeholder="/Volumes/LabNAS/Data" />
+      <div class="dr-actions">
+        <button class="btn-mini" id="data-root-save">Save</button>
+        <span id="data-root-msg" style="font-size:11px;color:var(--grey);"></span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="day" id="main">
+    <p class="empty">Loading…</p>
+  </main>
+
+</div>
+
+<!-- Entry form modal -->
+<div class="modal-overlay" id="modal-entry" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="entry-title">Add animal</h3>
+      <button class="modal-close" data-close="modal-entry" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field">
+          <label for="ef-mid">Mouse ID</label>
+          <input id="ef-mid" type="text" autocomplete="off" required placeholder="e.g. WT3479" />
+          <div class="hint" id="ef-mid-hint">Press Tab to look up in animal DB.</div>
+        </div>
+        <div class="field">
+          <label for="ef-cohort-mouse">Cohort (auto)</label>
+          <input id="ef-cohort-mouse" type="text" readonly placeholder="—" />
+          <div class="hint">From animal DB. Editable below.</div>
+        </div>
+      </div>
+
+      <div id="ef-mouse-info" class="mouse-info" style="display:none;"></div>
+
+      <div class="form-row">
+        <div class="field">
+          <label for="ef-agent">Agent (if applicable)</label>
+          <input id="ef-agent" type="text" placeholder="e.g. AAV-EGFP, chronic CNO" list="nc-agent-list" autocomplete="off" />
+          <datalist id="nc-agent-list"></datalist>
+        </div>
+        <div class="field">
+          <label for="ef-exp-cond-sel">Experimental condition</label>
+          <select id="ef-exp-cond-sel" style="width:100%;"></select>
+          <input id="ef-exp-cond" type="text" placeholder="Custom value…" autocomplete="off"
+            style="display:none;margin-top:6px;width:100%;box-sizing:border-box;" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="field">
+          <label for="ef-exp-type-sel">Experiment / type</label>
+          <select id="ef-exp-type-sel" style="width:100%;"></select>
+          <input id="ef-exp-type" type="text" placeholder="Custom value…" autocomplete="off"
+            style="display:none;margin-top:6px;width:100%;box-sizing:border-box;" />
+        </div>
+        <div class="field">
+          <label for="ef-cohort">Cohort number</label>
+          <input id="ef-cohort" type="text" placeholder="e.g. 0302" />
+        </div>
+      </div>
+
+      <div class="form-row">
+        <div class="field">
+          <label for="ef-cell-type-sel">Cell type</label>
+          <select id="ef-cell-type-sel" style="width:100%;"></select>
+          <input id="ef-cell-type" type="text" placeholder="Custom cell type…" autocomplete="off"
+            style="display:none;margin-top:6px;width:100%;box-sizing:border-box;" />
+        </div>
+        <div class="field"></div>
+      </div>
+
+      <div class="form-row" style="align-items:center;">
+        <div class="field" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:7px;cursor:pointer;font-size:13px;font-weight:600;color:var(--navy);">
+            <input type="checkbox" id="ef-behavior-done" style="width:16px;height:16px;cursor:pointer;" />
+            Behavior experiment accompaniment
+          </label>
+        </div>
+      </div>
+      <div id="ef-behavior-notes-row" class="form-row" style="display:none;">
+        <div class="field" style="width:100%;">
+          <label for="ef-behavior-notes" style="font-size:11px;color:var(--grey);">Behavior notes (tasks, timing…)</label>
+          <input id="ef-behavior-notes" type="text" placeholder="e.g. VOR + OKR, 3 days prior"
+            style="width:100%;box-sizing:border-box;" />
+        </div>
+      </div>
+
+      <div class="modal-msg" id="ef-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-entry" type="button">Cancel</button>
+      <button class="save" id="ef-save" type="button">Save animal info</button>
+    </div>
+  </div>
+</div>
+
+<!-- Naming conventions management modal (admin only) -->
+<div class="modal-overlay" id="modal-nc" style="display:none;">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head">
+      <h3 style="margin:0;font-size:15px;">Manage Dropdown Lists</h3>
+      <button class="modal-close" data-close="modal-nc" type="button">×</button>
+    </div>
+    <div class="modal-body" style="padding:16px 20px;">
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="btn-mini nc-tab-btn nc-tab-active" data-nc-cat="exp_condition">Exp Condition</button>
+        <button class="btn-mini nc-tab-btn" data-nc-cat="exp_type">Exp Type</button>
+        <button class="btn-mini nc-tab-btn" data-nc-cat="cell_type">Cell Type</button>
+        <button class="btn-mini nc-tab-btn" data-nc-cat="protocol">Protocol</button>
+        <button class="btn-mini nc-tab-btn" data-nc-cat="agent">Agent</button>
+      </div>
+      <!-- Shown only when Protocol tab is active -->
+      <div id="nc-proto-parent-row" style="display:none;margin-bottom:12px;">
+        <label style="font-size:12px;color:var(--grey);display:block;margin-bottom:4px;">Cell type (for this protocol set)</label>
+        <select id="nc-proto-parent-sel" style="width:100%;padding:6px 8px;border:1px solid var(--border);border-radius:6px;font-size:13px;">
+          <option value="">— Shared (all cell types) —</option>
+        </select>
+      </div>
+      <div id="nc-list" style="min-height:120px;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="nc-add-input" type="text" placeholder="Add new value…"
+          style="flex:1;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;" />
+        <button class="btn-add" id="nc-add-btn" style="padding:7px 14px;font-size:13px;">Add</button>
+      </div>
+      <p id="nc-msg" style="font-size:12px;margin:6px 0 0;min-height:16px;"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-nc" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Folder picker modal -->
+<div class="modal-overlay" id="modal-folder-picker" style="display:none;">
+  <div class="modal" style="max-width:460px;max-height:80vh;display:flex;flex-direction:column;">
+    <div class="modal-head" style="flex-shrink:0;">
+      <h3 style="margin:0;font-size:15px;">Select Data Folder</h3>
+      <button class="modal-close" data-close="modal-folder-picker" type="button">×</button>
+    </div>
+    <div style="padding:12px 16px 8px;flex-shrink:0;border-bottom:1px solid var(--border);">
+      <div style="display:flex;gap:6px;align-items:center;">
+        <input id="fp-path-input" type="text"
+          style="flex:1;padding:6px 10px;font-size:12px;font-family:'SF Mono',Consolas,monospace;border:1px solid var(--border);border-radius:6px;"
+          placeholder="/Volumes/LabNAS/Data" />
+        <button class="btn-mini" id="fp-go-btn">Go</button>
+      </div>
+    </div>
+    <div id="fp-breadcrumb" style="padding:8px 16px 4px;font-size:11px;color:var(--grey);flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+    <div id="fp-list" style="flex:1;overflow-y:auto;padding:4px 8px 8px;min-height:180px;">
+      <p style="color:var(--grey);font-size:13px;padding:12px;">Loading…</p>
+    </div>
+    <div class="modal-foot" style="flex-shrink:0;border-top:1px solid var(--border);flex-direction:column;align-items:stretch;gap:6px;">
+      <div style="font-size:12px;color:var(--grey);padding:0 2px;">
+        Selected: <code id="fp-selected-path" style="font-size:12px;color:var(--navy);"></code>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="cancel" data-close="modal-folder-picker" type="button">Cancel</button>
+        <button class="save" id="fp-select-btn" type="button">Select this folder</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Export date-range picker -->
+<div class="modal-overlay" id="modal-export" style="display:none;">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-head">
+      <h3 style="margin:0;font-size:15px;">Export Lab Notes PDF</h3>
+      <button class="modal-close" data-close="modal-export" type="button">×</button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px 8px;">
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;user-select:none;">
+        <input type="checkbox" id="exp-all-dates" checked style="width:15px;height:15px;accent-color:var(--navy);" />
+        <span style="font-size:14px;font-weight:500;">All dates</span>
+      </label>
+      <div id="exp-range-wrap" style="display:none;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:11px;color:var(--grey);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">From</label>
+            <input type="date" id="exp-date-from"
+              style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--grey);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">To</label>
+            <input type="date" id="exp-date-to"
+              style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;box-sizing:border-box;" />
+          </div>
+        </div>
+        <p id="exp-range-err" style="color:var(--red);font-size:12px;margin:6px 0 0;display:none;"></p>
+      </div>
+    </div>
+    <div class="modal-foot" style="gap:8px;">
+      <button class="cancel" data-close="modal-export" type="button">Cancel</button>
+      <button class="save" id="exp-do-export" type="button">📄 Generate PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Past day viewer popup -->
+<div class="modal-overlay" id="modal-viewer" style="display:none;">
+  <div class="modal wide">
+    <div class="modal-head">
+      <h3 id="viewer-title">…</h3>
+      <button class="modal-close" data-close="modal-viewer" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="day-popup-meta" id="viewer-meta"></div>
+      <div class="entries" id="viewer-entries"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-viewer" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-push" style="display:none;">
+  <div class="modal" style="max-width:460px;">
+    <div class="modal-head">
+      <h3>📤 Push data folder</h3>
+      <button class="modal-close" data-close="modal-push" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--grey);">Folder to copy</div>
+      <div id="push-folder-name" style="font-family:'SF Mono',Consolas,monospace;font-size:13px;font-weight:700;color:var(--navy);margin-bottom:10px;">—</div>
+      <div style="font-size:12px;color:var(--grey);">Destinations (Google Drive · external drive, etc. — up to 3 at once)</div>
+      <div id="push-dest-list" style="margin:6px 0;"></div>
+      <button class="btn-mini" id="push-add-dest" type="button">+ Add destination (choose folder)</button>
+      <div id="push-progress" style="margin-top:10px;"></div>
+      <div style="font-size:11px;color:var(--grey);margin-top:8px;">Destinations are saved in this browser. For Google Drive, choose a folder mounted by Drive Desktop and it will sync automatically.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-push" type="button">Close</button>
+      <button class="save" id="push-go" type="button">Push now</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+// project slug from URL — /eln/project/{slug}/slice
+const pathParts = window.location.pathname.split("/").filter(Boolean);
+// expected: ['eln', 'project', '{slug}', 'slice']
+const projectSlug = decodeURIComponent(pathParts[2] || "");
+const EXP_TYPE = "slice_recording";
+
+let currentUser = null;
+let project = null;
+let todayNote = null;            // the note row for today (own); null = none yet
+let allTodayNotes = [];          // admin: every user's note for the currently loaded day
+let viewerUserId = null;         // admin: which user's note is being viewed
+let calendarYear, calendarMonth; // current cal view
+let selectedDate = null;         // YYYY-MM-DD; null = today (the main view)
+let calendarDays = [];           // server-returned days[]
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function fmtLong(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+}
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (e) { data = null; }
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status; err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+// ───────────────────────────────────────────
+// Boot
+// ───────────────────────────────────────────
+async function boot() {
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    renderHeader();
+
+    const proj = await api("GET", `/api/eln/projects/${encodeURIComponent(projectSlug)}`);
+    project = proj.project;
+    $("#crumb-proj").innerHTML = `<a href="/eln/project/${encodeURIComponent(projectSlug)}" style="color:var(--ice); text-decoration:none;">${escapeHtml(project.title)}</a>`;
+    $("#back-link").href = `/eln/project/${encodeURIComponent(projectSlug)}`;
+
+    const t = new Date();
+    calendarYear = t.getFullYear();
+    calendarMonth = t.getMonth() + 1;
+
+    await Promise.all([
+      renderCalendar(),
+      loadDay(todayISO(), /*isToday*/ true),
+      loadNamingConventions(),
+    ]);
+
+    // Admin extras
+    if (currentUser.effective_role === "admin") {
+      const drSetting = $("#data-root-setting");
+      if (drSetting) drSetting.style.display = "";
+      try {
+        const cfg = await api("GET", "/api/eln/config?key=data_root");
+        const inp = $("#data-root-input");
+        if (inp) inp.value = cfg.value || "";
+      } catch (_) {}
+      // show "Manage lists" button in sidebar
+      const mlBtn = $("#btn-manage-lists");
+      if (mlBtn) mlBtn.style.display = "";
+    }
+  } catch (e) {
+    if (e.status === 401) { window.location.href = "/eln/login"; return; }
+    $("#main").innerHTML = `<p class="empty">Failed to load: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderHeader() {
+  const u = currentUser;
+  const initials = u.initials || (u.display_name || "?")[0];
+  const eff = u.effective_role;
+  const badge = `<span class="mode-pill ${eff === "admin" ? "" : "member"}">${eff === "admin" ? "Admin mode" : "User mode"}</span>`;
+  $("#me-area").innerHTML =
+    `<div class="avatar" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${initials}</div>` +
+    `<div>${u.display_name} ${badge}</div>`;
+}
+
+// ───────────────────────────────────────────
+// Calendar
+// ───────────────────────────────────────────
+async function renderCalendar() {
+  const y = calendarYear, m = calendarMonth;
+  $("#cal-title").textContent = new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+  // Fetch the days for this view
+  try {
+    const data = await api("GET",
+      `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes/calendar?experiment_type=${EXP_TYPE}&year=${y}&month=${m}`);
+    calendarDays = data.days || [];
+  } catch (e) { calendarDays = []; }
+
+  const byDate = new Map();
+  calendarDays.forEach(d => byDate.set(d.date, d));
+  const firstDow = new Date(y, m - 1, 1).getDay(); // 0=Sun
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const today = todayISO();
+
+  const grid = $("#cal-grid");
+  grid.innerHTML = "";
+  ["S","M","T","W","T","F","S"].forEach(d => {
+    const el = document.createElement("div"); el.className = "cal-dow"; el.textContent = d; grid.appendChild(el);
+  });
+  for (let i = 0; i < firstDow; i++) {
+    const e = document.createElement("div"); e.className = "cal-cell empty"; grid.appendChild(e);
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    const cell = document.createElement("div");
+    cell.className = "cal-cell" + (iso === today ? " today" : "") + (iso === selectedDate ? " selected" : "");
+    cell.dataset.date = iso;
+    cell.innerHTML = `<div>${day}</div>`;
+    const info = byDate.get(iso);
+    if (info) {
+      const dots = document.createElement("div"); dots.className = "dots";
+      const statuses = info.statuses || [];
+      const cls = (statuses.includes("approved") || statuses.includes("submitted")) ? "approved" : "";
+      const d1 = document.createElement("div"); d1.className = "dot " + cls; dots.appendChild(d1);
+      cell.appendChild(dots);
+    }
+    cell.addEventListener("click", () => {
+      if (iso === today) {
+        selectedDate = null;
+        loadDay(today, true);
+      } else {
+        selectedDate = iso;
+        openDayViewer(iso);
+      }
+      renderCalendar();   // refresh selection highlight
+    });
+    grid.appendChild(cell);
+  }
+}
+
+$("#cal-prev").addEventListener("click", () => {
+  calendarMonth -= 1;
+  if (calendarMonth < 1) { calendarMonth = 12; calendarYear -= 1; }
+  renderCalendar();
+});
+$("#cal-next").addEventListener("click", () => {
+  calendarMonth += 1;
+  if (calendarMonth > 12) { calendarMonth = 1; calendarYear += 1; }
+  renderCalendar();
+});
+$("#cal-today").addEventListener("click", () => {
+  const t = new Date();
+  calendarYear = t.getFullYear(); calendarMonth = t.getMonth() + 1;
+  selectedDate = null;
+  viewerUserId = currentUser?.id || null;
+  loadDay(todayISO(), true);
+  renderCalendar();
+});
+
+// ── Naming conventions: select↔custom toggle ─────────────────────────────────
+function wireSelectCustom(selId, inputId) {
+  const sel = $(selId);
+  const inp = $(inputId);
+  if (!sel || !inp) return;
+  sel.addEventListener("change", () => {
+    const isCustom = sel.value === "__custom__";
+    inp.style.display = isCustom ? "" : "none";
+    if (isCustom) { inp.value = ""; inp.focus(); }
+  });
+}
+wireSelectCustom("#ef-exp-cond-sel", "#ef-exp-cond");
+wireSelectCustom("#ef-exp-type-sel", "#ef-exp-type");
+wireSelectCustom("#ef-cell-type-sel", "#ef-cell-type");
+$("#ef-behavior-done").addEventListener("change", () => {
+  $("#ef-behavior-notes-row").style.display = $("#ef-behavior-done").checked ? "" : "none";
+});
+
+// ── Naming conventions management modal ──────────────────────────────────────
+let ncCurrentCategory = "exp_condition";
+
+function ncGetCurrentParent() {
+  if (ncCurrentCategory !== "protocol") return null;
+  return $("#nc-proto-parent-sel")?.value || null;
+}
+
+function ncUpdateProtoParentRow() {
+  const row = $("#nc-proto-parent-row");
+  const sel  = $("#nc-proto-parent-sel");
+  if (!row || !sel) return;
+  const isProto = ncCurrentCategory === "protocol";
+  row.style.display = isProto ? "" : "none";
+  if (isProto) {
+    const cellTypes = namingConventions.cell_type || [];
+    sel.innerHTML = `<option value="">— Shared (all cell types) —</option>` +
+      cellTypes.map(i => `<option value="${escapeHtml(i.value)}">${escapeHtml(i.label || i.value)}</option>`).join("");
+  }
+}
+
+async function ncLoadList() {
+  const list = $("#nc-list");
+  if (!list) return;
+  list.innerHTML = "<p style='color:var(--grey);font-size:13px;'>Loading…</p>";
+  const parent = ncGetCurrentParent();
+  let url = `/api/eln/naming-conventions?category=${ncCurrentCategory}`;
+  if (parent) url += `&parent=${encodeURIComponent(parent)}`;
+  const d = await api("GET", url);
+  // Don't cache filtered results — only update global when loading unfiltered
+  if (!parent) namingConventions[ncCurrentCategory] = d.items || [];
+  if (!d.items.length) {
+    list.innerHTML = "<p style='color:var(--grey);font-size:12px;'>No items yet.</p>";
+    return;
+  }
+  list.innerHTML = d.items.map(item => `
+    <div class="nc-item">
+      <span class="nc-item-val">${escapeHtml(item.value)}${item.parent ? ` <span style="font-size:11px;color:var(--grey);">[${escapeHtml(item.parent)}]</span>` : ""}</span>
+      <button class="btn-mini danger nc-del-btn" data-nc-id="${item.id}" style="padding:2px 8px;font-size:12px;">×</button>
+    </div>`).join("");
+}
+
+document.getElementById("modal-nc")?.addEventListener("click", async e => {
+  const tgt = e.target;
+  if (tgt.classList.contains("nc-tab-btn")) {
+    document.querySelectorAll(".nc-tab-btn").forEach(b => b.classList.remove("nc-tab-active"));
+    tgt.classList.add("nc-tab-active");
+    ncCurrentCategory = tgt.dataset.ncCat;
+    $("#nc-add-input").value = "";
+    $("#nc-msg").textContent = "";
+    ncUpdateProtoParentRow();
+    await ncLoadList();
+    return;
+  }
+  if (tgt.classList.contains("nc-del-btn")) {
+    try {
+      await api("DELETE", `/api/eln/naming-conventions/${tgt.dataset.ncId}`);
+      await ncLoadList();
+      await loadNamingConventions();
+      const expCond = getSelectOrCustom("#ef-exp-cond-sel", "#ef-exp-cond");
+      const expType = getSelectOrCustom("#ef-exp-type-sel", "#ef-exp-type");
+      const cellType = getSelectOrCustom("#ef-cell-type-sel", "#ef-cell-type");
+      populateEntrySelects(expCond, expType, cellType);
+    } catch (err) { $("#nc-msg").textContent = err.message; }
+    return;
+  }
+});
+
+$("#nc-proto-parent-sel")?.addEventListener("change", () => ncLoadList());
+
+$("#nc-add-btn")?.addEventListener("click", async () => {
+  const val = $("#nc-add-input").value.trim();
+  const msg = $("#nc-msg");
+  if (!val) { msg.textContent = "Enter a value first."; return; }
+  try {
+    const parent = ncGetCurrentParent() || undefined;
+    await api("POST", "/api/eln/naming-conventions", { category: ncCurrentCategory, value: val, parent });
+    $("#nc-add-input").value = "";
+    msg.textContent = "";
+    await ncLoadList();
+    await loadNamingConventions();
+    const expCond = getSelectOrCustom("#ef-exp-cond-sel", "#ef-exp-cond");
+    const expType = getSelectOrCustom("#ef-exp-type-sel", "#ef-exp-type");
+    const cellType = getSelectOrCustom("#ef-cell-type-sel", "#ef-cell-type");
+    populateEntrySelects(expCond, expType, cellType);
+  } catch (err) { msg.textContent = err.message; }
+});
+
+$("#nc-add-input")?.addEventListener("keydown", e => { if (e.key === "Enter") $("#nc-add-btn")?.click(); });
+
+$("#btn-manage-lists")?.addEventListener("click", async () => {
+  ncCurrentCategory = "exp_condition";
+  document.querySelectorAll(".nc-tab-btn").forEach((b, i) => b.classList.toggle("nc-tab-active", i === 0));
+  $("#nc-add-input").value = "";
+  $("#nc-msg").textContent = "";
+  ncUpdateProtoParentRow();
+  await ncLoadList();
+  $("#modal-nc").style.display = "flex";
+});
+
+// ── Folder picker ──────────────────────────────────────────────────────────
+let fpCurrentPath = "";
+
+async function fpNavigate(path) {
+  const list  = $("#fp-list");
+  const crumb = $("#fp-breadcrumb");
+  list.innerHTML = `<p style="color:var(--grey);font-size:13px;padding:12px;">Loading…</p>`;
+  try {
+    const d = await api("GET", `/api/eln/browse-dir${path ? "?path=" + encodeURIComponent(path) : ""}`);
+    fpCurrentPath = d.path;
+    $("#fp-path-input").value = d.path;
+    $("#fp-selected-path").textContent = d.path;
+    crumb.textContent = d.path;
+
+    let html = "";
+    if (d.parent) {
+      html += `<div class="fp-item fp-up" data-fp-path="${escapeHtml(d.parent)}">↑ Parent folder</div>`;
+    }
+    if (!d.entries.length) {
+      html += `<p style="color:var(--grey);font-size:12px;padding:8px 10px;">No subfolders here.</p>`;
+    } else {
+      html += d.entries.map(e =>
+        `<div class="fp-item" data-fp-path="${escapeHtml(e.path)}">📁 ${escapeHtml(e.name)}</div>`
+      ).join("");
+    }
+    list.innerHTML = html;
+  } catch (err) {
+    list.innerHTML = `<p style="color:var(--red);font-size:12px;padding:12px;">${escapeHtml(err.message)}</p>`;
+  }
+}
+
+// navigate on item click
+$("#fp-list").addEventListener("click", e => {
+  const item = e.target.closest("[data-fp-path]");
+  if (!item) return;
+  fpNavigate(item.dataset.fpPath);
+});
+
+// manual path input
+$("#fp-go-btn").addEventListener("click", () => fpNavigate($("#fp-path-input").value.trim()));
+$("#fp-path-input").addEventListener("keydown", e => { if (e.key === "Enter") fpNavigate(e.target.value.trim()); });
+
+// select button
+$("#fp-select-btn").addEventListener("click", () => {
+  const chosen = fpCurrentPath;
+  if (!chosen) return;
+  setDataRoot(chosen);
+  // update all folder sections in DOM
+  const entries = todayNote?.payload?.entries || [];
+  entries.forEach((raw, i) => {
+    const card = document.getElementById(`entry-${i}`);
+    const folderDiv = card?.querySelector(".entry-folder");
+    if (folderDiv) folderDiv.outerHTML = renderFolderSection(normalizeEntry(raw), i, false);
+  });
+  // also update sidebar input if visible
+  const inp = $("#data-root-input");
+  if (inp) inp.value = chosen;
+  $("#modal-folder-picker").style.display = "none";
+});
+
+// open picker from "✎ Change" + Browse button in sidebar
+document.getElementById("main").addEventListener("click", e => {
+  if (e.target.classList.contains("folder-set-root")) {
+    const folderDiv = e.target.closest(".entry-folder");
+    const eidx = folderDiv?.querySelector(".folder-root-save")?.dataset.eidx;
+    // show inline edit AND open picker
+    if (eidx != null) {
+      const editEl = document.getElementById(`folder-root-edit-${eidx}`);
+      if (editEl) { editEl.style.display = ""; editEl.querySelector(".folder-root-input")?.focus(); }
+    }
+  }
+}, true); // capture phase so it runs before the delegated handler lower
+
+// Per-cell recording parameters — auto-save on change (blur)
+document.getElementById("main").addEventListener("change", async (ev) => {
+  const inp = ev.target.closest(".cell-param-input");
+  if (!inp) return;
+  const eidx = parseInt(inp.dataset.eidx, 10);
+  const cell = inp.dataset.cell, field = inp.dataset.field;
+  const entries = todayNote.payload.entries;
+  const ent = { ...normalizeEntry(entries[eidx]) };
+  ent.cell_params = { ...(ent.cell_params || {}) };
+  ent.cell_params[cell] = { ...(ent.cell_params[cell] || {}) };
+  const val = inp.value.trim();
+  if (val) ent.cell_params[cell][field] = val; else delete ent.cell_params[cell][field];
+  entries[eidx] = ent;
+  inp.style.outline = "2px solid #8FB3E6";
+  try { await saveNotePayload(); inp.style.outline = "2px solid #34c759"; }
+  catch (err) { inp.style.outline = "2px solid #ff3b30"; }
+  setTimeout(() => { inp.style.outline = ""; }, 700);
+});
+
+// Per-cell screenshot → AI param extraction (📷). Endpoint returns 503 until a
+// vision API key is configured on the server; the button is otherwise ready.
+function fileToB64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(String(r.result).split(",")[1] || "");
+    r.onerror = reject;
+    r.readAsDataURL(file);
+  });
+}
+
+document.getElementById("main").addEventListener("click", (ev) => {
+  const btn = ev.target.closest(".cp-shot");
+  if (!btn) return;
+  const fileInp = document.createElement("input");
+  fileInp.type = "file"; fileInp.accept = "image/*";
+  fileInp.onchange = async () => {
+    const file = fileInp.files && fileInp.files[0];
+    if (!file) return;
+    btn.textContent = "⏳"; btn.disabled = true;
+    try {
+      const b64 = await fileToB64(file);
+      const r = await api("POST", "/api/eln/vision/extract-params",
+        { image_b64: b64, mime: file.type || "image/png" });
+      const p = r.params || {};
+      const row = btn.closest("tr");
+      let filled = 0;
+      ["ra", "rin", "cm", "ihold", "rmp"].forEach(f => {
+        const v = p[f];
+        if (v != null && v !== "") {
+          const ci = row.querySelector(`.cell-param-input[data-field="${f}"]`);
+          if (ci) { ci.value = v; ci.dispatchEvent(new Event("change", { bubbles: true })); filled++; }
+        }
+      });
+      btn.textContent = filled ? "✓" : "📷";
+      setTimeout(() => { btn.textContent = "📷"; }, 1200);
+    } catch (e) {
+      btn.textContent = "📷";
+      if (e.status === 503) {
+        alert("AI extraction isn't set up yet. Add a vision API key on the server to enable it.\n\n" + (e.message || ""));
+      } else {
+        alert("Extraction failed: " + (e.message || "unknown error"));
+      }
+    } finally {
+      btn.disabled = false;
+    }
+  };
+  fileInp.click();
+});
+
+function openFolderPicker() {
+  $("#modal-folder-picker").style.display = "flex";
+  fpNavigate(getDataRoot() || "");
+}
+
+$("#data-root-save").addEventListener("click", async () => {
+  const val = $("#data-root-input")?.value.trim() || "";
+  const msg = $("#data-root-msg");
+  try {
+    await api("PATCH", "/api/eln/config", { key: "data_root", value: val });
+    if (msg) { msg.textContent = "Saved ✓"; msg.style.color = "var(--green)"; }
+  } catch (e) {
+    if (msg) { msg.textContent = e.message; msg.style.color = "var(--red)"; }
+  }
+  setTimeout(() => { if (msg) msg.textContent = ""; }, 3000);
+});
+
+$("#btn-export").addEventListener("click", () => {
+  // Reset to defaults each time the modal opens
+  $("#exp-all-dates").checked = true;
+  $("#exp-range-wrap").style.display = "none";
+  $("#exp-date-from").value = "";
+  $("#exp-date-to").value   = todayISO();
+  $("#exp-range-err").style.display = "none";
+  $("#modal-export").style.display  = "flex";
+});
+
+$("#exp-all-dates").addEventListener("change", () => {
+  $("#exp-range-wrap").style.display = $("#exp-all-dates").checked ? "none" : "";
+  $("#exp-range-err").style.display  = "none";
+});
+
+async function runExport() {
+  const allDates  = $("#exp-all-dates").checked;
+  const dateFrom  = allDates ? "" : ($("#exp-date-from").value || "");
+  const dateTo    = allDates ? "" : ($("#exp-date-to").value   || "");
+  const errEl     = $("#exp-range-err");
+
+  if (!allDates && dateFrom && dateTo && dateFrom > dateTo) {
+    errEl.textContent = "\"From\" date must be on or before \"To\" date.";
+    errEl.style.display = "";
+    return;
+  }
+  errEl.style.display = "none";
+
+  const btn = $("#exp-do-export");
+  btn.disabled = true;
+  btn.textContent = "Generating…";
+  try {
+    let url = `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes/export-pdf?experiment_type=${EXP_TYPE}`;
+    if (dateFrom) url += `&date_from=${dateFrom}`;
+    if (dateTo)   url += `&date_to=${dateTo}`;
+    const resp = await fetch(url, { credentials: "include" });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try { const j = await resp.json(); detail = j.detail || detail; } catch (_) {}
+      throw new Error(detail);
+    }
+    const blob = await resp.blob();
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl;
+    const suffix = allDates ? "all" : `${dateFrom || "start"}_${dateTo || "end"}`;
+    a.download = `${projectSlug}_slice_${suffix}.pdf`;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(objUrl);
+    $("#modal-export").style.display = "none";
+  } catch (e) {
+    errEl.textContent = "Export failed: " + e.message;
+    errEl.style.display = "";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "📄 Generate PDF";
+  }
+}
+
+$("#exp-do-export").addEventListener("click", runExport);
+
+// ───────────────────────────────────────────
+// Today's note (main view)
+// ───────────────────────────────────────────
+async function loadDay(iso, isToday) {
+  formCellState = {};
+  $("#main").innerHTML = `<p class="empty">Loading…</p>`;
+  try {
+    const data = await api("GET",
+      `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes?experiment_type=${EXP_TYPE}&date=${iso}`);
+    allTodayNotes = data.notes || [];
+    if (!viewerUserId) viewerUserId = currentUser.id;
+    const selectedNote = allTodayNotes.find(n => n.user_id === viewerUserId)
+                      || allTodayNotes.find(n => n.user_id === currentUser.id);
+    todayNote = selectedNote || null;
+    viewerUserId = todayNote ? todayNote.user_id : currentUser.id;
+    renderDay(iso, todayNote, allTodayNotes);
+  } catch (e) {
+    $("#main").innerHTML = `<p class="empty">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderDay(iso, ownNote, allNotes) {
+  const isAdmin       = currentUser.effective_role === "admin";
+  const viewingOther  = ownNote && ownNote.user_id !== currentUser.id;
+  const otherAuthor   = viewingOther
+    ? (ownNote.author?.display_name || ownNote.author?.username || ownNote.user_id)
+    : "";
+
+  let userPicker = "";
+  if (isAdmin && (allNotes || []).length > 1) {
+    userPicker = `
+      <div style="display:flex;align-items:center;gap:6px;margin-left:8px;">
+        <span style="font-size:11px;color:var(--grey);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Viewing</span>
+        <select id="day-viewer-pick" style="border:1px solid var(--grey-light);border-radius:7px;padding:4px 8px;font:inherit;font-size:13px;background:var(--white);">
+          ${allNotes.map(n => {
+            const nm = n.author?.display_name || n.author?.username || n.user_id;
+            const me = n.user_id === currentUser.id ? " (me)" : "";
+            return `<option value="${n.user_id}" ${n.user_id === viewerUserId ? "selected" : ""}>${escapeHtml(nm)}${me}</option>`;
+          }).join("")}
+        </select>
+      </div>`;
+  }
+
+  const head = `
+    <div class="day-head">
+      <h2>${fmtLong(iso)}</h2>
+      ${ownNote ? `<span class="status-pill ${ownNote.status === "draft" ? "draft" : "approved"}">${ownNote.status === "draft" ? "Draft" : "Finalized"}</span>` : ""}
+      ${userPicker}
+      <div class="spacer"></div>
+      <div class="day-actions" id="day-actions"></div>
+    </div>`;
+
+  const entries = (ownNote?.payload?.entries) || [];
+  const isLocked = ownNote && ownNote.status !== "draft";
+  const readOnly = isLocked || isAdmin || viewingOther;
+
+  const adminBanner = isAdmin ? `
+    <div style="background:rgba(242,179,61,0.13);border:1px solid rgba(242,179,61,0.4);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#8a5b00;">
+      <strong>Admin mode</strong>${viewingOther ? ` — viewing <strong>${escapeHtml(otherAuthor)}</strong>'s note` : ""} — read-only. To write/edit your own lab notes, switch to <strong>User mode</strong>.
+    </div>` : "";
+
+  let body = "";
+  if (!ownNote || !entries.length) {
+    body = isAdmin
+      ? `<p class="empty">${viewingOther ? escapeHtml(otherAuthor) + " has" : "You have"} no animals recorded for ${iso}.</p>`
+      : `<p class="empty">No animals recorded for ${iso}. Click <strong>+ Add animal</strong> to start.</p>`;
+  } else {
+    body = `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, readOnly)).join("")}</div>`;
+  }
+
+  // Per-day add row + submit button
+  const addRow = `
+    <div class="add-row">
+      ${ readOnly ? "" : `<button class="btn-add" id="btn-add">+ Add animal</button>` }
+      ${ ownNote && entries.length && !readOnly ? `<button class="btn-finalize" id="btn-finalize" style="margin-left: 8px;">🔒 Finalize</button>` : "" }
+    </div>`;
+
+  $("#main").innerHTML = head + adminBanner + body + addRow;
+
+  // Admin: Unlock button for finalized notes
+  if (ownNote && ownNote.status !== "draft" && currentUser.effective_role === "admin") {
+    const actions = $("#day-actions");
+    actions.innerHTML = `<button class="btn-return" id="btn-unlock">Unlock</button>`;
+    $("#btn-unlock").addEventListener("click", () => returnNote(ownNote.id));
+  }
+
+  // Admin: user picker
+  const picker = $("#day-viewer-pick");
+  if (picker) {
+    picker.addEventListener("change", () => {
+      viewerUserId = picker.value;
+      const sel = allTodayNotes.find(n => n.user_id === viewerUserId);
+      todayNote = sel || null;
+      renderDay(iso, todayNote, allTodayNotes);
+    });
+  }
+
+  // Wire add + finalize
+  const addBtn = $("#btn-add");
+  if (addBtn) addBtn.addEventListener("click", () => openEntryForm(null));
+  const finBtn = $("#btn-finalize");
+  if (finBtn) finBtn.addEventListener("click", () => finalizeNote(ownNote.id));
+
+  // Wire entry edit/delete
+  $$(".entry [data-act='edit']").forEach(b => b.addEventListener("click", (e) => {
+    const idx = parseInt(e.target.dataset.idx);
+    openEntryForm(entries[idx], idx);
+  }));
+  $$(".entry [data-act='del']").forEach(b => b.addEventListener("click", (e) => {
+    const idx = parseInt(e.target.dataset.idx);
+    deleteEntry(idx);
+  }));
+}
+
+function normalizeEntry(e) {
+  if (e.recordings) return e;
+  if (e.cells) {
+    return { ...e, recordings: e.cells.map(c => ({ cell: c.cell || "", protocol: c.protocol || "", notes: c.notes || "" })) };
+  }
+  const recordings = (e.cell || e.protocol || e.notes)
+    ? [{ cell: e.cell || "", protocol: e.protocol || "", notes: e.notes || "" }]
+    : [];
+  return { ...e, recordings };
+}
+
+function computeFolderName(entry) {
+  const parts = [];
+  if (entry.exp_condition) parts.push(entry.exp_condition);
+  if (entry.exp_type)      parts.push(entry.exp_type);
+  if (entry.cohort)        parts.push(entry.cohort);
+  if (entry.mouse_id)      parts.push(`sub-${entry.mouse_id}`);
+  const days = entry.mouse?.days_in_condition;
+  if (days != null)        parts.push(`${days}d`);
+  if (!parts.length) return "(fill in fields)";
+  const initials = (currentUser?.initials || "").trim();
+  if (initials) parts.push(initials);   // experimenter initials always at the end
+  return parts.join("_");
+}
+
+// ── Naming conventions ───────────────────────────────────────────────────────
+let namingConventions = { exp_condition: [], exp_type: [], cell_type: [], protocol: [], agent: [] };
+// protocols keyed by cell_type value (populated on-demand)
+let protocolsByCell = {};
+
+async function loadNamingConventions() {
+  await Promise.all(["exp_condition", "exp_type", "cell_type", "protocol", "agent"].map(async cat => {
+    try {
+      const d = await api("GET", `/api/eln/naming-conventions?category=${cat}`);
+      namingConventions[cat] = d.items || [];
+    } catch (_) {}
+  }));
+  // Build per-cell-type protocol lookup from loaded protocols
+  // protocols with parent=null/undefined are "shared"; those with parent=cellType are specific
+  protocolsByCell = {};
+  for (const item of namingConventions.protocol) {
+    const key = item.parent || "";
+    if (!protocolsByCell[key]) protocolsByCell[key] = [];
+    protocolsByCell[key].push(item);
+  }
+  // Refresh datalist for agent
+  const dl = document.getElementById("nc-agent-list");
+  if (dl) dl.innerHTML = namingConventions.agent.map(i => `<option value="${escapeHtml(i.value)}">`).join("");
+}
+
+async function loadProtocolsForCellType(cellType) {
+  // Load protocols filtered by this cell type from the server
+  try {
+    const shared = await api("GET", `/api/eln/naming-conventions?category=protocol`);
+    const specific = cellType
+      ? await api("GET", `/api/eln/naming-conventions?category=protocol&parent=${encodeURIComponent(cellType)}`)
+      : { items: [] };
+    // combine: shared (no parent) + cell-type-specific
+    const sharedItems = (shared.items || []).filter(i => !i.parent);
+    const specificItems = specific.items || [];
+    return [...sharedItems, ...specificItems];
+  } catch (_) {
+    return [];
+  }
+}
+
+function buildSelectOptions(category, currentValue) {
+  const items = namingConventions[category] || [];
+  const known  = items.find(i => i.value === currentValue);
+  const isCustom = currentValue && !known;
+  let html = `<option value="">— select —</option>`;
+  html += items.map(i =>
+    `<option value="${escapeHtml(i.value)}" ${i.value === currentValue ? "selected" : ""}>${escapeHtml(i.label || i.value)}</option>`
+  ).join("");
+  html += `<option value="__custom__" ${isCustom ? "selected" : ""}>Custom…</option>`;
+  return html;
+}
+
+function buildProtocolSelectOptions(protocols, currentValue) {
+  const known = protocols.find(i => i.value === currentValue);
+  const isCustom = currentValue && !known;
+  let html = `<option value="">— select protocol —</option>`;
+  html += protocols.map(i =>
+    `<option value="${escapeHtml(i.value)}" ${i.value === currentValue ? "selected" : ""}>${escapeHtml(i.label || i.value)}</option>`
+  ).join("");
+  html += `<option value="__custom__" ${isCustom ? "selected" : ""}>Custom…</option>`;
+  return html;
+}
+
+function populateEntrySelects(expCond, expType, cellType) {
+  const selCond = $("#ef-exp-cond-sel");
+  const selType = $("#ef-exp-type-sel");
+  const selCell = $("#ef-cell-type-sel");
+  const inpCond = $("#ef-exp-cond");
+  const inpType = $("#ef-exp-type");
+  const inpCell = $("#ef-cell-type");
+  if (selCond) selCond.innerHTML = buildSelectOptions("exp_condition", expCond);
+  if (selType) selType.innerHTML = buildSelectOptions("exp_type", expType);
+  if (selCell) selCell.innerHTML = buildSelectOptions("cell_type", cellType || "");
+  // show/hide custom inputs
+  const condCustom = expCond && !namingConventions.exp_condition.find(i => i.value === expCond);
+  const typeCustom = expType && !namingConventions.exp_type.find(i => i.value === expType);
+  const cellCustom = cellType && !namingConventions.cell_type.find(i => i.value === cellType);
+  if (inpCond) { inpCond.style.display = condCustom ? "" : "none"; inpCond.value = condCustom ? expCond : ""; }
+  if (inpType) { inpType.style.display = typeCustom ? "" : "none"; inpType.value = typeCustom ? expType : ""; }
+  if (inpCell) { inpCell.style.display = cellCustom ? "" : "none"; inpCell.value = cellCustom ? cellType : ""; }
+}
+
+function getSelectOrCustom(selId, inputId) {
+  const sel = $(selId);
+  if (!sel) return $(inputId)?.value.trim() || "";
+  return sel.value === "__custom__" ? ($(inputId)?.value.trim() || "") : (sel.value || "");
+}
+
+// ── Filename ─────────────────────────────────────────────────────────────────
+function computeFilename(entry, rec) {
+  const initials   = currentUser?.initials || "";
+  const cohortCell = (entry.cohort || "") + (rec.cell || "");
+  const runStr     = String(rec.run_index ?? 0).padStart(4, "0");
+  const excSfx     = rec.excluded ? "_exclude" : "";
+  const parts = [initials, entry.exp_condition || "", entry.exp_type || "", cohortCell, rec.protocol || ""]
+    .filter(p => p !== "");
+  if (!parts.length) return "(fill in fields)";
+  return parts.join("_") + `_${runStr}${excSfx}.abf`;
+}
+
+function renderRecordingsTable(e, entryIdx, locked) {
+  const recs = e.recordings || [];
+  if (!recs.length) return `<p class="rec-empty">No recordings yet. Use "+ Add recording" below.</p>`;
+  const rows = recs.map((r, ri) => {
+    const fn     = computeFilename(e, r);
+    const runStr = String(r.run_index ?? 0).padStart(4, "0");
+    const excCls = r.excluded ? "rec-row-excluded" : "";
+    return `<tr class="${excCls}">
+      <td style="font-family:'SF Mono',Consolas,monospace;font-size:13px;font-weight:700;white-space:nowrap;">${escapeHtml(r.cell)}</td>
+      <td style="white-space:nowrap;">${escapeHtml(r.protocol)}</td>
+      <td style="font-family:'SF Mono',Consolas,monospace;font-size:11px;color:var(--grey);white-space:nowrap;">_${runStr}</td>
+      <td class="rec-fn">${escapeHtml(fn)}</td>
+      <td style="color:var(--grey);font-size:12px;">${escapeHtml(r.notes || "")}</td>
+      ${locked ? "" : `<td style="text-align:right;white-space:nowrap;">
+        <button class="btn-mini rec-excl-btn ${r.excluded ? "is-excluded" : ""}" data-eidx="${entryIdx}" data-ridx="${ri}" title="${r.excluded ? "Unmark exclude" : "Mark as excluded"}">excl</button>
+        <button class="btn-mini rec-repeat" data-eidx="${entryIdx}" data-ridx="${ri}" title="Add another run (+1)">+1</button>
+        <button class="btn-mini danger rec-del" data-eidx="${entryIdx}" data-ridx="${ri}" style="padding:2px 8px;font-size:12px;">×</button>
+      </td>`}
+    </tr>`;
+  }).join("");
+  return `<table class="rec-table">
+    <thead><tr>
+      <th>Cell</th><th>Protocol</th><th>Run</th><th>Filename</th><th>Notes</th>
+      ${locked ? "" : "<th></th>"}
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+// ── Per-cell recording parameters (Ra/Rin/Cm/Ihold/RMP + recording areas) ──
+const CELL_PARAM_FIELDS = [
+  { key: "ra",    label: "Ra",     unit: "MΩ" },
+  { key: "rin",   label: "Rin",    unit: "MΩ" },
+  { key: "cm",    label: "Cm",     unit: "pF" },
+  { key: "ihold", label: "Ihold",  unit: "pA" },
+  { key: "rmp",   label: "RMP",    unit: "mV" },
+  { key: "area1", label: "Area 1", unit: "" },
+  { key: "area2", label: "Area 2", unit: "" },
+  { key: "area3", label: "Area 3", unit: "" },
+  { key: "other", label: "Other",  unit: "" },
+];
+
+function distinctCells(e) {
+  const seen = [];
+  for (const r of (e.recordings || [])) {
+    const c = (r.cell || "").trim();
+    if (c && !seen.includes(c)) seen.push(c);
+  }
+  return seen;
+}
+
+function renderCellParams(e, idx, locked) {
+  const cells = distinctCells(e);
+  if (!cells.length) return "";
+  const cp = e.cell_params || {};
+  const head = `<th style="text-align:left;">Cell</th>` + CELL_PARAM_FIELDS.map(f =>
+    `<th style="font-weight:600;white-space:nowrap;">${f.label}${f.unit ? ` <span style="color:var(--grey);font-weight:400;font-size:10px;">${f.unit}</span>` : ""}</th>`).join("");
+  const rows = cells.map(cell => {
+    const vals = cp[cell] || {};
+    const tds = CELL_PARAM_FIELDS.map(f => {
+      const v = escapeHtml(vals[f.key] || "");
+      const w = f.unit ? "58px" : "92px";
+      if (locked) return `<td style="font-size:12px;">${v || '<span style="color:var(--grey);">—</span>'}</td>`;
+      return `<td><input class="cell-param-input" type="text" data-eidx="${idx}" data-cell="${escapeHtml(cell)}" data-field="${f.key}" value="${v}" style="width:${w};box-sizing:border-box;font-size:12px;padding:3px 5px;" /></td>`;
+    }).join("");
+    const shot = locked ? "" : `<button class="cp-shot" data-eidx="${idx}" data-cell="${escapeHtml(cell)}" title="Extract params from a test-pulse screenshot" style="margin-left:5px;border:1px solid #d6dae6;background:#fff;border-radius:5px;padding:1px 5px;cursor:pointer;font-size:12px;">📷</button>`;
+    return `<tr><td style="font-family:'SF Mono',Consolas,monospace;font-weight:700;font-size:13px;white-space:nowrap;">${escapeHtml(cell)}${shot}</td>${tds}</tr>`;
+  }).join("");
+  return `<div style="margin-top:10px;">
+    <div style="font-size:12px;color:var(--grey);font-weight:600;margin-bottom:4px;">Recording parameters (per cell)</div>
+    <div style="overflow-x:auto;"><table class="rec-table" style="font-size:12px;"><thead><tr>${head}</tr></thead><tbody>${rows}</tbody></table></div>
+  </div>`;
+}
+
+function fmtBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+// ── Data root: stored per-browser in localStorage ────────────────────────────
+const DATA_ROOT_KEY = "lab_eln_data_root";
+
+function getDataRoot() {
+  return localStorage.getItem(DATA_ROOT_KEY) || "";
+}
+function setDataRoot(path) {
+  if (path) localStorage.setItem(DATA_ROOT_KEY, path);
+  else localStorage.removeItem(DATA_ROOT_KEY);
+}
+
+function renderFolderSection(entry, idx, locked) {
+  const folderName = computeFolderName(entry);
+  const incomplete  = folderName === "(fill in fields)";
+
+  return `
+    <div class="entry-folder">
+      <div class="folder-row">
+        <span class="folder-icon">📁</span>
+        <span class="folder-name-code" title="${escapeHtml(folderName)}">${escapeHtml(folderName)}</span>
+        <button class="btn-mini folder-copy" data-folder="${escapeHtml(folderName)}" title="Copy folder name">Copy</button>
+      </div>
+      <div class="local-push" style="margin-top:8px;">
+        ${("showDirectoryPicker" in window) ? `
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span style="font-size:11px;color:var(--grey);white-space:nowrap;">Local (this computer):</span>
+          <span class="lp-root-name" style="font-size:11px;font-family:'SF Mono',Consolas,monospace;color:var(--navy);">${localRootHandle ? escapeHtml(localRootHandle.name) : '<span style="color:var(--grey);font-style:italic;">no folder set</span>'}</span>
+          <button class="btn-mini lp-pick-root" data-eidx="${idx}" type="button">📁 Data folder</button>
+          ${(!locked && !incomplete) ? `<button class="btn-mini lp-create" data-eidx="${idx}" data-folder="${escapeHtml(folderName)}" type="button">Create folder here</button>` : ""}
+          ${!incomplete ? `<button class="btn-mini lp-push" data-eidx="${idx}" data-folder="${escapeHtml(folderName)}" type="button">📤 Push</button>` : ""}
+        </div>
+        <div id="lp-status-${idx}" style="font-size:11px;color:var(--grey);margin-top:3px;"></div>
+        ` : `<div style="font-size:11px;color:var(--grey);">📤 Local folder creation and Push work only in <b>Chrome or Edge</b>.</div>`}
+      </div>
+    </div>`;
+}
+
+function renderEntry(rawEntry, idx, locked) {
+  const e = normalizeEntry(rawEntry);
+  const mouse = e.mouse || {};
+  const ageWk = mouse.age_weeks != null ? `${mouse.age_weeks}w` : "";
+  const days = mouse.days_in_condition != null ? `${mouse.days_in_condition}d` : "";
+  const isManual = mouse.from_db === false;
+  const meta = [e.exp_condition, e.exp_type, e.cohort ? `Cohort ${e.cohort}` : "", e.cell_type ? `Cell type: ${e.cell_type}` : ""].filter(Boolean).join(" · ");
+
+  const addForm = locked ? "" : `
+    <div class="rec-add-wrap" id="rec-add-wrap-${idx}" style="display:none;">
+      <!-- Step 1: enter cell number -->
+      <div id="rec-cell-mode-${idx}">
+        <div class="rec-form-row">
+          <div class="rf-cell">
+            <label class="rf-label">Cell #</label>
+            <input type="text" class="raf-cell" placeholder="01" data-eidx="${idx}" />
+          </div>
+          <div class="rf-celltype" style="flex:1;min-width:140px;">
+            <label class="rf-label">Cell type</label>
+            ${buildCellTypeSelect(e.cell_type || "", idx)}
+          </div>
+          <div style="align-self:flex-end; padding-bottom:1px;">
+            <button class="btn-add raf-set-cell" data-eidx="${idx}" style="padding:7px 16px;font-size:13px;">Set cell →</button>
+          </div>
+        </div>
+        <span class="raf-err" style="color:var(--red);font-size:12px;display:none;"></span>
+      </div>
+      <!-- Step 2: add protocols for the selected cell -->
+      <div id="rec-proto-mode-${idx}" style="display:none;">
+        <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+          <div style="font-size:12.5px; color:var(--grey);">
+            Cell: <strong id="rec-current-cell-${idx}" style="color:var(--navy); font-family:'SF Mono',Consolas,monospace; font-size:14px;"></strong>
+          </div>
+          <button class="btn-mini raf-new-cell" data-eidx="${idx}">+ New cell</button>
+        </div>
+        <div class="rec-form-row" style="flex-direction:column;gap:6px;">
+          <div class="rf-proto" style="width:100%;">
+            <label class="rf-label">Protocol</label>
+            ${buildEntryProtocolSelect(e.cell_type || "", "", idx)}
+          </div>
+          <div class="raf-suffix-wrap" style="display:none;"></div>
+          <div class="rf-notes" style="width:100%;">
+            <label class="rf-label">Notes (optional)</label>
+            <input type="text" class="raf-notes" placeholder="Anything unusual…" data-eidx="${idx}" style="width:100%;box-sizing:border-box;" />
+          </div>
+        </div>
+        <div class="rec-fn-preview" id="rec-fn-prev-${idx}">—</div>
+        <div class="rec-form-actions">
+          <button class="btn-add raf-add-protocol" data-eidx="${idx}" style="padding:8px 16px;font-size:13px;">+ Add protocol</button>
+          <button class="btn-return raf-done" data-eidx="${idx}" style="font-size:13px;">Done</button>
+          <span class="raf-err-proto" style="color:var(--red);font-size:12px;display:none;margin-left:8px;"></span>
+        </div>
+      </div>
+    </div>
+    <button class="btn-add-rec rec-add-toggle" id="rec-toggle-${idx}" data-eidx="${idx}">+ Add recording</button>`;
+
+  return `
+    <div class="entry" id="entry-${idx}">
+      <div class="entry-header">
+        <div class="entry-header-left">
+          <div class="entry-id">${escapeHtml(e.mouse_id || "(no ID)")}</div>
+          ${mouse.strain ? `<span class="chip">${escapeHtml(mouse.strain)}</span>` : ""}
+          ${mouse.sex ? `<span class="chip">${escapeHtml(mouse.sex)}</span>` : ""}
+          ${mouse.condition ? `<span class="chip">${escapeHtml(mouse.condition)}</span>` : ""}
+          ${ageWk ? `<span class="chip">${ageWk}</span>` : ""}
+          ${days ? `<span class="chip">${days} in cond</span>` : ""}
+          ${e.agent ? `<span class="chip warn">${escapeHtml(e.agent)}</span>` : ""}
+          ${e.behavior_exp?.done ? `<span class="chip" style="background:rgba(34,197,94,0.15);color:#166534;" title="${escapeHtml(e.behavior_exp.notes || "")}">🐭 Behavior</span>` : ""}
+          ${isManual ? `<span class="chip man" title="Not in animal DB">manual</span>` : ""}
+        </div>
+        ${locked ? "" : `<div class="entry-header-right">
+          <button class="btn-mini" data-act="edit" data-idx="${idx}">Edit info</button>
+          <button class="btn-mini danger" data-act="del" data-idx="${idx}">Delete</button>
+        </div>`}
+      </div>
+      ${meta ? `<div class="entry-meta">${escapeHtml(meta)}</div>` : ""}
+      <div id="rec-list-${idx}">${renderRecordingsTable(e, idx, locked)}</div>
+      <div id="cell-params-${idx}">${renderCellParams(e, idx, locked)}</div>
+      ${addForm}
+      ${renderFolderSection(e, idx, locked)}
+    </div>`;
+}
+
+// ───────────────────────────────────────────
+// Entry form (mouse-level only)
+// ───────────────────────────────────────────
+let editingIdx = null;
+let editingMouseCache = null;
+
+async function openEntryForm(entry, idx) {
+  editingIdx = (idx == null) ? null : idx;
+  $("#entry-title").textContent = editingIdx == null ? "Add animal" : "Edit animal info";
+  const norm = entry ? normalizeEntry(entry) : null;
+  $("#ef-mid").value          = norm?.mouse_id || "";
+  $("#ef-cohort-mouse").value = norm?.mouse?.cohort || "";
+  $("#ef-agent").value        = norm?.agent || "";
+  $("#ef-cohort").value       = norm?.cohort || "";
+  populateEntrySelects(norm?.exp_condition || "", norm?.exp_type || "", norm?.cell_type || "");
+  editingMouseCache = norm?.mouse || null;
+  if (editingMouseCache) renderMouseInfo(editingMouseCache);
+  else $("#ef-mouse-info").style.display = "none";
+  // behavior accompaniment
+  const bDone = !!(norm?.behavior_exp?.done);
+  $("#ef-behavior-done").checked = bDone;
+  $("#ef-behavior-notes-row").style.display = bDone ? "" : "none";
+  $("#ef-behavior-notes").value = norm?.behavior_exp?.notes || "";
+  $("#ef-msg").style.display = "none";
+  $("#ef-msg").className = "modal-msg";
+  $("#ef-mid-hint").textContent = "Press Tab to look up in animal DB.";
+  $("#modal-entry").style.display = "flex";
+  setTimeout(() => $("#ef-mid").focus(), 30);
+}
+
+function renderMouseInfo(m) {
+  const box = $("#ef-mouse-info");
+  if (m.from_db === false) {
+    box.className = "mouse-info manual";
+    box.innerHTML = `
+      <div><strong>Manual entry</strong> — this mouse is not in the animal DB.</div>
+      <div class="src-note">Use the prefix fields below to record what you know.</div>`;
+  } else {
+    box.className = "mouse-info";
+    box.innerHTML = `
+      <div><div class="l">Strain</div><div class="v">${escapeHtml(m.strain || "—")}</div></div>
+      <div><div class="l">Sex</div><div class="v">${escapeHtml(m.sex || "—")}</div></div>
+      <div><div class="l">Condition</div><div class="v">${escapeHtml(m.condition || "—")}</div></div>
+      <div><div class="l">DOB</div><div class="v">${escapeHtml(m.dob || "—")}</div></div>
+      <div><div class="l">Age</div><div class="v">${m.age_weeks != null ? m.age_weeks + " wks" : "—"}</div></div>
+      <div><div class="l">Days in cond</div><div class="v">${m.days_in_condition != null ? m.days_in_condition : "—"}</div></div>
+      <div class="src-note">Auto-filled from animal DB${m.condition_started_on ? ` (cond since ${m.condition_started_on})` : ""}.</div>`;
+  }
+  box.style.display = "";
+  $("#ef-cohort-mouse").value = m.cohort || "";
+}
+
+async function lookupMouse() {
+  const id = $("#ef-mid").value.trim();
+  if (!id) { editingMouseCache = null; $("#ef-mouse-info").style.display = "none"; return; }
+  $("#ef-mid-hint").textContent = "Looking up…";
+  try {
+    const data = await api("GET", `/api/eln/mice/${encodeURIComponent(id)}`);
+    editingMouseCache = data.mouse;
+    editingMouseCache.from_db = true;
+    renderMouseInfo(editingMouseCache);
+    $("#ef-mid-hint").textContent = "✓ Found in animal DB.";
+  } catch (e) {
+    if (e.status === 404) {
+      editingMouseCache = { from_db: false };
+      renderMouseInfo(editingMouseCache);
+      $("#ef-mid-hint").textContent = "Not in animal DB — manual entry mode.";
+    } else {
+      $("#ef-mid-hint").textContent = "Lookup error: " + e.message;
+    }
+  }
+}
+$("#ef-mid").addEventListener("blur", lookupMouse);
+$("#ef-mid").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); lookupMouse(); }
+});
+
+function readEntryFromForm() {
+  const existing = editingIdx != null
+    ? normalizeEntry(todayNote?.payload?.entries?.[editingIdx] || {})
+    : null;
+  return {
+    mouse_id:      $("#ef-mid").value.trim(),
+    mouse:         editingMouseCache || { from_db: false },
+    agent:         $("#ef-agent").value.trim(),
+    exp_condition: getSelectOrCustom("#ef-exp-cond-sel", "#ef-exp-cond"),
+    exp_type:      getSelectOrCustom("#ef-exp-type-sel", "#ef-exp-type"),
+    cell_type:     getSelectOrCustom("#ef-cell-type-sel", "#ef-cell-type"),
+    cohort:        $("#ef-cohort").value.trim(),
+    behavior_exp:  { done: $("#ef-behavior-done").checked, notes: $("#ef-behavior-notes").value.trim() },
+    recordings:    existing?.recordings || [],
+  };
+}
+
+$("#ef-save").addEventListener("click", async () => {
+  const entry = readEntryFromForm();
+  if (!entry.mouse_id) {
+    $("#ef-msg").className = "modal-msg error"; $("#ef-msg").textContent = "Mouse ID is required.";
+    return;
+  }
+  $("#ef-save").disabled = true;
+  try {
+    let entries = (todayNote?.payload?.entries) || [];
+    if (editingIdx == null) {
+      entries = [...entries, entry];
+    } else {
+      entries = entries.slice();
+      entries[editingIdx] = entry;
+    }
+    const payload = { entries };
+    if (!todayNote) {
+      const r = await api("POST", "/api/eln/notes", {
+        project_slug: projectSlug,
+        experiment_type: EXP_TYPE,
+        note_date: todayISO(),
+        payload,
+      });
+      todayNote = r.note;
+    } else {
+      const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload });
+      todayNote = r.note;
+    }
+    $("#modal-entry").style.display = "none";
+    await loadDay(todayISO(), true);
+    await renderCalendar();
+    // Auto-create data folder (fire-and-forget — don't block on failure)
+    createDataFolder(
+      editingIdx ?? (todayNote.payload.entries.length - 1),
+      entry,
+      null
+    ).catch(() => {});
+  } catch (e) {
+    $("#ef-msg").className = "modal-msg error"; $("#ef-msg").textContent = e.message;
+  } finally {
+    $("#ef-save").disabled = false;
+  }
+});
+
+async function deleteEntry(idx) {
+  if (!confirm("Delete this animal entry and all its recordings?")) return;
+  let entries = todayNote.payload.entries.slice();
+  entries.splice(idx, 1);
+  try {
+    const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { entries } });
+    todayNote = r.note;
+    await loadDay(todayISO(), true);
+    await renderCalendar();
+  } catch (e) { alert("Delete failed: " + e.message); }
+}
+
+// ───────────────────────────────────────────
+// Inline recordings management (auto-save)
+// ───────────────────────────────────────────
+async function saveNotePayload() {
+  const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { entries: todayNote.payload.entries } });
+  todayNote = r.note;
+}
+
+async function addRecordingToEntry(entryIdx, rec) {
+  const entries = todayNote.payload.entries;
+  const e = { ...normalizeEntry(entries[entryIdx]) };
+  e.recordings = [...(e.recordings || []), rec];
+  entries[entryIdx] = e;
+  const listEl = document.getElementById(`rec-list-${entryIdx}`);
+  if (listEl) listEl.innerHTML = renderRecordingsTable(e, entryIdx, false);
+  const cpEl = document.getElementById(`cell-params-${entryIdx}`);
+  if (cpEl) cpEl.innerHTML = renderCellParams(e, entryIdx, false);
+  try {
+    await saveNotePayload();
+  } catch (err) {
+    const errEl = document.querySelector(`#rec-add-wrap-${entryIdx} .raf-err`);
+    if (errEl) { errEl.textContent = `Save failed: ${err.message}`; errEl.style.display = ""; }
+  }
+}
+
+async function deleteRecordingFromEntry(entryIdx, recIdx) {
+  if (!confirm("Delete this recording?")) return;
+  const entries = todayNote.payload.entries;
+  const e = { ...normalizeEntry(entries[entryIdx]) };
+  e.recordings = (e.recordings || []).filter((_, i) => i !== recIdx);
+  entries[entryIdx] = e;
+  const listEl = document.getElementById(`rec-list-${entryIdx}`);
+  if (listEl) listEl.innerHTML = renderRecordingsTable(e, entryIdx, false);
+  const cpEl = document.getElementById(`cell-params-${entryIdx}`);
+  if (cpEl) cpEl.innerHTML = renderCellParams(e, entryIdx, false);
+  try {
+    await saveNotePayload();
+  } catch (err) { alert(`Delete failed: ${err.message}`); }
+}
+
+// eidx → current cell # string; null means cell-input mode
+// ── Data folder helpers ──────────────────────────────────────────────────────
+
+function renderFileList(data) {
+  const fullPath  = data.full_path  || "";
+  const dataRoot  = data.data_root  || "";
+  const files     = data.files      || [];
+  const relPath   = fullPath.startsWith(dataRoot)
+    ? fullPath.slice(dataRoot.length).replace(/^\//, "")
+    : fullPath;
+
+  let html = "";
+  if (!data.exists) {
+    html += `<div class="ff-empty">Folder not found on server. Click "Create folder" to make it.</div>`;
+  } else if (!files.length) {
+    html += `<div class="ff-empty">Folder is empty (no files yet).</div>`;
+  } else {
+    html += files.map(f => {
+      const mtime = f.mtime ? new Date(f.mtime).toLocaleDateString() : "";
+      return `<div class="folder-file-row">
+        <span class="ff-name">${escapeHtml(f.name)}</span>
+        <span class="ff-size">${fmtBytes(f.size)}</span>
+        <span class="ff-date">${mtime}</span>
+      </div>`;
+    }).join("");
+  }
+  if (fullPath) {
+    html += `<div class="folder-path-hint" style="padding:6px 14px;">
+      Server path: <code>${escapeHtml(fullPath)}</code>
+    </div>`;
+  }
+  return html;
+}
+
+function buildSliceMetadataText(entry, dateISO, author) {
+  const m   = entry.mouse || {};
+  const rec = entry.recordings || (entry.cells ? entry.cells.map(c => ({
+    cell: c.cell, protocol: c.protocol, notes: c.notes || ""
+  })) : []);
+  const sep = "=".repeat(60);
+  const lines = [];
+  lines.push(sep);
+  lines.push("Lab OS — Slice recording metadata");
+  lines.push(sep);
+  lines.push(`Date              : ${dateISO || "—"}`);
+  lines.push(`Experimenter      : ${author || "—"}${currentUser?.initials ? ` (${currentUser.initials})` : ""}`);
+  lines.push(`Generated         : ${new Date().toISOString()}`);
+  lines.push("");
+  lines.push("[Mouse]");
+  lines.push(`  Mouse ID        : ${entry.mouse_id || "—"}`);
+  lines.push(`  Cohort          : ${entry.cohort || "—"}`);
+  lines.push(`  Exp. condition  : ${entry.exp_condition || "—"}`);
+  lines.push(`  Exp. type       : ${entry.exp_type || "—"}`);
+  if (entry.cell_type) lines.push(`  Cell type       : ${entry.cell_type}`);
+  if (m.strain || m.sex || m.dob) {
+    lines.push(`  Strain          : ${m.strain || "—"}`);
+    lines.push(`  Sex             : ${m.sex || "—"}`);
+    lines.push(`  DOB             : ${m.dob || "—"}`);
+    if (m.age_weeks != null)         lines.push(`  Age             : ${m.age_weeks} wks`);
+    if (m.condition)                 lines.push(`  Condition       : ${m.condition}`);
+    if (m.days_in_condition != null) lines.push(`  Days in cond    : ${m.days_in_condition}`);
+    if (m.from_db === false)         lines.push(`  Source          : manual (not in animal DB)`);
+  }
+  lines.push("");
+  lines.push("[Recordings]");
+  if (!rec.length) {
+    lines.push("  (none)");
+  } else {
+    rec.forEach((r, i) => {
+      const run = (r.run_index != null) ? `_${String(r.run_index).padStart(4, "0")}` : "";
+      const exc = r.excluded ? "  [EXCLUDED]" : "";
+      lines.push(`  ${i + 1}. cell=${r.cell || "—"}${r.cell_type ? ` (${r.cell_type})` : ""}  protocol=${r.protocol || "—"}${run}${exc}`);
+      if (r.notes) lines.push(`     notes: ${r.notes}`);
+    });
+  }
+  if (entry.behavior_exp?.done) {
+    lines.push("");
+    lines.push("[Behavior accompaniment]");
+    lines.push(`  Notes           : ${entry.behavior_exp.notes || "(none)"}`);
+  }
+  lines.push("");
+  lines.push(sep);
+  return lines.join("\n") + "\n";
+}
+
+async function createDataFolder(eidx, entry, btn) {
+  const orig = btn ? btn.textContent : "";
+  if (btn) { btn.disabled = true; btn.textContent = "Creating…"; }
+  try {
+    const dr   = getDataRoot();
+    const dateISO = todayNote?.note_date || todayISO();
+    const author  = currentUser?.display_name || currentUser?.username || "";
+    const metaText = buildSliceMetadataText(entry, dateISO, author);
+    const body = {
+      entry,
+      metadata_text: metaText,
+      metadata_filename: "metadata.txt",
+    };
+    if (dr) body.data_root = dr;
+    const data = await api("POST", "/api/eln/data-folder", body);
+    const panel = document.getElementById(`folder-files-${eidx}`);
+    if (panel) {
+      panel.style.display = "";
+      panel.innerHTML = renderFileList(data);
+      const browseBtn = panel.closest(".entry-folder")?.querySelector(".folder-browse");
+      if (browseBtn) browseBtn.textContent = "Browse ▴";
+    }
+    if (btn) btn.textContent = data.created ? "Created ✓" : "Exists ✓";
+    setTimeout(() => { if (btn) { btn.disabled = false; btn.textContent = orig; } }, 2000);
+  } catch (e) {
+    if (btn) { btn.disabled = false; btn.textContent = orig; }
+    alert("Folder creation failed: " + e.message);
+  }
+}
+
+let formCellState = {};
+let formCellTypeState = {};   // eidx → cell type chosen for the cell being entered
+
+function getProtocolOptionsForEntry(cellType) {
+  const all = namingConventions.protocol || [];
+  // shared = no parent; specific = parent matches cellType
+  const shared   = all.filter(i => !i.parent);
+  const specific = cellType ? all.filter(i => i.parent === cellType) : [];
+  return [...shared, ...specific];
+}
+
+function buildEntryProtocolSelect(cellType, currentValue, eidx) {
+  const protos = getProtocolOptionsForEntry(cellType);
+  const known  = protos.find(i => i.value === currentValue);
+  const isCustom = currentValue && !known;
+  let opts = `<option value="">— select protocol —</option>`;
+  opts += protos.map(i =>
+    `<option value="${escapeHtml(i.value)}" ${i.value === currentValue ? "selected" : ""}>${escapeHtml(i.label || i.value)}</option>`
+  ).join("");
+  opts += `<option value="__custom__" ${isCustom ? "selected" : ""}>Custom…</option>`;
+  return `<select class="raf-protocol-sel" data-eidx="${eidx}" style="width:100%;">${opts}</select>
+    <input type="text" class="raf-protocol-custom" placeholder="Custom protocol…" data-eidx="${eidx}"
+      autocomplete="off" style="${isCustom ? "" : "display:none;"}margin-top:4px;width:100%;box-sizing:border-box;" />`;
+}
+
+// Cell-type picker shown at recording time (per cell — same animal can have
+// different cell types, and protocols are filtered by the chosen cell type).
+function buildCellTypeSelect(currentValue, eidx) {
+  const types = namingConventions.cell_type || [];
+  const known = types.find(i => i.value === currentValue);
+  const isCustom = currentValue && !known;
+  let opts = `<option value="">— cell type —</option>`;
+  opts += types.map(i =>
+    `<option value="${escapeHtml(i.value)}" ${i.value === currentValue ? "selected" : ""}>${escapeHtml(i.label || i.value)}</option>`
+  ).join("");
+  opts += `<option value="__custom__" ${isCustom ? "selected" : ""}>Custom…</option>`;
+  return `<select class="raf-celltype" data-eidx="${eidx}" style="width:100%;">${opts}</select>
+    <input type="text" class="raf-celltype-custom" placeholder="Custom cell type…" data-eidx="${eidx}"
+      autocomplete="off" value="${escapeHtml(isCustom ? currentValue : "")}" style="${isCustom ? "" : "display:none;"}margin-top:4px;width:100%;box-sizing:border-box;" />`;
+}
+
+// Returns true if the protocol name is LTDinduction-type (needs interval input)
+function isIntervalProtocol(proto) {
+  return proto.toLowerCase().includes("ltdinduction");
+}
+
+// Renders the suffix UI HTML for inside .raf-suffix-wrap
+function renderSuffixUI(proto) {
+  if (!proto) return "";
+  if (isIntervalProtocol(proto)) {
+    return `<span style="font-size:12px;color:var(--grey);">Interval:</span>
+      <input type="text" class="raf-interval" placeholder="e.g. 120ms" autocomplete="off" />`;
+  }
+  return `<span style="font-size:12px;color:var(--grey);">Suffix:</span>
+    <button type="button" class="btn-mini raf-sfx-btn raf-sfx-active" data-sfx="_base">_base</button>
+    <button type="button" class="btn-mini raf-sfx-btn" data-sfx="_post">_post</button>`;
+}
+
+function getSuffixFromWrap(wrap, baseProto) {
+  if (!baseProto) return "";
+  if (isIntervalProtocol(baseProto)) {
+    const iv = wrap.querySelector(".raf-interval")?.value.trim() || "";
+    return iv ? `_${iv}` : "";
+  }
+  const active = wrap.querySelector(".raf-sfx-btn.raf-sfx-active");
+  return active?.dataset.sfx || "_base";
+}
+
+function getBaseProtoFromWrap(wrap) {
+  const sel = wrap.querySelector(".raf-protocol-sel");
+  if (sel?.value === "__custom__") return wrap.querySelector(".raf-protocol-custom")?.value.trim() || "";
+  return sel?.value.trim() || "";
+}
+
+function getProtocolFromWrap(wrap) {
+  const base = getBaseProtoFromWrap(wrap);
+  if (!base) return "";
+  return base + getSuffixFromWrap(wrap, base);
+}
+
+function getNextRunIndex(eidx, cell, protocol) {
+  const entries = todayNote?.payload?.entries;
+  if (!entries) return 0;
+  const recs = normalizeEntry(entries[eidx]).recordings || [];
+  const same = recs.filter(r => r.cell === cell && r.protocol === protocol);
+  if (!same.length) return 0;
+  return Math.max(...same.map(r => r.run_index ?? 0)) + 1;
+}
+
+function recInlineFilenamePreview(eidx) {
+  const wrap = document.getElementById(`rec-add-wrap-${eidx}`);
+  if (!wrap || !todayNote?.payload?.entries) return;
+  const e = normalizeEntry(todayNote.payload.entries[eidx]);
+  const fn = computeFilename(e, {
+    cell:     formCellState[eidx] || wrap.querySelector(".raf-cell")?.value || "",
+    protocol: getProtocolFromWrap(wrap),
+  });
+  const prev = document.getElementById(`rec-fn-prev-${eidx}`);
+  if (prev) prev.textContent = fn;
+}
+
+function setCellInForm(eidx) {
+  const wrap = document.getElementById(`rec-add-wrap-${eidx}`);
+  if (!wrap) return;
+  const cell  = wrap.querySelector(".raf-cell")?.value.trim() || "";
+  const errEl = wrap.querySelector(".raf-err");
+  if (!cell) {
+    if (errEl) { errEl.textContent = "Cell # required."; errEl.style.display = ""; }
+    wrap.querySelector(".raf-cell")?.focus();
+    return;
+  }
+  if (errEl) errEl.style.display = "none";
+  // capture the per-cell cell type
+  const ctSel = wrap.querySelector(".raf-celltype");
+  let cellType = ctSel ? ctSel.value : "";
+  if (cellType === "__custom__") cellType = wrap.querySelector(".raf-celltype-custom")?.value.trim() || "";
+  formCellState[eidx] = cell;
+  formCellTypeState[eidx] = cellType;
+  document.getElementById(`rec-cell-mode-${eidx}`).style.display = "none";
+  document.getElementById(`rec-proto-mode-${eidx}`).style.display = "";
+  document.getElementById(`rec-current-cell-${eidx}`).textContent = cell + (cellType ? ` · ${cellType}` : "");
+  // protocols are filtered by cell type → rebuild the protocol picker for this cell
+  const protoWrap = wrap.querySelector(".rf-proto");
+  if (protoWrap) protoWrap.innerHTML = `<label class="rf-label">Protocol</label>` + buildEntryProtocolSelect(cellType, "", eidx);
+  const sfx = wrap.querySelector(".raf-suffix-wrap");
+  if (sfx) { sfx.style.display = "none"; sfx.innerHTML = ""; }
+  wrap.querySelector(".raf-protocol-sel")?.focus();
+  recInlineFilenamePreview(eidx);
+}
+
+function addProtocolToForm(eidx) {
+  const wrap     = document.getElementById(`rec-add-wrap-${eidx}`);
+  if (!wrap) return;
+  const cell     = formCellState[eidx] || "";
+  const baseProto = getBaseProtoFromWrap(wrap);
+  const errEl    = wrap.querySelector(".raf-err-proto");
+
+  if (!baseProto) {
+    if (errEl) { errEl.textContent = "Protocol required."; errEl.style.display = ""; }
+    wrap.querySelector(".raf-protocol-sel")?.focus();
+    return;
+  }
+  // Validate interval for LTDinduction
+  if (isIntervalProtocol(baseProto)) {
+    const iv = wrap.querySelector(".raf-interval")?.value.trim();
+    if (!iv) {
+      if (errEl) { errEl.textContent = "Interval required (e.g. 120ms)."; errEl.style.display = ""; }
+      wrap.querySelector(".raf-interval")?.focus();
+      return;
+    }
+  }
+
+  const protocol = getProtocolFromWrap(wrap);
+  const notes    = wrap.querySelector(".raf-notes")?.value.trim() || "";
+  const run_index = getNextRunIndex(eidx, cell, protocol);
+
+  if (errEl) errEl.style.display = "none";
+
+  // Reset form
+  const sel = wrap.querySelector(".raf-protocol-sel");
+  if (sel) sel.value = "";
+  const customInp = wrap.querySelector(".raf-protocol-custom");
+  if (customInp) { customInp.value = ""; customInp.style.display = "none"; }
+  const suffixWrap = wrap.querySelector(".raf-suffix-wrap");
+  if (suffixWrap) { suffixWrap.style.display = "none"; suffixWrap.innerHTML = ""; }
+  wrap.querySelector(".raf-notes").value = "";
+  const prev = document.getElementById(`rec-fn-prev-${eidx}`);
+  if (prev) prev.textContent = "—";
+  wrap.querySelector(".raf-protocol-sel")?.focus();
+
+  addRecordingToEntry(eidx, { cell, cell_type: formCellTypeState[eidx] || "", protocol, notes, run_index, excluded: false });
+}
+
+async function finalizeNote(noteId) {
+  if (!confirm("Finalize this note? It will be locked, then its data folder(s) auto-copied to your push destinations.")) return;
+  // Capture the data folders to push BEFORE the lock + reload changes the view.
+  const folders = (FSA_OK && localRootHandle && localDestHandles.length)
+    ? [...new Set((entries || [])
+        .map(e => computeFolderName(normalizeEntry(e)))
+        .filter(f => f && f !== "(fill in fields)"))]
+    : [];
+  try {
+    const r = await api("POST", `/api/eln/notes/${noteId}/approve`);
+    todayNote = r.note;
+    await loadDay(todayISO(), true);
+    await renderCalendar();
+    if (folders.length) await autoPushFolders(noteId, folders);
+  } catch (e) { alert("Finalize failed: " + e.message); }
+}
+async function returnNote(noteId) {
+  if (!confirm("Unlock this note for editing?")) return;
+  try {
+    const r = await api("POST", `/api/eln/notes/${noteId}/return`);
+    todayNote = r.note;
+    await loadDay(todayISO(), true);
+    await renderCalendar();
+  } catch (e) { alert("Unlock failed: " + e.message); }
+}
+
+// modal close
+document.querySelectorAll("[data-close]").forEach(el => {
+  el.addEventListener("click", () => { $("#" + el.dataset.close).style.display = "none"; });
+});
+document.querySelectorAll(".modal-overlay").forEach(ov => {
+  ov.addEventListener("click", (e) => { if (e.target === ov) ov.style.display = "none"; });
+});
+
+// modal drag (by header)
+(function setupModalDragging() {
+  document.querySelectorAll(".modal-head").forEach(head => {
+    head.style.cursor = "move";
+    head.style.userSelect = "none";
+    head.addEventListener("mousedown", (e) => {
+      if (e.target.closest("button")) return;
+      const modal = head.closest(".modal");
+      if (!modal) return;
+      const m = (modal.style.transform || "").match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      const startTx = m ? parseFloat(m[1]) : 0;
+      const startTy = m ? parseFloat(m[2]) : 0;
+      const startX = e.clientX, startY = e.clientY;
+      const onMove = (ev) => {
+        modal.style.transform = `translate(${startTx + ev.clientX - startX}px, ${startTy + ev.clientY - startY}px)`;
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      e.preventDefault();
+    });
+  });
+  document.querySelectorAll(".modal-overlay").forEach(ov => {
+    const modal = ov.querySelector(".modal");
+    if (!modal) return;
+    const reset = () => { modal.style.transform = ""; };
+    ov.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", reset));
+    ov.addEventListener("click", (e) => { if (e.target === ov) reset(); });
+  });
+})();
+
+// ───────────────────────────────────────────
+// Past day viewer (popup)
+// ───────────────────────────────────────────
+async function openDayViewer(iso) {
+  $("#viewer-title").textContent = fmtLong(iso);
+  $("#viewer-entries").innerHTML = '<p class="empty">Loading…</p>';
+  $("#viewer-meta").innerHTML = "";
+  $("#modal-viewer").style.display = "flex";
+  try {
+    const data = await api("GET",
+      `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes?experiment_type=${EXP_TYPE}&date=${iso}`);
+    const notes = data.notes || [];
+    if (!notes.length) {
+      $("#viewer-entries").innerHTML = '<p class="empty">No entries for this date.</p>';
+      return;
+    }
+    // Show all notes for this date (could be multiple authors in admin mode)
+    const blocks = notes.map(n => {
+      const author = n.author?.display_name || n.author?.username || "—";
+      const entries = (n.payload?.entries || []);
+      const list = entries.length
+        ? `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, true)).join("")}</div>`
+        : `<p class="empty">No entries.</p>`;
+      return `
+        <div style="margin-bottom: 18px;">
+          <div class="day-popup-meta">
+            <span class="status-pill ${n.status === "draft" ? "draft" : "approved"}">${n.status === "draft" ? "Draft" : "Finalized"}</span>
+            <span>by ${escapeHtml(author)}</span>
+            <span>· updated ${(n.updated_at || "").slice(0,16).replace("T"," ")}</span>
+          </div>
+          ${list}
+        </div>`;
+    }).join("");
+    $("#viewer-entries").innerHTML = blocks;
+  } catch (e) {
+    $("#viewer-entries").innerHTML = `<p class="empty">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// ───────────────────────────────────────────
+// Inline recording event delegation
+// Attached to #main element (persists across innerHTML replacements)
+// ───────────────────────────────────────────
+document.getElementById("main").addEventListener("click", (ev) => {
+  const tgt = ev.target;
+
+  if (tgt.classList.contains("rec-add-toggle")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const wrap = document.getElementById(`rec-add-wrap-${eidx}`);
+    if (wrap) {
+      const hasCellSet = !!formCellState[eidx];
+      document.getElementById(`rec-cell-mode-${eidx}`).style.display  = hasCellSet ? "none" : "";
+      document.getElementById(`rec-proto-mode-${eidx}`).style.display = hasCellSet ? "" : "none";
+      if (hasCellSet) document.getElementById(`rec-current-cell-${eidx}`).textContent = formCellState[eidx];
+      wrap.style.display = "";
+      (hasCellSet ? wrap.querySelector(".raf-protocol-sel") : wrap.querySelector(".raf-cell"))?.focus();
+    }
+    tgt.style.display = "none";
+    return;
+  }
+
+  if (tgt.classList.contains("raf-set-cell")) {
+    setCellInForm(parseInt(tgt.dataset.eidx));
+    return;
+  }
+
+  if (tgt.classList.contains("raf-new-cell")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    formCellState[eidx] = null;
+    document.getElementById(`rec-proto-mode-${eidx}`).style.display = "none";
+    document.getElementById(`rec-cell-mode-${eidx}`).style.display  = "";
+    const wrap = document.getElementById(`rec-add-wrap-${eidx}`);
+    if (wrap) { wrap.querySelector(".raf-cell").value = ""; wrap.querySelector(".raf-cell")?.focus(); }
+    return;
+  }
+
+  if (tgt.classList.contains("raf-add-protocol")) {
+    addProtocolToForm(parseInt(tgt.dataset.eidx));
+    return;
+  }
+
+  if (tgt.classList.contains("raf-sfx-btn")) {
+    const wrap = tgt.closest(".rec-add-wrap");
+    if (!wrap) return;
+    wrap.querySelectorAll(".raf-sfx-btn").forEach(b => b.classList.remove("raf-sfx-active"));
+    tgt.classList.add("raf-sfx-active");
+    const eidx = parseInt(wrap.id.replace("rec-add-wrap-", ""));
+    recInlineFilenamePreview(eidx);
+    return;
+  }
+
+  if (tgt.classList.contains("rec-excl-btn")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const ridx = parseInt(tgt.dataset.ridx);
+    const entries = todayNote?.payload?.entries;
+    if (!entries) return;
+    const e = normalizeEntry(entries[eidx]);
+    const oldRec = e.recordings[ridx];
+    const oldFn  = computeFilename(e, oldRec);
+    const newRec = { ...oldRec, excluded: !oldRec.excluded };
+    const newFn  = computeFilename(e, newRec);
+    e.recordings[ridx] = newRec;
+    entries[eidx] = e;
+    document.getElementById(`rec-list-${eidx}`).innerHTML = renderRecordingsTable(e, eidx, false);
+    saveNotePayload().catch(err => alert("Save failed: " + err.message));
+    // Rename the actual file on disk if data root is configured
+    const dr = getDataRoot();
+    if (dr && oldFn && oldFn !== "(fill in fields)" && oldFn !== newFn) {
+      const folderName = computeFolderName(e);
+      api("POST", "/api/eln/rename-file", {
+        folder_name: folderName,
+        old_name: oldFn,
+        new_name: newFn,
+        data_root: dr,
+      }).then(() => {
+        // briefly show renamed status on the row button
+        const newBtn = document.querySelector(`[data-eidx="${eidx}"][data-ridx="${ridx}"].rec-excl-btn`);
+        if (newBtn) { const t = newBtn.textContent; newBtn.textContent = "renamed ✓"; setTimeout(() => { newBtn.textContent = t; }, 1800); }
+      }).catch(err => {
+        const msg = err.status === 404
+          ? "File not found on disk — exclude marked in notes only."
+          : `Rename failed: ${err.message}`;
+        alert(msg);
+      });
+    }
+    return;
+  }
+
+  if (tgt.classList.contains("rec-repeat")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const ridx = parseInt(tgt.dataset.ridx);
+    const entries = todayNote?.payload?.entries;
+    if (!entries) return;
+    const e = normalizeEntry(entries[eidx]);
+    const orig = e.recordings[ridx];
+    if (!orig) return;
+    const same = e.recordings.filter(r => r.cell === orig.cell && r.protocol === orig.protocol);
+    const nextRun = Math.max(...same.map(r => r.run_index ?? 0)) + 1;
+    addRecordingToEntry(eidx, { cell: orig.cell, protocol: orig.protocol, notes: orig.notes || "", run_index: nextRun, excluded: false });
+    return;
+  }
+
+  if (tgt.classList.contains("raf-done")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const wrap = document.getElementById(`rec-add-wrap-${eidx}`);
+    if (wrap) wrap.style.display = "none";
+    const btn = document.getElementById(`rec-toggle-${eidx}`);
+    if (btn) btn.style.display = "";
+    return;
+  }
+
+  if (tgt.classList.contains("rec-del")) {
+    deleteRecordingFromEntry(parseInt(tgt.dataset.eidx), parseInt(tgt.dataset.ridx));
+    return;
+  }
+
+  // ── Folder actions ──
+  if (tgt.classList.contains("folder-copy")) {
+    navigator.clipboard?.writeText(tgt.dataset.folder || "").catch(() => {});
+    const orig = tgt.textContent;
+    tgt.textContent = "Copied!";
+    setTimeout(() => { tgt.textContent = orig; }, 1200);
+    return;
+  }
+
+  if (tgt.classList.contains("folder-create")) {
+    const eidx   = parseInt(tgt.dataset.eidx);
+    const entry  = normalizeEntry(todayNote?.payload?.entries?.[eidx] || {});
+    createDataFolder(eidx, entry, tgt);
+    return;
+  }
+
+  if (tgt.classList.contains("folder-browse")) {
+    const eidx  = parseInt(tgt.dataset.eidx);
+    const panel = document.getElementById(`folder-files-${eidx}`);
+    if (!panel) return;
+    if (panel.style.display !== "none") {
+      panel.style.display = "none";
+      tgt.textContent = "Browse ▾";
+      return;
+    }
+    tgt.textContent = "Browse ▴";
+    panel.style.display = "";
+    panel.innerHTML = `<div class="ff-empty">Loading…</div>`;
+    const dr = getDataRoot();
+    const url = `/api/eln/data-folder?folder_name=${encodeURIComponent(tgt.dataset.folder)}` +
+                (dr ? `&data_root=${encodeURIComponent(dr)}` : "");
+    api("GET", url)
+      .then(d => { panel.innerHTML = renderFileList(d); })
+      .catch(e => { panel.innerHTML = `<div class="ff-empty">${escapeHtml(e.message)}</div>`; });
+    return;
+  }
+
+  if (tgt.classList.contains("folder-copy-full")) {
+    navigator.clipboard?.writeText(tgt.dataset.path || "").catch(() => {});
+    const orig = tgt.textContent;
+    tgt.textContent = "Copied!";
+    setTimeout(() => { tgt.textContent = orig; }, 1200);
+    return;
+  }
+
+  if (tgt.classList.contains("folder-set-root")) {
+    const folderDiv = tgt.closest(".entry-folder");
+    const eidx = folderDiv?.querySelector(".folder-root-save")?.dataset.eidx;
+    if (eidx == null) return;
+    const editEl = document.getElementById(`folder-root-edit-${eidx}`);
+    if (editEl) { editEl.style.display = ""; editEl.querySelector(".folder-root-input")?.focus(); }
+    return;
+  }
+
+  if (tgt.classList.contains("folder-root-cancel")) {
+    const editEl = document.getElementById(`folder-root-edit-${tgt.dataset.eidx}`);
+    if (editEl) editEl.style.display = "none";
+    return;
+  }
+
+  if (tgt.classList.contains("folder-root-browse")) {
+    openFolderPicker();
+    return;
+  }
+
+  if (tgt.classList.contains("folder-root-save")) {
+    const eidx  = tgt.dataset.eidx;
+    const editEl = document.getElementById(`folder-root-edit-${eidx}`);
+    const newRoot = editEl?.querySelector(".folder-root-input")?.value.trim() || "";
+    setDataRoot(newRoot);
+    // Re-render all entry cards to reflect new path
+    const entries = todayNote?.payload?.entries || [];
+    entries.forEach((raw, i) => {
+      const card = document.getElementById(`entry-${i}`);
+      if (!card) return;
+      const folderDiv = card.querySelector(".entry-folder");
+      if (!folderDiv) return;
+      const e = normalizeEntry(raw);
+      folderDiv.outerHTML = renderFolderSection(e, i, false);
+    });
+    return;
+  }
+});
+
+document.getElementById("main").addEventListener("input", (ev) => {
+  const tgt = ev.target;
+  if (tgt.classList.contains("raf-protocol-custom") || tgt.classList.contains("raf-interval")) {
+    const wrap = tgt.closest(".rec-add-wrap");
+    if (wrap) recInlineFilenamePreview(parseInt(wrap.id.replace("rec-add-wrap-", "")));
+  }
+});
+
+document.getElementById("main").addEventListener("change", (ev) => {
+  const tgt = ev.target;
+  if (tgt.classList.contains("raf-celltype")) {
+    const wrap = tgt.closest(".rec-add-wrap");
+    const customInp = wrap?.querySelector(".raf-celltype-custom");
+    if (customInp) {
+      const isCustom = tgt.value === "__custom__";
+      customInp.style.display = isCustom ? "" : "none";
+      if (isCustom) { customInp.value = ""; customInp.focus(); }
+    }
+    return;
+  }
+  if (tgt.classList.contains("raf-protocol-sel")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const wrap = document.getElementById(`rec-add-wrap-${eidx}`);
+    if (!wrap) return;
+    // toggle custom input
+    const customInp = wrap.querySelector(".raf-protocol-custom");
+    const isCustom = tgt.value === "__custom__";
+    if (customInp) {
+      customInp.style.display = isCustom ? "" : "none";
+      if (isCustom) { customInp.value = ""; customInp.focus(); }
+    }
+    // render suffix UI
+    const suffixWrap = wrap.querySelector(".raf-suffix-wrap");
+    if (suffixWrap) {
+      const proto = isCustom ? "" : tgt.value;
+      if (proto) {
+        suffixWrap.style.display = "";
+        suffixWrap.innerHTML = renderSuffixUI(proto);
+      } else {
+        suffixWrap.style.display = "none";
+        suffixWrap.innerHTML = "";
+      }
+    }
+    recInlineFilenamePreview(eidx);
+  }
+});
+
+document.getElementById("main").addEventListener("keydown", (ev) => {
+  const tgt = ev.target;
+  if (!tgt.dataset?.eidx && !tgt.closest(".rec-add-wrap")) return;
+  const wrap = tgt.closest(".rec-add-wrap");
+  const eidx = wrap ? parseInt(wrap.id.replace("rec-add-wrap-", "")) : parseInt(tgt.dataset.eidx);
+  if (isNaN(eidx)) return;
+  if (tgt.classList.contains("raf-cell") && ev.key === "Enter") {
+    ev.preventDefault();
+    setCellInForm(eidx);
+  } else if (tgt.classList.contains("raf-interval") && ev.key === "Enter") {
+    ev.preventDefault();
+    wrap?.querySelector(".raf-notes")?.focus();
+  } else if (tgt.classList.contains("raf-protocol-custom") && ev.key === "Enter") {
+    ev.preventDefault();
+    wrap?.querySelector(".raf-notes")?.focus();
+  } else if (tgt.classList.contains("raf-notes") && ev.key === "Enter") {
+    ev.preventDefault();
+    addProtocolToForm(eidx);
+  }
+});
+
+// ════════════ Client-side data folder + multi-destination push ════════════
+// File System Access API (Chrome/Edge). Copies a recording's local data folder
+// to 1–3 destinations (Drive-Desktop folder, portable drive, …) in the browser
+// — no server, no GCP egress.
+const FSA_OK = typeof window !== "undefined" && "showDirectoryPicker" in window;
+let localRootHandle = null;   // where .abf are saved (data root)
+let localDestHandles = [];    // [{name, handle}] push destinations
+let pushCtx = { eidx: null, folderName: "" };
+
+function fsaIdb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open("labos_fsa", 1);
+    r.onupgradeneeded = () => r.result.createObjectStore("h");
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+function fsaPut(key, val) {
+  return fsaIdb().then(db => new Promise((res, rej) => {
+    const tx = db.transaction("h", "readwrite");
+    tx.objectStore("h").put(val, key);
+    tx.oncomplete = () => res(); tx.onerror = () => rej(tx.error);
+  }));
+}
+function fsaGet(key) {
+  return fsaIdb().then(db => new Promise((res, rej) => {
+    const tx = db.transaction("h", "readonly");
+    const rq = tx.objectStore("h").get(key);
+    rq.onsuccess = () => res(rq.result || null); rq.onerror = () => rej(rq.error);
+  }));
+}
+async function fsaPerm(handle, mode) {
+  if (!handle) return false;
+  const o = { mode: mode || "readwrite" };
+  if ((await handle.queryPermission(o)) === "granted") return true;
+  return (await handle.requestPermission(o)) === "granted";
+}
+async function loadLocalHandles() {
+  if (!FSA_OK) return;
+  try {
+    localRootHandle = await fsaGet("data_root");
+    localDestHandles = (await fsaGet("destinations")) || [];
+    if (localRootHandle) document.querySelectorAll(".lp-root-name").forEach(el => el.textContent = localRootHandle.name);
+  } catch (_) {}
+}
+async function lpPickRoot() {
+  if (!FSA_OK) { alert("This feature works only in Chrome or Edge."); return; }
+  try {
+    const h = await window.showDirectoryPicker({ mode: "readwrite" });
+    localRootHandle = h;
+    await fsaPut("data_root", h);
+    document.querySelectorAll(".lp-root-name").forEach(el => el.textContent = h.name);
+  } catch (e) { if (e.name !== "AbortError") alert("Failed to choose folder: " + e.message); }
+}
+async function lpCreateFolder(eidx, folderName) {
+  const st = document.getElementById("lp-status-" + eidx);
+  if (!localRootHandle) { alert("Choose a '📁 Data folder' first."); return; }
+  try {
+    if (!(await fsaPerm(localRootHandle))) { alert("Folder permission is required."); return; }
+    const dir = await localRootHandle.getDirectoryHandle(folderName, { create: true });
+    const entry = normalizeEntry(todayNote.payload.entries[eidx]);
+    const meta = buildSliceMetadataText(entry, todayNote?.note_date || todayISO(), currentUser?.display_name || "");
+    const fh = await dir.getFileHandle("metadata.txt", { create: true });
+    const w = await fh.createWritable(); await w.write(meta); await w.close();
+    if (st) { st.textContent = `✓ Created: ${localRootHandle.name}/${folderName} (with metadata.txt)`; st.style.color = "#1F7A3A"; }
+  } catch (e) { if (st) { st.textContent = "Failed to create: " + e.message; st.style.color = "#b91c1c"; } }
+}
+async function copyFolderInto(srcDir, destParent, folderName) {
+  const dest = await destParent.getDirectoryHandle(folderName, { create: true });
+  let n = 0;
+  for await (const [name, handle] of srcDir.entries()) {
+    if (handle.kind === "file") {
+      const file = await handle.getFile();
+      const fh = await dest.getFileHandle(name, { create: true });
+      const w = await fh.createWritable(); await w.write(await file.arrayBuffer()); await w.close();
+      n++;
+    }
+  }
+  return n;
+}
+function renderPushDests() {
+  const list = document.getElementById("push-dest-list");
+  if (!list) return;
+  list.innerHTML = localDestHandles.length
+    ? localDestHandles.map((d, i) =>
+        `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;">
+           <span style="font-family:'SF Mono',Consolas,monospace;font-size:13px;">📂 ${escapeHtml(d.name)}</span>
+           <button class="btn-mini danger push-del-dest" data-i="${i}" type="button" style="margin-left:auto;">Remove</button>
+         </div>`).join("")
+    : `<div style="color:var(--grey);font-size:12px;font-style:italic;">No destinations. Use "+ Add destination" to choose a Drive / external folder.</div>`;
+}
+function openPushModal(eidx, folderName) {
+  pushCtx = { eidx, folderName };
+  document.getElementById("push-folder-name").textContent = folderName;
+  document.getElementById("push-progress").innerHTML = "";
+  renderPushDests();
+  document.getElementById("modal-push").style.display = "flex";
+}
+async function pushAddDest() {
+  if (!FSA_OK) { alert("Works only in Chrome/Edge."); return; }
+  if (localDestHandles.length >= 3) { alert("Up to 3 destinations."); return; }
+  try {
+    const h = await window.showDirectoryPicker({ mode: "readwrite" });
+    localDestHandles.push({ name: h.name, handle: h });
+    await fsaPut("destinations", localDestHandles);
+    renderPushDests();
+  } catch (e) { if (e.name !== "AbortError") alert("Failed to add destination: " + e.message); }
+}
+async function doPush() {
+  const prog = document.getElementById("push-progress");
+  const folderName = pushCtx.folderName;
+  if (!localRootHandle) { alert("Choose a data folder first."); return; }
+  if (!localDestHandles.length) { alert("Add at least one destination."); return; }
+  try {
+    if (!(await fsaPerm(localRootHandle, "read"))) { alert("Source folder permission is required."); return; }
+    const srcDir = await localRootHandle.getDirectoryHandle(folderName, { create: false });
+    prog.innerHTML = "";
+    for (const d of localDestHandles) {
+      const line = document.createElement("div");
+      line.style.cssText = "font-size:12px;margin-top:4px;";
+      line.textContent = `→ ${d.name}: copying…`;
+      prog.appendChild(line);
+      try {
+        if (!(await fsaPerm(d.handle))) { line.textContent = `→ ${d.name}: permission denied`; line.style.color = "#b91c1c"; continue; }
+        const n = await copyFolderInto(srcDir, d.handle, folderName);
+        line.textContent = `→ ${d.name}: ✓ ${n} file(s) copied`; line.style.color = "#1F7A3A";
+      } catch (e) { line.textContent = `→ ${d.name}: failed (${e.message})`; line.style.color = "#b91c1c"; }
+    }
+  } catch (e) {
+    prog.innerHTML = `<div style="color:#b91c1c;font-size:12px;">Source folder '${escapeHtml(folderName)}' not found — create it with 'Create folder here', or save the .abf into that folder. (${escapeHtml(e.message)})</div>`;
+  }
+}
+
+// ── Reusable push core + auto-push on finalize ──────────────────────────────
+async function pushOneFolder(folderName, logFn) {
+  if (!localRootHandle) throw new Error("No data-folder root chosen.");
+  const srcDir = await localRootHandle.getDirectoryHandle(folderName, { create: false });
+  const results = [];
+  for (const d of localDestHandles) {
+    try {
+      if (!(await fsaPerm(d.handle))) { results.push({ name: d.name, ok: false, error: "permission denied" }); logFn && logFn(`→ ${d.name}: permission denied`, false); continue; }
+      const n = await copyFolderInto(srcDir, d.handle, folderName);
+      results.push({ name: d.name, ok: true, files: n }); logFn && logFn(`→ ${d.name}: ✓ ${n} file(s)`, true);
+    } catch (e) { results.push({ name: d.name, ok: false, error: e.message }); logFn && logFn(`→ ${d.name}: failed (${e.message})`, false); }
+  }
+  return { folder: folderName, results };
+}
+function pushProgressOpen(title) {
+  document.getElementById("push-folder-name").textContent = title;
+  document.getElementById("push-progress").innerHTML = "";
+  renderPushDests();
+  document.getElementById("modal-push").style.display = "flex";
+}
+function pushProgressLine(text, ok) {
+  const prog = document.getElementById("push-progress");
+  const line = document.createElement("div");
+  line.style.cssText = "font-size:12px;margin-top:4px;" + (ok === true ? "color:#1F7A3A;" : ok === false ? "color:#b91c1c;" : "");
+  line.textContent = text;
+  prog.appendChild(line);
+}
+// Copy a finalized note's pre-captured data folder(s) to the ≤3 destinations,
+// then record provenance to the audit log. Best-effort (never un-finalizes).
+async function autoPushFolders(noteId, folders) {
+  pushProgressOpen("Finalizing — copying data folder(s)…");
+  const recorded = [];
+  for (const f of folders) {
+    pushProgressLine(`Folder ${f}:`);
+    try {
+      const res = await pushOneFolder(f, (msg, ok) => pushProgressLine("  " + msg, ok));
+      res.results.forEach(r => recorded.push({ folder: f, name: r.name, ok: r.ok, files: r.files || 0 }));
+    } catch (e) {
+      pushProgressLine(`  ✗ ${e.message}`, false);
+      recorded.push({ folder: f, ok: false, error: e.message });
+    }
+  }
+  pushProgressLine(`Done — ${recorded.filter(r => r.ok).length}/${recorded.length} copies ok.`, recorded.every(r => r.ok));
+  try { await api("POST", `/api/eln/notes/${noteId}/push-record`, { folders, destinations: recorded }); }
+  catch (e) { console.warn("push-record failed:", e.message); }
+}
+
+document.getElementById("main").addEventListener("click", (ev) => {
+  const t = ev.target;
+  if (t.classList.contains("lp-pick-root")) { lpPickRoot(); return; }
+  if (t.classList.contains("lp-create"))    { lpCreateFolder(parseInt(t.dataset.eidx), t.dataset.folder); return; }
+  if (t.classList.contains("lp-push"))       { openPushModal(parseInt(t.dataset.eidx), t.dataset.folder); return; }
+});
+document.getElementById("push-add-dest")?.addEventListener("click", pushAddDest);
+document.getElementById("push-go")?.addEventListener("click", doPush);
+document.getElementById("push-dest-list")?.addEventListener("click", async (ev) => {
+  const b = ev.target.closest(".push-del-dest");
+  if (!b) return;
+  localDestHandles.splice(parseInt(b.dataset.i), 1);
+  await fsaPut("destinations", localDestHandles);
+  renderPushDests();
+});
+loadLocalHandles();
+
+boot();
+</script>
+<script src="/labos-nav.js" defer></script>
+<script>/* Lab OS guided tour — dependency-free, auto-skips missing targets */
+(function(){
+  if(window.__labosTour) return;
+  var STEPS = [
+ {sel:'#cal-grid', t:'Calendar', b:'Pick a date. Dots: <b>blue = draft</b>, <b>green = finalized</b>; the outlined day is today.'},
+ {sel:'#btn-add', t:'+ Add animal', b:'Open the entry form. Type the <b>Mouse ID</b> first and press Tab to auto-fill from the animal DB.'},
+ {sel:'.rec-add-toggle', t:'+ Add recording', b:'Two steps: set the <b>Cell #</b>, then add protocols. Each run gets an auto <code>.abf</code> filename.'},
+ {sel:'#btn-finalize', t:'\u{1F512} Finalize', b:'Locks the day to read-only and turns the calendar dot green. An admin can Unlock.'},
+ {sel:'#btn-export', t:'\u{1F4C4} Export Lab notes', b:'Generate a date-sorted, locked PDF of the notes.'}
+];
+  function elq(s){ try{ return document.querySelector(s); }catch(e){ return null; } }
+  var btn=document.createElement('button');
+  btn.id='labosTourBtn'; btn.type='button'; btn.textContent='🧭 Tour';
+  btn.style.cssText='position:fixed;right:18px;bottom:18px;z-index:99998;background:#1E2761;color:#fff;border:none;border-radius:24px;padding:11px 18px;font:600 14px -apple-system,system-ui,sans-serif;box-shadow:0 6px 18px rgba(30,39,97,.35);cursor:pointer';
+  btn.onclick=start;
+  function mount(){ if(document.body && !document.getElementById('labosTourBtn')) document.body.appendChild(btn); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',mount); else mount();
+  var ov,tip,ring,cur=0,active=[];
+  function start(){ active=STEPS.filter(function(s){ return !s.sel || elq(s.sel); }); if(!active.length){ alert('Nothing to tour on this screen yet — open a note/day first.'); return; } cur=0; build(); show(); }
+  function build(){ if(ov) return;
+    ov=document.createElement('div'); ov.id='labosTourOv'; ov.style.cssText='position:fixed;inset:0;z-index:99999;';
+    ring=document.createElement('div'); ring.style.cssText='position:absolute;border-radius:10px;box-shadow:0 0 0 9999px rgba(16,22,45,.55);border:2px solid #7A5CFF;transition:all .22s ease;pointer-events:none;';
+    tip=document.createElement('div'); tip.style.cssText='position:absolute;max-width:320px;background:#fff;border-radius:12px;padding:15px 16px 14px;box-shadow:0 14px 44px rgba(0,0,0,.32);font-family:-apple-system,system-ui,sans-serif;';
+    ov.appendChild(ring); ov.appendChild(tip);
+    ov.addEventListener('click',function(e){ if(e.target===ov) stop(); });
+    document.body.appendChild(ov);
+  }
+  function show(){
+    var s=active[cur]; var node=s.sel?elq(s.sel):null;
+    if(node) node.scrollIntoView({block:'center',behavior:'smooth'});
+    setTimeout(function(){
+      var r=node?node.getBoundingClientRect():{left:innerWidth/2-150,top:110,width:300,height:0,bottom:110};
+      ring.style.left=(r.left-6)+'px'; ring.style.top=(r.top-6)+'px'; ring.style.width=(r.width+12)+'px'; ring.style.height=(r.height+12)+'px';
+      ring.style.display=node?'block':'none';
+      tip.innerHTML='<div style="font:700 11px/1 system-ui;letter-spacing:1px;color:#7A5CFF;text-transform:uppercase;margin-bottom:6px">Step '+(cur+1)+' / '+active.length+'</div>'+
+        '<div style="font:700 16px/1.25 Georgia,serif;color:#1E2761;margin-bottom:6px">'+s.t+'</div>'+
+        '<div style="color:#1B2436;font-size:13.5px;line-height:1.5">'+s.b+'</div>'+
+        '<div style="display:flex;gap:8px;margin-top:13px">'+
+        '<button type="button" id="ltPrev" style="flex:1;border:1px solid #DCE4F2;background:#fff;color:#1E2761;border-radius:8px;padding:8px;font-weight:700;cursor:pointer">Prev</button>'+
+        '<button type="button" id="ltNext" style="flex:1;border:none;background:#7A5CFF;color:#fff;border-radius:8px;padding:8px;font-weight:700;cursor:pointer">'+(cur===active.length-1?'Done':'Next ›')+'</button></div>'+
+        '<button type="button" id="ltSkip" style="position:absolute;top:7px;right:10px;border:none;background:none;color:#6B7689;font-size:19px;cursor:pointer;line-height:1">×</button>';
+      var tw=320, th=tip.offsetHeight||190, top=r.bottom+12;
+      if(top+th>innerHeight-10) top=Math.max(10, r.top-th-12);
+      var left=Math.min(Math.max(10, r.left), innerWidth-tw-10);
+      tip.style.top=top+'px'; tip.style.left=left+'px';
+      document.getElementById('ltNext').onclick=function(){ if(cur===active.length-1) stop(); else { cur++; show(); } };
+      document.getElementById('ltPrev').onclick=function(){ if(cur>0){ cur--; show(); } };
+      document.getElementById('ltSkip').onclick=stop;
+    },190);
+  }
+  function stop(){ if(ov){ ov.remove(); ov=null; tip=null; ring=null; } }
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') stop(); });
+  window.__labosTour={start:start};
+})();</script>
+
+</body>
+</html>

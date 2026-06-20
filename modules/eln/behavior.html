@@ -1,0 +1,2235 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Behavior</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --red: #b91c1c;
+    --red-soft: #fef2f2;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter);
+    color: #1c2333;
+    min-height: 100vh;
+  }
+  header.app-top {
+    background: var(--navy); color: var(--white);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  header.app-top .brand { font-family: Georgia, serif; font-size: 18px; font-weight: 700; }
+  header.app-top .brand-sub {
+    color: var(--accent); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; margin-left: 4px;
+  }
+  header.app-top a.back {
+    color: var(--ice); text-decoration: none; font-size: 13px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  header.app-top a.back:hover { color: var(--white); }
+  header.app-top .crumbs {
+    color: var(--ice-deep); font-size: 12.5px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  header.app-top .crumbs strong { color: var(--white); }
+  header.app-top .spacer { flex: 1; }
+  header.app-top .me { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  header.app-top .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  header.app-top .mode-pill {
+    background: var(--accent); color: var(--navy-deep);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  header.app-top .mode-pill.member { background: var(--ice-deep); color: var(--navy-deep); }
+
+  /* ── (sub-type nav removed) ── */
+  .sub-type-nav-UNUSED {
+    background: var(--white);
+    border-bottom: 1px solid var(--grey-light);
+    padding: 10px 24px;
+    display: flex; gap: 6px; align-items: center;
+    flex-wrap: wrap;
+  }
+  .stn-btn {
+    background: var(--grey-lighter); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 999px;
+    padding: 5px 16px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; transition: background 0.12s;
+  }
+  .stn-btn.active {
+    background: var(--navy); color: var(--white); border-color: var(--navy);
+  }
+  .stn-btn.disabled {
+    opacity: 0.45; cursor: default; pointer-events: none;
+  }
+
+  /* ── two-column layout ── */
+  .shell {
+    display: grid;
+    grid-template-columns: 280px minmax(0, 1fr);
+    max-width: 1280px; margin: 0 auto;
+    padding: 24px;
+    gap: 20px;
+    align-items: start;
+  }
+  @media (max-width: 880px) { .shell { grid-template-columns: 1fr; } }
+
+  /* ── sidebar ── */
+  aside.sidebar {
+    background: var(--white); border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    position: sticky; top: 16px;
+    width: 280px; max-width: 280px;
+    min-width: 0;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+  .cal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .cal-title { font-weight: 700; color: var(--navy); font-size: 14px; }
+  .cal-nav { display: flex; gap: 4px; }
+  .cal-nav button {
+    background: var(--grey-lighter); color: var(--navy);
+    border: 0; border-radius: 7px;
+    padding: 4px 8px; font: inherit; font-size: 13px; cursor: pointer;
+    line-height: 1;
+  }
+  .cal-nav button:hover { background: var(--grey-light); }
+  .cal-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    gap: 2px;
+    width: 100%;
+    min-width: 0;
+  }
+  .cal-dow {
+    text-align: center; font-size: 10px; color: var(--grey);
+    padding: 2px 0; font-weight: 700;
+    letter-spacing: 0.04em;
+    min-width: 0;
+  }
+  .cal-cell {
+    height: 34px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    border-radius: 6px;
+    font-size: 12px; color: var(--navy-deep);
+    cursor: pointer;
+    position: relative;
+    border: 1px solid transparent;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .cal-cell.empty { opacity: 0.2; cursor: default; pointer-events: none; }
+  .cal-cell:not(.empty):hover { background: var(--grey-lighter); }
+  .cal-cell.today { border-color: var(--navy); font-weight: 700; }
+  .cal-cell.selected { background: var(--navy); color: var(--white); }
+  .cal-cell.selected.today { background: var(--navy); }
+  .cal-cell .dots { display: flex; gap: 2px; margin-top: 1px; }
+  .cal-cell .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ice-deep); }
+  .cal-cell .dot.approved { background: var(--green); }
+  .cal-cell.selected .dot { background: var(--white); }
+  .cal-legend {
+    margin-top: 14px;
+    display: flex; flex-wrap: wrap; gap: 8px 10px;
+    font-size: 10.5px; color: var(--grey);
+  }
+  .cal-legend .lg { display: inline-flex; align-items: center; gap: 4px; }
+  .cal-legend .lg .swatch { width: 7px; height: 7px; border-radius: 50%; }
+  .cal-foot {
+    margin-top: 14px; padding-top: 12px;
+    border-top: 1px solid var(--grey-light);
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .cal-foot button {
+    background: var(--white); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 9px;
+    padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer; text-align: left; width: 100%;
+  }
+  .cal-foot button:hover { background: var(--grey-lighter); }
+  .cal-foot .hint { font-size: 10.5px; color: var(--grey); margin-top: 2px; }
+
+  /* ── main ── */
+  main.day {
+    background: var(--white); border-radius: 14px;
+    padding: 24px 28px 28px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    min-height: 400px;
+  }
+  .day-head {
+    display: flex; align-items: baseline; gap: 14px;
+    margin-bottom: 10px; flex-wrap: wrap;
+  }
+  .day-head h2 { margin: 0; font-family: Georgia, serif; color: var(--navy); font-size: 22px; }
+  .status-pill {
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .status-pill.draft     { background: var(--grey-lighter); color: var(--grey); }
+  .status-pill.approved  { background: var(--green-soft); color: var(--green); }
+  .day-head .spacer { flex: 1; }
+  .day-head .day-actions { display: flex; gap: 8px; }
+
+  .entries { display: flex; flex-direction: column; gap: 12px; }
+  .entry {
+    background: var(--white);
+    border: 1px solid var(--grey-light); border-radius: 10px;
+    padding: 14px 16px;
+    transition: border-color 0.15s;
+  }
+  .entry:hover { border-color: var(--ice-deep); }
+  .entry-header { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 4px; }
+  .entry-header-left { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+  .entry-header-right { display: flex; gap: 6px; flex-shrink: 0; }
+  .entry-meta { font-size: 11.5px; color: var(--grey); margin: 2px 0 10px; }
+  .entry-id {
+    font-family: "SF Mono", Consolas, monospace;
+    font-weight: 700; color: var(--navy); font-size: 14px;
+  }
+  .chip {
+    background: var(--grey-lighter); color: var(--navy);
+    border-radius: 999px; padding: 2px 9px;
+    font-size: 11px; font-weight: 600;
+  }
+  .chip.man { background: rgba(143, 179, 230, 0.20); color: var(--navy); }
+
+  /* ── sessions table ── */
+  .sess-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }
+  .sess-table th {
+    text-align: left; color: var(--grey); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 4px 8px 6px; border-bottom: 1px solid var(--grey-light);
+  }
+  .sess-table td { padding: 5px 8px; border-bottom: 1px solid var(--grey-lighter); vertical-align: top; }
+  .sess-table tbody tr:last-child td { border-bottom: 0; }
+  .sess-empty { color: var(--grey); font-size: 12.5px; font-style: italic; margin: 4px 0 6px; }
+
+  /* ── session add form ── */
+  .sess-add-wrap {
+    border-top: 1px dashed var(--grey-light); margin-top: 10px;
+    background: var(--grey-lighter); border-radius: 0 0 8px 8px;
+    padding: 12px 12px 10px;
+    margin-left: -1px; margin-right: -1px; margin-bottom: -1px;
+    border-radius: 0 0 10px 10px;
+    display: none;
+  }
+  .sess-form-row { display: flex; gap: 8px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 8px; }
+  .saf-task-wrap { flex: 1; min-width: 120px; }
+  .saf-score-wrap { flex: 0 0 100px; }
+  .saf-notes-wrap { flex: 2; min-width: 130px; }
+  .saf-label {
+    display: block; font-size: 10.5px; color: var(--grey); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 3px;
+  }
+  .sess-form-row input, .sess-form-row select {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 7px 10px; font: inherit; font-size: 14px;
+    background: var(--white); box-sizing: border-box;
+  }
+  .sess-form-row input:focus, .sess-form-row select:focus {
+    outline: none; border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(30,39,97,0.13);
+  }
+  .sess-form-actions { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+  .btn-add-sess {
+    background: transparent; color: var(--navy);
+    border: 1px dashed var(--ice-deep); border-radius: 8px;
+    padding: 6px 14px; font: inherit; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; margin-top: 8px; display: inline-block;
+  }
+  .btn-add-sess:hover { background: var(--white); border-style: solid; }
+
+  /* ── shared buttons ── */
+  .btn-mini {
+    background: var(--white); border: 1px solid var(--grey-light); border-radius: 7px;
+    padding: 4px 10px; font: inherit; font-size: 12px; font-weight: 600;
+    cursor: pointer; color: var(--navy);
+  }
+  .btn-mini:hover { background: var(--grey-lighter); }
+  .btn-mini.danger { color: #b91c1c; }
+  .btn-mini.danger:hover { background: var(--red-soft); border-color: #fecaca; }
+  .add-row { margin-top: 16px; }
+  .btn-add {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 10px 18px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-add:hover { background: var(--navy-deep); }
+  .btn-finalize {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 9px 16px; font: inherit; font-size: 13px; font-weight: 700;
+    cursor: pointer; letter-spacing: 0.04em;
+  }
+  .btn-finalize:hover { background: var(--navy-deep); }
+  .btn-return {
+    background: var(--white); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 10px;
+    padding: 9px 14px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-return:hover { background: var(--grey-lighter); }
+
+  .empty { color: var(--grey); font-style: italic; padding: 30px 0; text-align: center; }
+
+  /* ── modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15,23,42,0.45);
+    display: flex; align-items: flex-start; justify-content: center;
+    padding: 40px 16px; z-index: 800;
+    overflow-y: auto;
+  }
+  .modal {
+    background: var(--white); border-radius: 14px;
+    width: 100%; max-width: 520px;
+    box-shadow: 0 24px 60px rgba(15,23,42,0.30);
+    margin: auto 0;
+  }
+  .modal.wide { max-width: 800px; }
+  .modal-head {
+    padding: 14px 22px;
+    border-bottom: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; align-items: center; justify-content: space-between;
+    border-radius: 14px 14px 0 0;
+  }
+  .modal-head h3 { margin: 0; font-family: Georgia, serif; color: var(--navy); font-size: 17px; }
+  .modal-close { background: transparent; border: 0; cursor: pointer; font-size: 22px; color: var(--grey); padding: 0 4px; }
+  .modal-body { padding: 18px 22px 22px; }
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  .form-row.one { grid-template-columns: 1fr; }
+  .field { margin-bottom: 12px; }
+  .field label {
+    display: block; color: var(--grey); font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    margin-bottom: 3px;
+  }
+  .field input[type="text"], .field select {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 8px 11px; font: inherit; font-size: 14px;
+    background: var(--white);
+  }
+  .field input:focus, .field select:focus {
+    outline: none; border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(30, 39, 97, 0.13);
+  }
+  .field .hint { color: var(--grey); font-size: 10.5px; margin-top: 3px; }
+
+  .mouse-info {
+    background: var(--grey-lighter); border-radius: 10px;
+    padding: 12px 14px; margin: 6px 0 12px;
+    font-size: 12.5px;
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 6px 12px;
+  }
+  .mouse-info .l { color: var(--grey); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .mouse-info .v { color: var(--navy-deep); font-weight: 600; }
+  .mouse-info.manual { background: rgba(242, 179, 61, 0.10); grid-template-columns: 1fr; }
+  .mouse-info .src-note {
+    grid-column: 1 / -1; color: var(--grey); font-size: 11px; font-style: italic; margin-top: 4px;
+  }
+
+  .modal-foot {
+    padding: 14px 22px;
+    border-top: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; justify-content: flex-end; gap: 8px;
+    border-radius: 0 0 14px 14px;
+  }
+  .modal-foot button {
+    border: 0; border-radius: 9px;
+    padding: 8px 16px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .modal-foot .cancel { background: var(--white); border: 1px solid var(--grey-light); color: var(--navy); }
+  .modal-foot .save { background: var(--navy); color: var(--white); }
+  .modal-foot .save:disabled { background: #c7d2fe; cursor: progress; }
+
+  .modal-msg {
+    margin-top: 10px; padding: 9px 12px; border-radius: 7px;
+    font-size: 12.5px; display: none;
+  }
+  .modal-msg.error { background: var(--red-soft); color: var(--red); display: block; }
+  .modal-msg.info  { background: #eef2ff; color: var(--navy); display: block; }
+  .modal-msg.success { background: var(--green-soft); color: var(--green); display: block; }
+
+  /* day viewer popup */
+  .day-popup-meta {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    margin-bottom: 12px; color: var(--grey); font-size: 12.5px;
+  }
+
+  /* Recording modality */
+  .rec-toggle-group { display: flex; gap: 4px; flex-wrap: wrap; }
+  .rec-toggle-btn {
+    background: var(--white); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 999px;
+    padding: 4px 11px; font: inherit; font-size: 12.5px; font-weight: 600;
+    cursor: pointer; transition: background 0.1s, border-color 0.1s;
+  }
+  .rec-toggle-btn:hover { background: var(--grey-lighter); border-color: var(--ice-deep); }
+  .rec-toggle-btn.active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+  .task-chip-btn {
+    background: var(--white); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 999px;
+    padding: 4px 11px; font: inherit; font-size: 12.5px; font-weight: 600;
+    cursor: pointer;
+  }
+  .task-chip-btn:hover { background: var(--grey-lighter); }
+  .task-chip-btn.selected { background: var(--navy); color: var(--white); border-color: var(--navy); }
+  .rec-section {
+    background: var(--grey-lighter); border-radius: 8px;
+    padding: 11px 13px; margin-bottom: 8px;
+  }
+  .rec-section-title {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.06em; color: var(--grey); margin-bottom: 8px;
+  }
+  .rec-row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 8px; }
+  .rec-row:last-child { margin-bottom: 0; }
+  .rec-field { flex: 1; min-width: 100px; }
+  .rec-field label {
+    display: block; font-size: 10.5px; color: var(--grey); font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 3px;
+  }
+  .rec-field input {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 6px 9px; font: inherit; font-size: 13.5px; background: var(--white); box-sizing: border-box;
+  }
+  .rec-field input:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(30,39,97,0.13); }
+
+  /* Data folder rows */
+  .folder-block {
+    margin-top: 10px; padding-top: 10px;
+    border-top: 1px dashed var(--grey-light);
+  }
+  .folder-block-title {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--grey); margin-bottom: 6px;
+  }
+  .folder-row {
+    display: flex; gap: 8px; align-items: center; flex-wrap: wrap;
+    padding: 6px 0;
+  }
+  .folder-row .task-pill {
+    background: var(--grey-lighter); color: var(--navy);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 12px; font-weight: 700;
+    flex-shrink: 0;
+  }
+  .folder-row input.tlabel {
+    flex: 1; min-width: 110px;
+    border: 1px solid #d1d5db; border-radius: 7px;
+    padding: 6px 9px; font: inherit; font-size: 13px; background: var(--white);
+  }
+  .folder-row .folder-name-preview {
+    flex-basis: 100%;
+    font-family: 'SF Mono', Consolas, monospace;
+    color: var(--grey); font-size: 11.5px;
+    margin-top: 2px; word-break: break-all;
+  }
+  .folder-row .folder-name-preview .ok {
+    color: var(--green); font-weight: 700;
+  }
+  .folder-row .folder-created {
+    font-size: 11.5px; color: var(--green); font-weight: 600;
+  }
+
+  /* NC modal */
+  .nc-tab-active { background: var(--navy); color: #fff; border-color: var(--navy); }
+  .nc-item {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 6px 10px; border-radius: 6px; font-size: 13px;
+  }
+  .nc-item:nth-child(even) { background: var(--grey-lighter); }
+  .nc-item-val { font-family: 'SF Mono', Consolas, monospace; }
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div>
+    <span class="brand">Lab OS</span><span class="brand-sub">ELN</span>
+  </div>
+  <a class="back" id="back-link" href="/eln/">← Projects</a>
+  <div class="crumbs">
+    <span>/</span><span id="crumb-proj">…</span>
+    <span>/</span><strong>Behavior</strong>
+  </div>
+  <div class="spacer"></div>
+  <div class="me" id="me-area">Loading…</div>
+</header>
+
+
+<div class="shell">
+
+  <aside class="sidebar">
+    <div class="cal-head">
+      <div class="cal-title" id="cal-title">…</div>
+      <div class="cal-nav">
+        <button id="cal-prev" type="button" title="Previous month">‹</button>
+        <button id="cal-today" type="button" title="Jump to today">Today</button>
+        <button id="cal-next" type="button" title="Next month">›</button>
+      </div>
+    </div>
+    <div class="cal-grid" id="cal-grid"></div>
+    <div class="cal-legend">
+      <span class="lg"><span class="swatch" style="background:var(--ice-deep);"></span>Draft</span>
+      <span class="lg"><span class="swatch" style="background:var(--green);"></span>Finalized</span>
+    </div>
+    <div class="cal-foot">
+      <button id="btn-export" type="button">📄 Export Lab notes</button>
+      <button id="btn-manage-lists" type="button" style="display:none;">⚙ Manage lists</button>
+    </div>
+  </aside>
+
+  <main class="day" id="main">
+    <p class="empty">Loading…</p>
+  </main>
+
+</div>
+
+<!-- Entry form modal -->
+<div class="modal-overlay" id="modal-entry" style="display:none;">
+  <div class="modal" style="max-width:680px;">
+    <div class="modal-head">
+      <h3 id="entry-title">Add animal</h3>
+      <button class="modal-close" data-close="modal-entry" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="field">
+          <label for="ef-mid">Mouse ID</label>
+          <input id="ef-mid" type="text" autocomplete="off" required placeholder="e.g. WT3479" />
+          <div class="hint" id="ef-mid-hint">Press Tab or Enter to look up in animal DB.</div>
+        </div>
+        <div class="field">
+          <label for="ef-cohort-mouse">Cohort (auto)</label>
+          <input id="ef-cohort-mouse" type="text" readonly placeholder="—" />
+          <div class="hint">From animal DB. Editable below.</div>
+        </div>
+      </div>
+
+      <div id="ef-mouse-info" class="mouse-info" style="display:none;"></div>
+
+      <div class="form-row">
+        <div class="field">
+          <label for="ef-exp-cond-sel">Experimental condition</label>
+          <select id="ef-exp-cond-sel" style="width:100%;padding:8px 11px;border:1px solid #d1d5db;border-radius:8px;font:inherit;font-size:14px;background:var(--white);"></select>
+          <input id="ef-exp-cond" type="text" placeholder="Custom value…" autocomplete="off"
+            style="display:none;margin-top:6px;width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:8px;padding:8px 11px;font:inherit;font-size:14px;" />
+        </div>
+        <div class="field">
+          <label for="ef-cohort">Cohort number</label>
+          <input id="ef-cohort" type="text" placeholder="e.g. 03" />
+        </div>
+      </div>
+
+      <!-- Behavior tasks -->
+      <div class="field" style="margin-top:4px;">
+        <label>Behavior tasks run</label>
+        <div id="ef-behavior-tasks-wrap" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px;min-height:26px;"></div>
+      </div>
+
+      <!-- Visual stimulus params (VOR / OKR only) -->
+      <div id="ef-visstim-wrap" style="display:none;margin-top:6px;"></div>
+
+      <!-- Recording modality -->
+      <div style="margin:14px 0 6px;border-top:1px solid var(--grey-light);padding-top:12px;">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--grey);margin-bottom:8px;">Recording modality</div>
+        <div style="display:flex;gap:16px;margin-bottom:10px;flex-wrap:wrap;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:600;">
+            <input type="checkbox" id="ef-rec-photometry" style="width:15px;height:15px;" /> Photometry
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:600;">
+            <input type="checkbox" id="ef-rec-ephys" style="width:15px;height:15px;" /> ePhys
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:600;">
+            <input type="checkbox" id="ef-rec-opto" style="width:15px;height:15px;" /> Opto
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:600;">
+            <input type="checkbox" id="ef-rec-chemo" style="width:15px;height:15px;" /> Chemogenetic
+          </label>
+          <label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;font-weight:600;">
+            <input type="checkbox" id="ef-rec-drug" style="width:15px;height:15px;" /> Drug application
+          </label>
+        </div>
+
+        <!-- Target region (common) -->
+        <div id="ef-target-region-row" style="display:none;margin-bottom:10px;">
+          <div class="rec-field" style="max-width:260px;">
+            <label>Target region</label>
+            <input id="ef-target-region" type="text" placeholder="e.g. DRN, mPFC, LC" autocomplete="off" />
+          </div>
+        </div>
+
+        <!-- Photometry -->
+        <div id="ef-photo-section" class="rec-section" style="display:none;">
+          <div class="rec-section-title">Photometry</div>
+          <div class="rec-row">
+            <div class="rec-field" style="flex:0 0 auto;">
+              <label>Recording site</label>
+              <div class="rec-toggle-group" id="ef-photo-site-grp">
+                <button type="button" class="rec-toggle-btn" data-val="left">Left</button>
+                <button type="button" class="rec-toggle-btn" data-val="right">Right</button>
+                <button type="button" class="rec-toggle-btn" data-val="bilateral">Bilateral</button>
+              </div>
+            </div>
+            <div class="rec-field">
+              <label>Indicator type</label>
+              <input id="ef-photo-indicator" type="text" placeholder="e.g. GCaMP6f, NE-GRAB" autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Channel</label>
+              <input id="ef-photo-channel" type="text" placeholder="e.g. 488 nm, 532 nm" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
+        <!-- ePhys -->
+        <div id="ef-ephys-section" class="rec-section" style="display:none;">
+          <div class="rec-section-title">ePhys</div>
+          <div class="rec-row">
+            <div class="rec-field" style="flex:0 0 auto;">
+              <label>Type</label>
+              <div class="rec-toggle-group" id="ef-ephys-type-grp">
+                <button type="button" class="rec-toggle-btn" data-val="single_unit">Single unit</button>
+                <button type="button" class="rec-toggle-btn" data-val="neuropixel">Neuropixel</button>
+              </div>
+            </div>
+            <div class="rec-field" style="flex:0 0 auto;">
+              <label>Recording site</label>
+              <div class="rec-toggle-group" id="ef-ephys-site-grp">
+                <button type="button" class="rec-toggle-btn" data-val="left">Left</button>
+                <button type="button" class="rec-toggle-btn" data-val="right">Right</button>
+                <button type="button" class="rec-toggle-btn" data-val="bilateral">Bilateral</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chemogenetic -->
+        <div id="ef-chemo-section" class="rec-section" style="display:none;">
+          <div class="rec-section-title">Chemogenetic</div>
+          <div class="rec-row">
+            <div class="rec-field">
+              <label>Agent</label>
+              <input id="ef-chemo-agent" type="text" placeholder="e.g. CNO, DCZ" autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Dose</label>
+              <input id="ef-chemo-dose" type="text" placeholder="e.g. 1 mg/kg" autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Route</label>
+              <input id="ef-chemo-route" type="text" placeholder="e.g. i.p." autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Notes</label>
+              <input id="ef-chemo-notes" type="text" placeholder="" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Drug application -->
+        <div id="ef-drug-section" class="rec-section" style="display:none;">
+          <div class="rec-section-title">Drug application</div>
+          <div class="rec-row">
+            <div class="rec-field">
+              <label>Drug</label>
+              <input id="ef-drug-name" type="text" placeholder="e.g. muscimol" autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Dose</label>
+              <input id="ef-drug-dose" type="text" placeholder="e.g. 0.5 mg/kg" autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Route</label>
+              <input id="ef-drug-route" type="text" placeholder="e.g. i.p., local" autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Notes</label>
+              <input id="ef-drug-notes" type="text" placeholder="" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Opto -->
+        <div id="ef-opto-section" class="rec-section" style="display:none;">
+          <div class="rec-section-title">Optogenetics</div>
+          <div class="rec-row">
+            <div class="rec-field" style="flex:0 0 auto;">
+              <label>Stim side</label>
+              <div class="rec-toggle-group" id="ef-opto-side-grp">
+                <button type="button" class="rec-toggle-btn" data-val="unilateral">Unilateral</button>
+                <button type="button" class="rec-toggle-btn" data-val="bilateral">Bilateral</button>
+              </div>
+            </div>
+            <div class="rec-field" style="flex:0 0 auto;">
+              <label>Ipsi / Contra</label>
+              <div class="rec-toggle-group" id="ef-opto-lat-grp">
+                <button type="button" class="rec-toggle-btn" data-val="ipsi">Ipsi</button>
+                <button type="button" class="rec-toggle-btn" data-val="contra">Contra</button>
+              </div>
+            </div>
+            <div class="rec-field">
+              <label>Opsin type</label>
+              <input id="ef-opto-opsin" type="text" placeholder="e.g. ChR2-EYFP" autocomplete="off" />
+            </div>
+          </div>
+          <div class="rec-row">
+            <div class="rec-field">
+              <label># of pulses</label>
+              <input id="ef-opto-pulses" type="text" placeholder="e.g. 10" autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Frequency</label>
+              <input id="ef-opto-freq" type="text" placeholder="e.g. 20 Hz" autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Phase</label>
+              <input id="ef-opto-phase" type="text" placeholder="e.g. reward delivery" autocomplete="off" />
+            </div>
+            <div class="rec-field">
+              <label>Power</label>
+              <input id="ef-opto-power" type="text" placeholder="e.g. 5 mW" autocomplete="off" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-msg" id="ef-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-entry" type="button">Cancel</button>
+      <button class="save" id="ef-save" type="button">Save animal info</button>
+    </div>
+  </div>
+</div>
+
+<!-- Naming conventions management modal (admin only) -->
+<div class="modal-overlay" id="modal-nc" style="display:none;">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head">
+      <h3 style="margin:0;font-size:15px;">Manage Dropdown Lists</h3>
+      <button class="modal-close" data-close="modal-nc" type="button">×</button>
+    </div>
+    <div class="modal-body" style="padding:16px 20px;">
+      <div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap;">
+        <button class="btn-mini nc-tab-btn nc-tab-active" data-nc-cat="exp_condition">Exp Condition</button>
+        <button class="btn-mini nc-tab-btn" data-nc-cat="behavior_task">Behavior Task</button>
+      </div>
+      <div id="nc-list" style="min-height:120px;margin-bottom:14px;"></div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input id="nc-add-input" type="text" placeholder="Add new value…"
+          style="flex:1;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;" />
+        <button class="btn-add" id="nc-add-btn" style="padding:7px 14px;font-size:13px;">Add</button>
+      </div>
+      <p id="nc-msg" style="font-size:12px;margin:6px 0 0;min-height:16px;"></p>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-nc" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- Export date-range picker -->
+<div class="modal-overlay" id="modal-export" style="display:none;">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-head">
+      <h3 style="margin:0;font-size:15px;">Export Behavior Notes PDF</h3>
+      <button class="modal-close" data-close="modal-export" type="button">×</button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px 8px;">
+      <label style="display:flex;align-items:center;gap:8px;margin-bottom:16px;cursor:pointer;user-select:none;">
+        <input type="checkbox" id="exp-all-dates" checked style="width:15px;height:15px;accent-color:var(--navy);" />
+        <span style="font-size:14px;font-weight:500;">All dates</span>
+      </label>
+      <div id="exp-range-wrap" style="display:none;margin-bottom:16px;">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+          <div>
+            <label style="font-size:11px;color:var(--grey);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">From</label>
+            <input type="date" id="exp-date-from" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;" />
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--grey);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">To</label>
+            <input type="date" id="exp-date-to" style="width:100%;padding:7px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;box-sizing:border-box;" />
+          </div>
+        </div>
+        <p id="exp-range-err" style="color:var(--red);font-size:12px;margin:6px 0 0;display:none;"></p>
+      </div>
+    </div>
+    <div class="modal-foot" style="gap:8px;">
+      <button class="cancel" data-close="modal-export" type="button">Cancel</button>
+      <button class="save" id="exp-do-export" type="button">📄 Generate PDF</button>
+    </div>
+  </div>
+</div>
+
+<!-- Past day viewer popup -->
+<div class="modal-overlay" id="modal-viewer" style="display:none;">
+  <div class="modal wide">
+    <div class="modal-head">
+      <h3 id="viewer-title">…</h3>
+      <button class="modal-close" data-close="modal-viewer" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="day-popup-meta" id="viewer-meta"></div>
+      <div class="entries" id="viewer-entries"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-viewer" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+// project slug from URL — /eln/project/{slug}/behavior
+const pathParts = window.location.pathname.split("/").filter(Boolean);
+const projectSlug = decodeURIComponent(pathParts[2] || "");
+const EXP_TYPE = "behavior";
+
+let currentUser = null;
+let project = null;
+let todayNote = null;
+let allTodayNotes = [];          // admin: every user's note for the currently loaded day
+let viewerUserId = null;         // admin: which user's note is being viewed
+let calendarYear, calendarMonth;
+let selectedDate = null;
+let calendarDays = [];
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function todayISO() {
+  const d = new Date();
+  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function fmtLong(iso) {
+  if (!iso) return "";
+  const d = new Date(iso + "T00:00:00");
+  return d.toLocaleDateString(undefined, { weekday: "long", year: "numeric", month: "long", day: "numeric" });
+}
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (e) { data = null; }
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status; err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+// ───────────────────────────────────────────
+// Boot
+// ───────────────────────────────────────────
+async function boot() {
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    renderHeader();
+
+    const proj = await api("GET", `/api/eln/projects/${encodeURIComponent(projectSlug)}`);
+    project = proj.project;
+    $("#crumb-proj").innerHTML = `<a href="/eln/project/${encodeURIComponent(projectSlug)}" style="color:var(--ice); text-decoration:none;">${escapeHtml(project.title)}</a>`;
+    $("#back-link").href = `/eln/project/${encodeURIComponent(projectSlug)}`;
+
+    const t = new Date();
+    calendarYear = t.getFullYear();
+    calendarMonth = t.getMonth() + 1;
+
+    await Promise.all([
+      renderCalendar(),
+      loadDay(todayISO(), true),
+      loadNamingConventions(),
+    ]);
+
+    if (currentUser.effective_role === "admin") {
+      const mlBtn = $("#btn-manage-lists");
+      if (mlBtn) mlBtn.style.display = "";
+    }
+  } catch (e) {
+    if (e.status === 401) { window.location.href = "/eln/login"; return; }
+    $("#main").innerHTML = `<p class="empty">Failed to load: ${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderHeader() {
+  const u = currentUser;
+  const initials = u.initials || (u.display_name || "?")[0];
+  const eff = u.effective_role;
+  const badge = `<span class="mode-pill ${eff === "admin" ? "" : "member"}">${eff === "admin" ? "Admin mode" : "User mode"}</span>`;
+  $("#me-area").innerHTML =
+    `<div class="avatar" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${initials}</div>` +
+    `<div>${u.display_name} ${badge}</div>`;
+}
+
+// ───────────────────────────────────────────
+// Calendar
+// ───────────────────────────────────────────
+async function renderCalendar() {
+  const y = calendarYear, m = calendarMonth;
+  $("#cal-title").textContent = new Date(y, m - 1, 1).toLocaleDateString(undefined, { month: "long", year: "numeric" });
+
+  try {
+    const data = await api("GET",
+      `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes/calendar?experiment_type=${EXP_TYPE}&year=${y}&month=${m}`);
+    calendarDays = data.days || [];
+  } catch (e) { calendarDays = []; }
+
+  const byDate = new Map();
+  calendarDays.forEach(d => byDate.set(d.date, d));
+  const firstDow = new Date(y, m - 1, 1).getDay();
+  const daysInMonth = new Date(y, m, 0).getDate();
+  const today = todayISO();
+
+  const grid = $("#cal-grid");
+  grid.innerHTML = "";
+  ["S","M","T","W","T","F","S"].forEach(d => {
+    const el = document.createElement("div"); el.className = "cal-dow"; el.textContent = d; grid.appendChild(el);
+  });
+  for (let i = 0; i < firstDow; i++) {
+    const e = document.createElement("div"); e.className = "cal-cell empty"; grid.appendChild(e);
+  }
+  for (let day = 1; day <= daysInMonth; day++) {
+    const iso = `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+    const cell = document.createElement("div");
+    cell.className = "cal-cell" + (iso === today ? " today" : "") + (iso === selectedDate ? " selected" : "");
+    cell.dataset.date = iso;
+    cell.innerHTML = `<div>${day}</div>`;
+    const info = byDate.get(iso);
+    if (info) {
+      const dots = document.createElement("div"); dots.className = "dots";
+      const statuses = info.statuses || [];
+      const cls = (statuses.includes("approved") || statuses.includes("submitted")) ? "approved" : "";
+      const d1 = document.createElement("div"); d1.className = "dot " + cls; dots.appendChild(d1);
+      cell.appendChild(dots);
+    }
+    cell.addEventListener("click", () => {
+      if (iso === today) {
+        selectedDate = null;
+        loadDay(today, true);
+      } else {
+        selectedDate = iso;
+        openDayViewer(iso);
+      }
+      renderCalendar();
+    });
+    grid.appendChild(cell);
+  }
+}
+
+$("#cal-prev").addEventListener("click", () => {
+  calendarMonth -= 1;
+  if (calendarMonth < 1) { calendarMonth = 12; calendarYear -= 1; }
+  renderCalendar();
+});
+$("#cal-next").addEventListener("click", () => {
+  calendarMonth += 1;
+  if (calendarMonth > 12) { calendarMonth = 1; calendarYear += 1; }
+  renderCalendar();
+});
+$("#cal-today").addEventListener("click", () => {
+  const t = new Date();
+  calendarYear = t.getFullYear(); calendarMonth = t.getMonth() + 1;
+  selectedDate = null;
+  viewerUserId = currentUser?.id || null;
+  loadDay(todayISO(), true);
+  renderCalendar();
+});
+
+// ───────────────────────────────────────────
+// Naming conventions
+// ───────────────────────────────────────────
+let namingConventions = { exp_condition: [], behavior_task: [] };
+
+async function loadNamingConventions() {
+  await Promise.all(["exp_condition", "behavior_task"].map(async cat => {
+    try {
+      const d = await api("GET", `/api/eln/naming-conventions?category=${cat}`);
+      namingConventions[cat] = d.items || [];
+    } catch (_) {}
+  }));
+}
+
+function buildSelectOptions(category, currentValue) {
+  const items = namingConventions[category] || [];
+  const known = items.find(i => i.value === currentValue);
+  const isCustom = currentValue && !known;
+  let html = `<option value="">— select —</option>`;
+  html += items.map(i =>
+    `<option value="${escapeHtml(i.value)}" ${i.value === currentValue ? "selected" : ""}>${escapeHtml(i.label || i.value)}</option>`
+  ).join("");
+  html += `<option value="__custom__" ${isCustom ? "selected" : ""}>Custom…</option>`;
+  return html;
+}
+
+function getSelectOrCustom(selId, inputId) {
+  const sel = $(selId);
+  if (!sel) return $(inputId)?.value.trim() || "";
+  return sel.value === "__custom__" ? ($(inputId)?.value.trim() || "") : (sel.value || "");
+}
+
+function wireSelectCustom(selId, inputId) {
+  const sel = $(selId);
+  const inp = $(inputId);
+  if (!sel || !inp) return;
+  sel.addEventListener("change", () => {
+    const isCustom = sel.value === "__custom__";
+    inp.style.display = isCustom ? "" : "none";
+    if (isCustom) { inp.value = ""; inp.focus(); }
+  });
+}
+wireSelectCustom("#ef-exp-cond-sel", "#ef-exp-cond");
+
+// ── NC management modal ──
+let ncCurrentCategory = "exp_condition";
+
+async function ncLoadList() {
+  const list = $("#nc-list");
+  if (!list) return;
+  list.innerHTML = "<p style='color:var(--grey);font-size:13px;'>Loading…</p>";
+  const d = await api("GET", `/api/eln/naming-conventions?category=${ncCurrentCategory}`);
+  namingConventions[ncCurrentCategory] = d.items || [];
+  if (!d.items.length) {
+    list.innerHTML = "<p style='color:var(--grey);font-size:12px;'>No items yet.</p>";
+    return;
+  }
+  list.innerHTML = d.items.map(item => `
+    <div class="nc-item">
+      <span class="nc-item-val">${escapeHtml(item.value)}</span>
+      <button class="btn-mini danger nc-del-btn" data-nc-id="${item.id}" style="padding:2px 8px;font-size:12px;">×</button>
+    </div>`).join("");
+}
+
+document.getElementById("modal-nc").addEventListener("click", async e => {
+  const tgt = e.target;
+  if (tgt.classList.contains("nc-tab-btn")) {
+    $$(".nc-tab-btn").forEach(b => b.classList.remove("nc-tab-active"));
+    tgt.classList.add("nc-tab-active");
+    ncCurrentCategory = tgt.dataset.ncCat;
+    $("#nc-add-input").value = "";
+    $("#nc-msg").textContent = "";
+    await ncLoadList();
+    return;
+  }
+  if (tgt.classList.contains("nc-del-btn")) {
+    try {
+      await api("DELETE", `/api/eln/naming-conventions/${tgt.dataset.ncId}`);
+      await ncLoadList();
+      await loadNamingConventions();
+      // Refresh exp condition select if open
+      const expCond = getSelectOrCustom("#ef-exp-cond-sel", "#ef-exp-cond");
+      populateEntryExpCondSelect(expCond);
+    } catch (err) { $("#nc-msg").textContent = err.message; }
+    return;
+  }
+});
+
+$("#nc-add-btn").addEventListener("click", async () => {
+  const val = $("#nc-add-input").value.trim();
+  const msg = $("#nc-msg");
+  if (!val) { msg.textContent = "Enter a value first."; return; }
+  try {
+    await api("POST", "/api/eln/naming-conventions", { category: ncCurrentCategory, value: val });
+    $("#nc-add-input").value = "";
+    msg.textContent = "";
+    await ncLoadList();
+    await loadNamingConventions();
+    const expCond = getSelectOrCustom("#ef-exp-cond-sel", "#ef-exp-cond");
+    populateEntryExpCondSelect(expCond);
+  } catch (err) { msg.textContent = err.message; }
+});
+
+$("#nc-add-input").addEventListener("keydown", e => { if (e.key === "Enter") $("#nc-add-btn").click(); });
+
+$("#btn-manage-lists").addEventListener("click", async () => {
+  ncCurrentCategory = "exp_condition";
+  $$(".nc-tab-btn").forEach((b, i) => b.classList.toggle("nc-tab-active", i === 0));
+  $("#nc-add-input").value = "";
+  $("#nc-msg").textContent = "";
+  await ncLoadList();
+  $("#modal-nc").style.display = "flex";
+});
+
+function populateEntryExpCondSelect(currentValue) {
+  const sel = $("#ef-exp-cond-sel");
+  const inp = $("#ef-exp-cond");
+  if (sel) sel.innerHTML = buildSelectOptions("exp_condition", currentValue);
+  const isCustom = currentValue && !namingConventions.exp_condition.find(i => i.value === currentValue);
+  if (inp) { inp.style.display = isCustom ? "" : "none"; inp.value = isCustom ? currentValue : ""; }
+}
+
+// ───────────────────────────────────────────
+// Normalize entry
+// ───────────────────────────────────────────
+function normalizeEntry(e) {
+  return {
+    mouse_id:       e.mouse_id || "",
+    mouse:          e.mouse || {},
+    exp_condition:  e.exp_condition || "",
+    cohort:         e.cohort || "",
+    sessions:       Array.isArray(e.sessions) ? e.sessions : [],
+    behavior_tasks: Array.isArray(e.behavior_tasks) ? e.behavior_tasks : [],
+    recording:      e.recording || {},
+    folders:        (e.folders && typeof e.folders === "object") ? e.folders : {},
+    stim_params:    (e.stim_params && typeof e.stim_params === "object") ? e.stim_params : {},
+  };
+}
+
+function _isVisualStimTask(task) {
+  const a = _taskAbbr(task);
+  return a === "vor" || a === "okr";
+}
+
+// ── Folder naming for behavior ──────────────────────────────────────────
+function _modalitySuffix(rec) {
+  if (!rec) return "";
+  if (rec.photometry?.enabled)    return "pt";
+  if (rec.opto?.enabled)          return "opto";
+  if (rec.ephys?.enabled)         return "ephys";
+  if (rec.chemogenetic?.enabled)  return "CNO";
+  if (rec.drug?.enabled)          return "drug";
+  return "";
+}
+function _sanitizePart(s) {
+  return String(s || "").replace(/[^A-Za-z0-9-]/g, "");
+}
+function _taskAbbr(task) {
+  // "Open field (OFT)" → "oft"   |   "VOR" → "vor"
+  const s = String(task || "").trim();
+  const m = s.match(/\(([^)]+)\)\s*$/);
+  const raw = m ? m[1] : s.replace(/\s*\([^)]*\)\s*$/, "");
+  return raw.replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+}
+function buildBehaviorFolderName(entry, task, userTaskLabel, dateISO) {
+  const taskAbbr = _taskAbbr(task);
+  const suffix   = _modalitySuffix(entry.recording).toLowerCase();
+  const parts = [`exp-${taskAbbr}${suffix}`];
+  if (entry.mouse_id)      parts.push(`sub-${_sanitizePart(entry.mouse_id)}`);
+  if (entry.cohort)        parts.push(`cohort-${_sanitizePart(entry.cohort)}`);
+  if (entry.exp_condition) parts.push(`cond-${_sanitizePart(entry.exp_condition)}`);
+  if (userTaskLabel)       parts.push(`task-${_sanitizePart(userTaskLabel)}`);
+  if (dateISO)             parts.push(`date-${dateISO.replaceAll("-", "")}`);
+  parts.push("rawdata");
+  return parts.join("_");
+}
+
+// ───────────────────────────────────────────
+// Sessions table
+// ───────────────────────────────────────────
+function buildTaskSelectOptions(currentValue) {
+  const items = namingConventions.behavior_task || [];
+  const known = items.find(i => i.value === currentValue);
+  const isCustom = currentValue && !known;
+  let html = `<option value="">— select task —</option>`;
+  html += items.map(i =>
+    `<option value="${escapeHtml(i.value)}" ${i.value === currentValue ? "selected" : ""}>${escapeHtml(i.label || i.value)}</option>`
+  ).join("");
+  html += `<option value="__custom__" ${isCustom ? "selected" : ""}>Custom…</option>`;
+  return html;
+}
+
+function renderSessionsTable(e, entryIdx, locked) {
+  const sessions = e.sessions || [];
+  if (!sessions.length) return `<p class="sess-empty">No sessions yet. Use "+ Add session" below.</p>`;
+  const rows = sessions.map((s, si) => `
+    <tr>
+      <td style="font-weight:600;">${escapeHtml(s.task || "")}</td>
+      <td style="font-family:'SF Mono',Consolas,monospace;">${escapeHtml(s.score || "")}</td>
+      <td style="color:var(--grey);font-size:12px;">${escapeHtml(s.notes || "")}</td>
+      ${locked ? "" : `<td style="text-align:right;">
+        <button class="btn-mini danger sess-del" data-eidx="${entryIdx}" data-sidx="${si}" style="padding:2px 8px;font-size:12px;">×</button>
+      </td>`}
+    </tr>`).join("");
+  return `<table class="sess-table">
+    <thead><tr>
+      <th>Task</th><th>Score</th><th>Notes</th>${locked ? "" : "<th></th>"}
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function renderSessionAddForm(entryIdx) {
+  return `
+    <div class="sess-add-wrap" id="sess-add-wrap-${entryIdx}">
+      <div class="sess-form-row">
+        <div class="saf-task-wrap">
+          <label class="saf-label">Task</label>
+          <select class="saf-task-sel" data-eidx="${entryIdx}" style="width:100%;">${buildTaskSelectOptions("")}</select>
+          <input type="text" class="saf-task-custom" data-eidx="${entryIdx}" placeholder="Custom task…" autocomplete="off"
+            style="display:none;margin-top:4px;width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font:inherit;font-size:14px;" />
+        </div>
+        <div class="saf-score-wrap">
+          <label class="saf-label">Score</label>
+          <input type="text" class="saf-score" data-eidx="${entryIdx}" placeholder="e.g. 0.85 or N/A" />
+        </div>
+        <div class="saf-notes-wrap">
+          <label class="saf-label">Notes</label>
+          <input type="text" class="saf-notes" data-eidx="${entryIdx}" placeholder="Anything unusual…" />
+        </div>
+      </div>
+      <div class="sess-form-actions">
+        <button class="btn-add saf-add-btn" data-eidx="${entryIdx}" style="padding:8px 16px;font-size:13px;">+ Add</button>
+        <button class="btn-return saf-done-btn" data-eidx="${entryIdx}" style="font-size:13px;">Done</button>
+        <span class="saf-err" style="color:var(--red);font-size:12px;display:none;margin-left:8px;"></span>
+      </div>
+    </div>
+    <button class="btn-add-sess sess-add-toggle" id="sess-toggle-${entryIdx}" data-eidx="${entryIdx}">+ Add session</button>`;
+}
+
+function renderFolderBlock(e, idx, locked, dateISO) {
+  const tasks = e.behavior_tasks || [];
+  if (!tasks.length) return "";
+  const rows = tasks.map((task, ti) => {
+    const saved = (e.folders || {})[task] || {};
+    const tlabel = saved.task_label || "";
+    const folderName = saved.folder_name || buildBehaviorFolderName(e, task, tlabel, dateISO);
+    const created = !!saved.created_at;
+    return `
+      <div class="folder-row" data-eidx="${idx}" data-task="${escapeHtml(task)}">
+        <span class="task-pill">${escapeHtml(task)}</span>
+        ${locked ? `<span style="font-size:12.5px;color:var(--navy);">task-${escapeHtml(tlabel || "—")}</span>` : `
+          <input type="text" class="tlabel" placeholder="task label (e.g. baseline)" value="${escapeHtml(tlabel)}" />
+          <button class="btn-mini fld-create" data-eidx="${idx}" data-task="${escapeHtml(task)}">
+            ${created ? "Re-create" : "📁 Create folder"}
+          </button>`}
+        ${created ? `<span class="folder-created">✓ created</span>` : ""}
+        <div class="folder-name-preview" id="fldprev-${idx}-${ti}">${escapeHtml(folderName)}</div>
+      </div>`;
+  }).join("");
+  return `
+    <div class="folder-block">
+      <div class="folder-block-title">📁 Data folders</div>
+      ${rows}
+    </div>`;
+}
+
+function renderEntry(rawEntry, idx, locked, dateISO) {
+  const e = normalizeEntry(rawEntry);
+  const mouse = e.mouse || {};
+  const ageWk = mouse.age_weeks != null ? `${mouse.age_weeks}w` : "";
+  const days = mouse.days_in_condition != null ? `${mouse.days_in_condition}d` : "";
+  const isManual = mouse.from_db === false;
+  const meta = [e.exp_condition, e.cohort ? `Cohort ${e.cohort}` : ""].filter(Boolean).join(" · ");
+  const rec = e.recording || {};
+  const recChips = [
+    rec.photometry?.enabled ? `<span class="chip" style="background:rgba(99,102,241,0.12);color:#4338ca;">📊 Photometry</span>` : "",
+    rec.ephys?.enabled      ? `<span class="chip" style="background:rgba(245,158,11,0.12);color:#92400e;">⚡ ePhys</span>` : "",
+    rec.opto?.enabled       ? `<span class="chip" style="background:rgba(16,185,129,0.12);color:#065f46;">💡 Opto</span>` : "",
+    rec.chemogenetic?.enabled ? `<span class="chip" style="background:rgba(168,85,247,0.12);color:#6b21a8;">💊 Chemo</span>` : "",
+    rec.drug?.enabled       ? `<span class="chip" style="background:rgba(244,114,182,0.12);color:#9d174d;">💉 Drug</span>` : "",
+  ].filter(Boolean).join("");
+  const taskChips = (e.behavior_tasks || []).map(t =>
+    `<span class="chip" style="background:rgba(30,39,97,0.07);color:var(--navy);">${escapeHtml(t)}</span>`
+  ).join("");
+
+  const addForm = locked ? "" : renderSessionAddForm(idx);
+
+  return `
+    <div class="entry" id="entry-${idx}">
+      <div class="entry-header">
+        <div class="entry-header-left">
+          <div class="entry-id">${escapeHtml(e.mouse_id || "(no ID)")}</div>
+          ${mouse.strain ? `<span class="chip">${escapeHtml(mouse.strain)}</span>` : ""}
+          ${mouse.sex ? `<span class="chip">${escapeHtml(mouse.sex)}</span>` : ""}
+          ${mouse.condition ? `<span class="chip">${escapeHtml(mouse.condition)}</span>` : ""}
+          ${ageWk ? `<span class="chip">${ageWk}</span>` : ""}
+          ${days ? `<span class="chip">${days} in cond</span>` : ""}
+          ${isManual ? `<span class="chip man" title="Not in animal DB">manual</span>` : ""}
+          ${recChips}
+          ${taskChips}
+        </div>
+        ${locked ? "" : `<div class="entry-header-right">
+          <button class="btn-mini" data-act="edit" data-idx="${idx}">Edit info</button>
+          <button class="btn-mini danger" data-act="del" data-idx="${idx}">Delete</button>
+        </div>`}
+      </div>
+      ${meta ? `<div class="entry-meta">${escapeHtml(meta)}</div>` : ""}
+      <div id="sess-list-${idx}">${renderSessionsTable(e, idx, locked)}</div>
+      ${addForm}
+      ${renderFolderBlock(e, idx, locked, dateISO)}
+    </div>`;
+}
+
+// ───────────────────────────────────────────
+// Load / render day
+// ───────────────────────────────────────────
+async function loadDay(iso, isToday) {
+  $("#main").innerHTML = `<p class="empty">Loading…</p>`;
+  try {
+    const data = await api("GET",
+      `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes?experiment_type=${EXP_TYPE}&date=${iso}`);
+    allTodayNotes = data.notes || [];
+    if (!viewerUserId) viewerUserId = currentUser.id;
+    const selectedNote = allTodayNotes.find(n => n.user_id === viewerUserId)
+                      || allTodayNotes.find(n => n.user_id === currentUser.id);
+    todayNote = selectedNote || null;
+    if (todayNote) viewerUserId = todayNote.user_id;
+    else           viewerUserId = currentUser.id;
+    renderDay(iso, todayNote);
+  } catch (e) {
+    $("#main").innerHTML = `<p class="empty">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderDay(iso, ownNote) {
+  const isAdmin       = currentUser.effective_role === "admin";
+  const viewingOther  = ownNote && ownNote.user_id !== currentUser.id;
+  const otherAuthor   = viewingOther
+    ? (ownNote.author?.display_name || ownNote.author?.username || ownNote.user_id)
+    : "";
+
+  let userPicker = "";
+  if (isAdmin && allTodayNotes.length > 1) {
+    userPicker = `
+      <div style="display:flex;align-items:center;gap:6px;margin-left:8px;">
+        <span style="font-size:11px;color:var(--grey);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Viewing</span>
+        <select id="day-viewer-pick" style="border:1px solid var(--grey-light);border-radius:7px;padding:4px 8px;font:inherit;font-size:13px;background:var(--white);">
+          ${allTodayNotes.map(n => {
+            const nm = n.author?.display_name || n.author?.username || n.user_id;
+            const me = n.user_id === currentUser.id ? " (me)" : "";
+            return `<option value="${n.user_id}" ${n.user_id === viewerUserId ? "selected" : ""}>${escapeHtml(nm)}${me}</option>`;
+          }).join("")}
+        </select>
+      </div>`;
+  }
+
+  const head = `
+    <div class="day-head">
+      <h2>${fmtLong(iso)}</h2>
+      ${ownNote ? `<span class="status-pill ${ownNote.status === "draft" ? "draft" : "approved"}">${ownNote.status === "draft" ? "Draft" : "Finalized"}</span>` : ""}
+      ${userPicker}
+      <div class="spacer"></div>
+      <div class="day-actions" id="day-actions"></div>
+    </div>`;
+
+  const entries = ownNote?.payload?.entries || [];
+  const isLocked = ownNote && ownNote.status !== "draft";
+  const readOnly = isLocked || isAdmin || viewingOther;
+
+  const adminBanner = isAdmin ? `
+    <div style="background:rgba(242,179,61,0.13);border:1px solid rgba(242,179,61,0.4);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#8a5b00;">
+      <strong>Admin mode</strong>${viewingOther ? ` — viewing <strong>${escapeHtml(otherAuthor)}</strong>'s note` : ""} — read-only. To write/edit your own lab notes, switch to <strong>User mode</strong>.
+    </div>` : "";
+
+  let body = "";
+  if (!ownNote || !entries.length) {
+    body = isAdmin
+      ? `<p class="empty">${viewingOther ? escapeHtml(otherAuthor) + " has" : "You have"} no animals recorded for ${iso}.</p>`
+      : `<p class="empty">No animals recorded for ${iso}. Click <strong>+ Add animal</strong> to start.</p>`;
+  } else {
+    body = `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, readOnly, iso)).join("")}</div>`;
+  }
+
+  const addRow = `
+    <div class="add-row">
+      ${readOnly ? "" : `<button class="btn-add" id="btn-add">+ Add animal</button>`}
+      ${ownNote && entries.length && !readOnly ? `<button class="btn-finalize" id="btn-finalize" style="margin-left:8px;">🔒 Finalize</button>` : ""}
+    </div>`;
+
+  $("#main").innerHTML = head + adminBanner + body + addRow;
+
+  if (ownNote && ownNote.status !== "draft" && currentUser.effective_role === "admin") {
+    const actions = $("#day-actions");
+    actions.innerHTML = `<button class="btn-return" id="btn-unlock">Unlock</button>`;
+    $("#btn-unlock").addEventListener("click", () => returnNote(ownNote.id));
+  }
+
+  const addBtn = $("#btn-add");
+  if (addBtn) addBtn.addEventListener("click", () => openEntryForm(null));
+  const finBtn = $("#btn-finalize");
+  if (finBtn) finBtn.addEventListener("click", () => finalizeNote(ownNote.id));
+
+  const picker = $("#day-viewer-pick");
+  if (picker) {
+    picker.addEventListener("change", () => {
+      viewerUserId = picker.value;
+      const sel = allTodayNotes.find(n => n.user_id === viewerUserId);
+      todayNote = sel || null;
+      renderDay(iso, todayNote);
+    });
+  }
+
+  $$(".entry [data-act='edit']").forEach(b => b.addEventListener("click", (e) => {
+    const idx = parseInt(e.target.dataset.idx);
+    openEntryForm(entries[idx], idx);
+  }));
+  $$(".entry [data-act='del']").forEach(b => b.addEventListener("click", (e) => {
+    const idx = parseInt(e.target.dataset.idx);
+    deleteEntry(idx);
+  }));
+}
+
+// ───────────────────────────────────────────
+// Recording modality helpers
+// ───────────────────────────────────────────
+function setToggleGroup(groupId, value) {
+  const grp = document.getElementById(groupId);
+  if (!grp) return;
+  grp.querySelectorAll(".rec-toggle-btn").forEach(b => b.classList.toggle("active", b.dataset.val === value));
+}
+function getToggleGroup(groupId) {
+  return document.getElementById(groupId)?.querySelector(".rec-toggle-btn.active")?.dataset.val || "";
+}
+
+function updateRecordingSections() {
+  const phot  = $("#ef-rec-photometry").checked;
+  const ephys = $("#ef-rec-ephys").checked;
+  const opto  = $("#ef-rec-opto").checked;
+  const chemo = $("#ef-rec-chemo").checked;
+  const drug  = $("#ef-rec-drug").checked;
+  $("#ef-target-region-row").style.display = (phot || ephys || opto) ? "" : "none";
+  $("#ef-photo-section").style.display  = phot  ? "" : "none";
+  $("#ef-ephys-section").style.display  = ephys ? "" : "none";
+  $("#ef-opto-section").style.display   = opto  ? "" : "none";
+  $("#ef-chemo-section").style.display  = chemo ? "" : "none";
+  $("#ef-drug-section").style.display   = drug  ? "" : "none";
+}
+
+// Mutable state — values typed into Stim params inputs (keyed by task name)
+let editingStimParams = {};
+
+function renderVisualStimSections() {
+  const wrap = $("#ef-visstim-wrap");
+  if (!wrap) return;
+  // Snapshot current input values before re-rendering
+  wrap.querySelectorAll(".vstim-block").forEach(blk => {
+    const task = blk.dataset.task;
+    editingStimParams[task] = {
+      velocity:     blk.querySelector(".vstim-velocity")?.value.trim() || "",
+      frequency:    blk.querySelector(".vstim-frequency")?.value.trim() || "",
+      phase:        blk.querySelector(".vstim-phase")?.value.trim() || "",
+      luminescence: blk.querySelector(".vstim-luminescence")?.value.trim() || "",
+    };
+  });
+
+  const selected = Array.from(document.querySelectorAll("#ef-behavior-tasks-wrap .task-chip-btn.selected"))
+    .map(b => b.dataset.taskVal)
+    .filter(_isVisualStimTask);
+
+  if (!selected.length) { wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+
+  wrap.style.display = "";
+  wrap.innerHTML = `
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;color:var(--grey);margin:8px 0 6px;">
+      Visual stimulus parameters
+    </div>
+    ${selected.map(task => {
+      const v = editingStimParams[task] || {};
+      return `
+        <div class="rec-section vstim-block" data-task="${escapeHtml(task)}">
+          <div class="rec-section-title">${escapeHtml(task)}</div>
+          <div class="rec-row">
+            <div class="rec-field">
+              <label>Stim velocity</label>
+              <input type="text" class="vstim-velocity" placeholder="e.g. 20 deg/s" autocomplete="off" value="${escapeHtml(v.velocity || "")}" />
+            </div>
+            <div class="rec-field">
+              <label>Stim frequency</label>
+              <input type="text" class="vstim-frequency" placeholder="e.g. 0.5 Hz" autocomplete="off" value="${escapeHtml(v.frequency || "")}" />
+            </div>
+            <div class="rec-field">
+              <label>Stim phase</label>
+              <input type="text" class="vstim-phase" placeholder="e.g. 0 deg" autocomplete="off" value="${escapeHtml(v.phase || "")}" />
+            </div>
+            <div class="rec-field">
+              <label>Luminescence</label>
+              <input type="text" class="vstim-luminescence" placeholder="e.g. 10 lx" autocomplete="off" value="${escapeHtml(v.luminescence || "")}" />
+            </div>
+          </div>
+        </div>`;
+    }).join("")}
+  `;
+}
+
+function renderBehaviorTaskChips(selectedTasks) {
+  const wrap = $("#ef-behavior-tasks-wrap");
+  if (!wrap) return;
+  const items = namingConventions.behavior_task || [];
+  if (!items.length) {
+    wrap.innerHTML = `<span style="font-size:12px;color:var(--grey);font-style:italic;">No tasks yet — add via ⚙ Manage lists.</span>`;
+    return;
+  }
+  wrap.innerHTML = items.map(i =>
+    `<button type="button" class="task-chip-btn ${selectedTasks.includes(i.value) ? "selected" : ""}" data-task-val="${escapeHtml(i.value)}">${escapeHtml(i.label || i.value)}</button>`
+  ).join("");
+}
+
+// Delegate toggle group + task chip clicks inside modal-entry
+document.getElementById("modal-entry").addEventListener("click", ev => {
+  const btn = ev.target.closest(".rec-toggle-btn");
+  if (btn) {
+    const grp = btn.closest(".rec-toggle-group");
+    if (grp) grp.querySelectorAll(".rec-toggle-btn").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    return;
+  }
+  const taskBtn = ev.target.closest(".task-chip-btn");
+  if (taskBtn) { taskBtn.classList.toggle("selected"); renderVisualStimSections(); }
+});
+
+["ef-rec-photometry", "ef-rec-ephys", "ef-rec-opto", "ef-rec-chemo", "ef-rec-drug"].forEach(id => {
+  document.getElementById(id)?.addEventListener("change", updateRecordingSections);
+});
+
+// ───────────────────────────────────────────
+// Entry form (mouse-level)
+// ───────────────────────────────────────────
+let editingIdx = null;
+let editingMouseCache = null;
+
+async function openEntryForm(entry, idx) {
+  editingIdx = idx == null ? null : idx;
+  $("#entry-title").textContent = editingIdx == null ? "Add animal" : "Edit animal info";
+  const norm = entry ? normalizeEntry(entry) : null;
+  $("#ef-mid").value          = norm?.mouse_id || "";
+  $("#ef-cohort-mouse").value = norm?.mouse?.cohort || "";
+  $("#ef-cohort").value       = norm?.cohort || "";
+  populateEntryExpCondSelect(norm?.exp_condition || "");
+  editingMouseCache = norm?.mouse || null;
+  if (editingMouseCache && Object.keys(editingMouseCache).length) renderMouseInfo(editingMouseCache);
+  else $("#ef-mouse-info").style.display = "none";
+
+  // Behavior tasks
+  renderBehaviorTaskChips(norm?.behavior_tasks || []);
+  editingStimParams = { ...(norm?.stim_params || {}) };
+  renderVisualStimSections();
+
+  // Recording modality
+  const rec  = norm?.recording || {};
+  const phot = rec.photometry || {};
+  const eph  = rec.ephys || {};
+  const opt  = rec.opto || {};
+  const chm  = rec.chemogenetic || {};
+  const drg  = rec.drug || {};
+  $("#ef-rec-photometry").checked = !!phot.enabled;
+  $("#ef-rec-ephys").checked      = !!eph.enabled;
+  $("#ef-rec-opto").checked       = !!opt.enabled;
+  $("#ef-rec-chemo").checked      = !!chm.enabled;
+  $("#ef-rec-drug").checked       = !!drg.enabled;
+  updateRecordingSections();
+  $("#ef-target-region").value    = rec.target_region || "";
+  // Photometry
+  setToggleGroup("ef-photo-site-grp", phot.site || "");
+  $("#ef-photo-indicator").value  = phot.indicator || "";
+  $("#ef-photo-channel").value    = phot.channel || "";
+  // ePhys
+  setToggleGroup("ef-ephys-type-grp", eph.type || "");
+  setToggleGroup("ef-ephys-site-grp", eph.site || "");
+  // Opto
+  setToggleGroup("ef-opto-side-grp", opt.stim_side || "");
+  setToggleGroup("ef-opto-lat-grp",  opt.laterality || "");
+  $("#ef-opto-opsin").value  = opt.opsin || "";
+  $("#ef-opto-pulses").value = opt.n_pulses || "";
+  $("#ef-opto-freq").value   = opt.frequency || "";
+  $("#ef-opto-phase").value  = opt.phase || "";
+  $("#ef-opto-power").value  = opt.power || "";
+  // Chemogenetic
+  $("#ef-chemo-agent").value = chm.agent || "";
+  $("#ef-chemo-dose").value  = chm.dose || "";
+  $("#ef-chemo-route").value = chm.route || "";
+  $("#ef-chemo-notes").value = chm.notes || "";
+  // Drug
+  $("#ef-drug-name").value   = drg.name || "";
+  $("#ef-drug-dose").value   = drg.dose || "";
+  $("#ef-drug-route").value  = drg.route || "";
+  $("#ef-drug-notes").value  = drg.notes || "";
+
+  $("#ef-msg").style.display = "none";
+  $("#ef-msg").className = "modal-msg";
+  $("#ef-mid-hint").textContent = "Press Tab or Enter to look up in animal DB.";
+  $("#modal-entry").style.display = "flex";
+  setTimeout(() => $("#ef-mid").focus(), 30);
+}
+
+function renderMouseInfo(m) {
+  const box = $("#ef-mouse-info");
+  if (m.from_db === false) {
+    box.className = "mouse-info manual";
+    box.innerHTML = `
+      <div><strong>Manual entry</strong> — this mouse is not in the animal DB.</div>
+      <div class="src-note">Use the fields below to record what you know.</div>`;
+  } else {
+    box.className = "mouse-info";
+    box.innerHTML = `
+      <div><div class="l">Strain</div><div class="v">${escapeHtml(m.strain || "—")}</div></div>
+      <div><div class="l">Sex</div><div class="v">${escapeHtml(m.sex || "—")}</div></div>
+      <div><div class="l">Condition</div><div class="v">${escapeHtml(m.condition || "—")}</div></div>
+      <div><div class="l">DOB</div><div class="v">${escapeHtml(m.dob || "—")}</div></div>
+      <div><div class="l">Age</div><div class="v">${m.age_weeks != null ? m.age_weeks + " wks" : "—"}</div></div>
+      <div><div class="l">Days in cond</div><div class="v">${m.days_in_condition != null ? m.days_in_condition : "—"}</div></div>
+      <div class="src-note">Auto-filled from animal DB${m.condition_started_on ? ` (cond since ${m.condition_started_on})` : ""}.</div>`;
+  }
+  box.style.display = "";
+  $("#ef-cohort-mouse").value = m.cohort || "";
+}
+
+async function lookupMouse() {
+  const id = $("#ef-mid").value.trim();
+  if (!id) { editingMouseCache = null; $("#ef-mouse-info").style.display = "none"; return; }
+  $("#ef-mid-hint").textContent = "Looking up…";
+  try {
+    const data = await api("GET", `/api/eln/mice/${encodeURIComponent(id)}`);
+    editingMouseCache = data.mouse || data.animal || data;
+    editingMouseCache.from_db = true;
+    renderMouseInfo(editingMouseCache);
+    $("#ef-mid-hint").textContent = "✓ Found in animal DB.";
+  } catch (e) {
+    if (e.status === 404) {
+      editingMouseCache = { from_db: false };
+      renderMouseInfo(editingMouseCache);
+      $("#ef-mid-hint").textContent = "Not in animal DB — manual entry mode.";
+    } else {
+      $("#ef-mid-hint").textContent = "Lookup error: " + e.message;
+    }
+  }
+}
+$("#ef-mid").addEventListener("blur", lookupMouse);
+$("#ef-mid").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); lookupMouse(); }
+});
+
+$("#ef-save").addEventListener("click", async () => {
+  const mouseId = $("#ef-mid").value.trim();
+  if (!mouseId) {
+    $("#ef-msg").className = "modal-msg error"; $("#ef-msg").textContent = "Mouse ID is required.";
+    return;
+  }
+  $("#ef-save").disabled = true;
+  try {
+    const expCond = getSelectOrCustom("#ef-exp-cond-sel", "#ef-exp-cond");
+
+    const selectedTasks = Array.from(
+      document.querySelectorAll("#ef-behavior-tasks-wrap .task-chip-btn.selected")
+    ).map(b => b.dataset.taskVal);
+
+    // Collect visual-stim params for VOR/OKR tasks currently visible
+    const stim_params = {};
+    document.querySelectorAll("#ef-visstim-wrap .vstim-block").forEach(blk => {
+      const task = blk.dataset.task;
+      if (!selectedTasks.includes(task)) return;
+      stim_params[task] = {
+        velocity:     blk.querySelector(".vstim-velocity")?.value.trim() || "",
+        frequency:    blk.querySelector(".vstim-frequency")?.value.trim() || "",
+        phase:        blk.querySelector(".vstim-phase")?.value.trim() || "",
+        luminescence: blk.querySelector(".vstim-luminescence")?.value.trim() || "",
+      };
+    });
+
+    const recPhot  = $("#ef-rec-photometry").checked;
+    const recEphys = $("#ef-rec-ephys").checked;
+    const recOpto  = $("#ef-rec-opto").checked;
+    const recChemo = $("#ef-rec-chemo").checked;
+    const recDrug  = $("#ef-rec-drug").checked;
+    const recording = {
+      target_region: $("#ef-target-region").value.trim(),
+      photometry: recPhot ? {
+        enabled:   true,
+        site:      getToggleGroup("ef-photo-site-grp"),
+        indicator: $("#ef-photo-indicator").value.trim(),
+        channel:   $("#ef-photo-channel").value.trim(),
+      } : { enabled: false },
+      ephys: recEphys ? {
+        enabled: true,
+        type:    getToggleGroup("ef-ephys-type-grp"),
+        site:    getToggleGroup("ef-ephys-site-grp"),
+      } : { enabled: false },
+      opto: recOpto ? {
+        enabled:    true,
+        stim_side:  getToggleGroup("ef-opto-side-grp"),
+        laterality: getToggleGroup("ef-opto-lat-grp"),
+        opsin:      $("#ef-opto-opsin").value.trim(),
+        n_pulses:   $("#ef-opto-pulses").value.trim(),
+        frequency:  $("#ef-opto-freq").value.trim(),
+        phase:      $("#ef-opto-phase").value.trim(),
+        power:      $("#ef-opto-power").value.trim(),
+      } : { enabled: false },
+      chemogenetic: recChemo ? {
+        enabled: true,
+        agent:   $("#ef-chemo-agent").value.trim(),
+        dose:    $("#ef-chemo-dose").value.trim(),
+        route:   $("#ef-chemo-route").value.trim(),
+        notes:   $("#ef-chemo-notes").value.trim(),
+      } : { enabled: false },
+      drug: recDrug ? {
+        enabled: true,
+        name:    $("#ef-drug-name").value.trim(),
+        dose:    $("#ef-drug-dose").value.trim(),
+        route:   $("#ef-drug-route").value.trim(),
+        notes:   $("#ef-drug-notes").value.trim(),
+      } : { enabled: false },
+    };
+
+    const prevEntry = editingIdx != null
+      ? normalizeEntry(todayNote?.payload?.entries?.[editingIdx] || {})
+      : null;
+
+    const entry = {
+      mouse_id:       mouseId,
+      mouse:          editingMouseCache || { from_db: false },
+      exp_condition:  expCond,
+      cohort:         $("#ef-cohort").value.trim(),
+      behavior_tasks: selectedTasks,
+      recording,
+      stim_params,
+      sessions:       prevEntry?.sessions || [],
+      folders:        prevEntry?.folders  || {},
+    };
+
+    let entries = todayNote?.payload?.entries || [];
+    if (editingIdx == null) {
+      entries = [...entries, entry];
+    } else {
+      entries = entries.slice();
+      entries[editingIdx] = entry;
+    }
+    const payload = { entries };
+    if (!todayNote) {
+      const r = await api("POST", "/api/eln/notes", {
+        project_slug: projectSlug,
+        experiment_type: EXP_TYPE,
+        note_date: todayISO(),
+        payload,
+      });
+      todayNote = r.note;
+    } else {
+      const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload });
+      todayNote = r.note;
+    }
+    $("#modal-entry").style.display = "none";
+    await loadDay(todayISO(), true);
+    await renderCalendar();
+  } catch (e) {
+    $("#ef-msg").className = "modal-msg error"; $("#ef-msg").textContent = e.message;
+  } finally {
+    $("#ef-save").disabled = false;
+  }
+});
+
+async function deleteEntry(idx) {
+  if (!confirm("Delete this animal entry and all its sessions?")) return;
+  let entries = todayNote.payload.entries.slice();
+  entries.splice(idx, 1);
+  try {
+    const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { entries } });
+    todayNote = r.note;
+    await loadDay(todayISO(), true);
+    await renderCalendar();
+  } catch (e) { alert("Delete failed: " + e.message); }
+}
+
+// ───────────────────────────────────────────
+// Session management (inline, auto-save)
+// ───────────────────────────────────────────
+async function saveNotePayload() {
+  const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { entries: todayNote.payload.entries } });
+  todayNote = r.note;
+}
+
+function getTaskFromWrap(wrap) {
+  const sel = wrap.querySelector(".saf-task-sel");
+  if (!sel) return "";
+  if (sel.value === "__custom__") return wrap.querySelector(".saf-task-custom")?.value.trim() || "";
+  return sel.value || "";
+}
+
+async function addSessionToEntry(entryIdx, session) {
+  const entries = todayNote.payload.entries;
+  const e = { ...normalizeEntry(entries[entryIdx]) };
+  e.sessions = [...(e.sessions || []), session];
+  entries[entryIdx] = e;
+  const listEl = document.getElementById(`sess-list-${entryIdx}`);
+  if (listEl) listEl.innerHTML = renderSessionsTable(e, entryIdx, false);
+  try {
+    await saveNotePayload();
+  } catch (err) {
+    const errEl = document.querySelector(`#sess-add-wrap-${entryIdx} .saf-err`);
+    if (errEl) { errEl.textContent = `Save failed: ${err.message}`; errEl.style.display = ""; }
+  }
+}
+
+async function deleteSessionFromEntry(entryIdx, sessIdx) {
+  if (!confirm("Delete this session?")) return;
+  const entries = todayNote.payload.entries;
+  const e = { ...normalizeEntry(entries[entryIdx]) };
+  e.sessions = (e.sessions || []).filter((_, i) => i !== sessIdx);
+  entries[entryIdx] = e;
+  const listEl = document.getElementById(`sess-list-${entryIdx}`);
+  if (listEl) listEl.innerHTML = renderSessionsTable(e, entryIdx, false);
+  try {
+    await saveNotePayload();
+  } catch (err) { alert(`Delete failed: ${err.message}`); }
+}
+
+function doAddSession(eidx) {
+  const wrap = document.getElementById(`sess-add-wrap-${eidx}`);
+  if (!wrap) return;
+  const task  = getTaskFromWrap(wrap);
+  const score = wrap.querySelector(".saf-score")?.value.trim() || "";
+  const notes = wrap.querySelector(".saf-notes")?.value.trim() || "";
+  const errEl = wrap.querySelector(".saf-err");
+
+  if (!task) {
+    if (errEl) { errEl.textContent = "Task is required."; errEl.style.display = ""; }
+    wrap.querySelector(".saf-task-sel")?.focus();
+    return;
+  }
+  if (errEl) errEl.style.display = "none";
+
+  // Reset form
+  const sel = wrap.querySelector(".saf-task-sel");
+  if (sel) sel.value = "";
+  const customInp = wrap.querySelector(".saf-task-custom");
+  if (customInp) { customInp.value = ""; customInp.style.display = "none"; }
+  const scoreInp = wrap.querySelector(".saf-score");
+  if (scoreInp) scoreInp.value = "";
+  const notesInp = wrap.querySelector(".saf-notes");
+  if (notesInp) notesInp.value = "";
+
+  addSessionToEntry(eidx, { task, score, notes });
+  sel?.focus();
+}
+
+// ───────────────────────────────────────────
+// Finalize / return
+// ───────────────────────────────────────────
+async function finalizeNote(noteId) {
+  if (!confirm("Finalize this note? It will be locked and cannot be edited.")) return;
+  try {
+    const r = await api("POST", `/api/eln/notes/${noteId}/approve`);
+    todayNote = r.note;
+    await loadDay(todayISO(), true);
+    await renderCalendar();
+  } catch (e) { alert("Finalize failed: " + e.message); }
+}
+
+async function returnNote(noteId) {
+  if (!confirm("Unlock this note for editing?")) return;
+  try {
+    const r = await api("POST", `/api/eln/notes/${noteId}/return`);
+    todayNote = r.note;
+    await loadDay(todayISO(), true);
+    await renderCalendar();
+  } catch (e) { alert("Unlock failed: " + e.message); }
+}
+
+// ───────────────────────────────────────────
+// Export PDF
+// ───────────────────────────────────────────
+$("#btn-export").addEventListener("click", () => {
+  $("#exp-all-dates").checked = true;
+  $("#exp-range-wrap").style.display = "none";
+  $("#exp-date-from").value = "";
+  $("#exp-date-to").value = "";
+  $("#exp-range-err").style.display = "none";
+  $("#modal-export").style.display = "flex";
+});
+
+$("#exp-all-dates").addEventListener("change", () => {
+  $("#exp-range-wrap").style.display = $("#exp-all-dates").checked ? "none" : "";
+});
+
+async function runExport() {
+  const all = $("#exp-all-dates").checked;
+  const from = $("#exp-date-from").value;
+  const to   = $("#exp-date-to").value;
+  const errEl = $("#exp-range-err");
+  errEl.style.display = "none";
+  if (!all) {
+    if (!from && !to) { errEl.textContent = "Pick at least one date."; errEl.style.display = ""; return; }
+    if (from && to && from > to) { errEl.textContent = "From date must be on or before To date."; errEl.style.display = ""; return; }
+  }
+  const btn = $("#exp-do-export");
+  const orig = btn.textContent;
+  btn.disabled = true; btn.textContent = "Generating…";
+  try {
+    let url = `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes/export-pdf?experiment_type=${EXP_TYPE}`;
+    if (!all && from) url += `&date_from=${from}`;
+    if (!all && to)   url += `&date_to=${to}`;
+    const r = await fetch(url, { credentials: "include" });
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { const j = await r.json(); msg = j.detail || msg; } catch (_) {}
+      throw new Error(msg);
+    }
+    const blob = await r.blob();
+    const dispo = r.headers.get("content-disposition") || "";
+    const m = dispo.match(/filename="?([^"]+)"?/);
+    const fname = m ? m[1] : `behavior_notes_${todayISO()}.pdf`;
+    const objUrl = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = objUrl; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(objUrl);
+    $("#modal-export").style.display = "none";
+  } catch (e) {
+    errEl.textContent = "Export failed: " + e.message;
+    errEl.style.display = "";
+  } finally {
+    btn.disabled = false; btn.textContent = orig;
+  }
+}
+$("#exp-do-export").addEventListener("click", runExport);
+
+// ───────────────────────────────────────────
+// Modal close + drag
+// ───────────────────────────────────────────
+$$("[data-close]").forEach(el => {
+  el.addEventListener("click", () => { $("#" + el.dataset.close).style.display = "none"; });
+});
+$$(".modal-overlay").forEach(ov => {
+  ov.addEventListener("click", (e) => { if (e.target === ov) ov.style.display = "none"; });
+});
+
+(function setupModalDragging() {
+  document.querySelectorAll(".modal-head").forEach(head => {
+    head.style.cursor = "move";
+    head.style.userSelect = "none";
+    head.addEventListener("mousedown", (e) => {
+      if (e.target.closest("button")) return; // don't drag from close button
+      const modal = head.closest(".modal");
+      if (!modal) return;
+      const m = (modal.style.transform || "").match(/translate\(([-\d.]+)px,\s*([-\d.]+)px\)/);
+      const startTx = m ? parseFloat(m[1]) : 0;
+      const startTy = m ? parseFloat(m[2]) : 0;
+      const startX = e.clientX, startY = e.clientY;
+      const onMove = (ev) => {
+        modal.style.transform = `translate(${startTx + ev.clientX - startX}px, ${startTy + ev.clientY - startY}px)`;
+      };
+      const onUp = () => {
+        document.removeEventListener("mousemove", onMove);
+        document.removeEventListener("mouseup", onUp);
+      };
+      document.addEventListener("mousemove", onMove);
+      document.addEventListener("mouseup", onUp);
+      e.preventDefault();
+    });
+  });
+  // Reset position when overlay is closed
+  document.querySelectorAll(".modal-overlay").forEach(ov => {
+    const modal = ov.querySelector(".modal");
+    if (!modal) return;
+    const reset = () => { modal.style.transform = ""; };
+    ov.querySelectorAll("[data-close]").forEach(b => b.addEventListener("click", reset));
+    ov.addEventListener("click", (e) => { if (e.target === ov) reset(); });
+  });
+})();
+
+// ───────────────────────────────────────────
+// Past day viewer
+// ───────────────────────────────────────────
+async function openDayViewer(iso) {
+  $("#viewer-title").textContent = fmtLong(iso);
+  $("#viewer-entries").innerHTML = '<p class="empty">Loading…</p>';
+  $("#viewer-meta").innerHTML = "";
+  $("#modal-viewer").style.display = "flex";
+  try {
+    const data = await api("GET",
+      `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes?experiment_type=${EXP_TYPE}&date=${iso}`);
+    const notes = data.notes || [];
+    if (!notes.length) {
+      $("#viewer-entries").innerHTML = '<p class="empty">No entries for this date.</p>';
+      return;
+    }
+    const blocks = notes.map(n => {
+      const author = n.author?.display_name || n.author?.username || "—";
+      const entries = n.payload?.entries || [];
+      const list = entries.length
+        ? `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, true, iso)).join("")}</div>`
+        : `<p class="empty">No entries.</p>`;
+      return `
+        <div style="margin-bottom:18px;">
+          <div class="day-popup-meta">
+            <span class="status-pill ${n.status === "draft" ? "draft" : "approved"}">${n.status === "draft" ? "Draft" : "Finalized"}</span>
+            <span>by ${escapeHtml(author)}</span>
+            <span>· updated ${(n.updated_at || "").slice(0,16).replace("T"," ")}</span>
+          </div>
+          ${list}
+        </div>`;
+    }).join("");
+    $("#viewer-entries").innerHTML = blocks;
+  } catch (e) {
+    $("#viewer-entries").innerHTML = `<p class="empty">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+// ───────────────────────────────────────────
+// Event delegation on #main
+// ───────────────────────────────────────────
+document.getElementById("main").addEventListener("click", (ev) => {
+  const tgt = ev.target;
+
+  // Toggle session add form
+  if (tgt.classList.contains("sess-add-toggle")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const wrap = document.getElementById(`sess-add-wrap-${eidx}`);
+    if (wrap) { wrap.style.display = ""; wrap.querySelector(".saf-task-sel")?.focus(); }
+    tgt.style.display = "none";
+    return;
+  }
+
+  // Add session button
+  if (tgt.classList.contains("saf-add-btn")) {
+    doAddSession(parseInt(tgt.dataset.eidx));
+    return;
+  }
+
+  // Done button — hide form, show toggle
+  if (tgt.classList.contains("saf-done-btn")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const wrap = document.getElementById(`sess-add-wrap-${eidx}`);
+    if (wrap) wrap.style.display = "none";
+    const btn = document.getElementById(`sess-toggle-${eidx}`);
+    if (btn) btn.style.display = "";
+    return;
+  }
+
+  // Delete session
+  if (tgt.classList.contains("sess-del")) {
+    deleteSessionFromEntry(parseInt(tgt.dataset.eidx), parseInt(tgt.dataset.sidx));
+    return;
+  }
+
+  // Create folder
+  if (tgt.classList.contains("fld-create")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const task = tgt.dataset.task;
+    createFolderForTask(eidx, task);
+    return;
+  }
+});
+
+// Live preview update when typing task label
+document.getElementById("main").addEventListener("input", (ev) => {
+  const tgt = ev.target;
+  if (!tgt.classList.contains("tlabel")) return;
+  const row = tgt.closest(".folder-row");
+  if (!row) return;
+  const eidx = parseInt(row.dataset.eidx);
+  const task = row.dataset.task;
+  const e = normalizeEntry(todayNote?.payload?.entries?.[eidx] || {});
+  const name = buildBehaviorFolderName(e, task, tgt.value.trim(), todayNote?.note_date || todayISO());
+  const prev = row.querySelector(".folder-name-preview");
+  if (prev) prev.textContent = name;
+});
+
+function buildBehaviorMetadataText(e, task, userTaskLabel, dateISO, author) {
+  const rec = e.recording || {};
+  const mouse = e.mouse || {};
+  const lines = [];
+  const sep = "=".repeat(60);
+  lines.push(sep);
+  lines.push("Lab OS — Behavior recording metadata");
+  lines.push(sep);
+  lines.push(`Date              : ${dateISO || "—"}`);
+  lines.push(`Author            : ${author || "—"}`);
+  lines.push(`Generated         : ${new Date().toISOString()}`);
+  lines.push("");
+  lines.push("[Mouse]");
+  lines.push(`  Mouse ID        : ${e.mouse_id || "—"}`);
+  lines.push(`  Cohort          : ${e.cohort || "—"}`);
+  lines.push(`  Exp. condition  : ${e.exp_condition || "—"}`);
+  if (mouse.strain || mouse.sex || mouse.dob) {
+    lines.push(`  Strain          : ${mouse.strain || "—"}`);
+    lines.push(`  Sex             : ${mouse.sex || "—"}`);
+    lines.push(`  DOB             : ${mouse.dob || "—"}`);
+    if (mouse.age_weeks != null)         lines.push(`  Age             : ${mouse.age_weeks} wks`);
+    if (mouse.condition)                 lines.push(`  Condition       : ${mouse.condition}`);
+    if (mouse.days_in_condition != null) lines.push(`  Days in cond    : ${mouse.days_in_condition}`);
+    if (mouse.from_db === false)         lines.push(`  Source          : manual (not in animal DB)`);
+  }
+  lines.push("");
+  lines.push("[Behavior]");
+  lines.push(`  Task            : ${task || "—"}`);
+  lines.push(`  Task label      : ${userTaskLabel || "—"}`);
+  if ((e.behavior_tasks || []).length > 1) {
+    lines.push(`  All tasks today : ${(e.behavior_tasks || []).join(", ")}`);
+  }
+  lines.push("");
+  const sp = (e.stim_params || {})[task];
+  if (sp && _isVisualStimTask(task)) {
+    lines.push("[Visual stimulus]");
+    lines.push(`  Stim velocity   : ${sp.velocity || "—"}`);
+    lines.push(`  Stim frequency  : ${sp.frequency || "—"}`);
+    lines.push(`  Stim phase      : ${sp.phase || "—"}`);
+    lines.push(`  Luminescence    : ${sp.luminescence || "—"}`);
+    lines.push("");
+  }
+  lines.push("[Recording modality]");
+  if (rec.target_region) lines.push(`  Target region   : ${rec.target_region}`);
+
+  const ph = rec.photometry || {};
+  if (ph.enabled) {
+    lines.push("");
+    lines.push("  · Photometry");
+    lines.push(`      Recording site : ${ph.site || "—"}`);
+    lines.push(`      Indicator type : ${ph.indicator || "—"}`);
+    lines.push(`      Channel        : ${ph.channel || "—"}`);
+  }
+  const ep = rec.ephys || {};
+  if (ep.enabled) {
+    lines.push("");
+    lines.push("  · ePhys");
+    lines.push(`      Type           : ${ep.type || "—"}`);
+    lines.push(`      Recording site : ${ep.site || "—"}`);
+  }
+  const op = rec.opto || {};
+  if (op.enabled) {
+    lines.push("");
+    lines.push("  · Optogenetics");
+    lines.push(`      Stim side      : ${op.stim_side || "—"}`);
+    lines.push(`      Ipsi/Contra    : ${op.laterality || "—"}`);
+    lines.push(`      Opsin          : ${op.opsin || "—"}`);
+    lines.push(`      # of pulses    : ${op.n_pulses || "—"}`);
+    lines.push(`      Frequency      : ${op.frequency || "—"}`);
+    lines.push(`      Phase          : ${op.phase || "—"}`);
+    lines.push(`      Power          : ${op.power || "—"}`);
+  }
+  const ch = rec.chemogenetic || {};
+  if (ch.enabled) {
+    lines.push("");
+    lines.push("  · Chemogenetic");
+    lines.push(`      Agent          : ${ch.agent || "—"}`);
+    lines.push(`      Dose           : ${ch.dose || "—"}`);
+    lines.push(`      Route          : ${ch.route || "—"}`);
+    lines.push(`      Notes          : ${ch.notes || "—"}`);
+  }
+  const dr = rec.drug || {};
+  if (dr.enabled) {
+    lines.push("");
+    lines.push("  · Drug application");
+    lines.push(`      Drug           : ${dr.name || "—"}`);
+    lines.push(`      Dose           : ${dr.dose || "—"}`);
+    lines.push(`      Route          : ${dr.route || "—"}`);
+    lines.push(`      Notes          : ${dr.notes || "—"}`);
+  }
+  if (!ph.enabled && !ep.enabled && !op.enabled && !ch.enabled && !dr.enabled) {
+    lines.push("  (none selected — behavior only)");
+  }
+  lines.push("");
+  lines.push(sep);
+  return lines.join("\n") + "\n";
+}
+
+async function createFolderForTask(entryIdx, task) {
+  if (!todayNote) { alert("Save the entry first."); return; }
+  const row = document.querySelector(`.folder-row[data-eidx="${entryIdx}"][data-task="${CSS.escape(task)}"]`);
+  if (!row) return;
+  const tlabel = row.querySelector(".tlabel")?.value.trim() || "";
+  if (!tlabel) {
+    if (!confirm("No task label entered. Create folder without task- part?")) return;
+  }
+  const e = normalizeEntry(todayNote.payload.entries[entryIdx]);
+  const dateISO = todayNote.note_date || todayISO();
+  const folderName = buildBehaviorFolderName(e, task, tlabel, dateISO);
+  const metaText = buildBehaviorMetadataText(e, task, tlabel, dateISO, currentUser?.display_name || currentUser?.username || "");
+  try {
+    const r = await api("POST", "/api/eln/data-folder", {
+      entry: e,
+      folder_name: folderName,
+      metadata_text: metaText,
+      metadata_filename: "metadata.txt",
+    });
+    // Persist into entry.folders
+    const entries = todayNote.payload.entries;
+    const target = { ...normalizeEntry(entries[entryIdx]) };
+    target.folders = { ...(target.folders || {}) };
+    target.folders[task] = {
+      task_label:  tlabel,
+      folder_name: r.folder_name,
+      full_path:   r.full_path,
+      created_at:  new Date().toISOString(),
+    };
+    entries[entryIdx] = target;
+    await saveNotePayload();
+    await loadDay(dateISO, true);
+    alert(`Folder ${r.created ? "created" : "already exists"}:\n${r.full_path}`);
+  } catch (err) {
+    alert("Folder create failed: " + err.message);
+  }
+}
+
+// Task select ↔ custom toggle (delegated on #main)
+document.getElementById("main").addEventListener("change", (ev) => {
+  const tgt = ev.target;
+  if (tgt.classList.contains("saf-task-sel")) {
+    const wrap = tgt.closest(".sess-add-wrap");
+    if (!wrap) return;
+    const customInp = wrap.querySelector(".saf-task-custom");
+    const isCustom = tgt.value === "__custom__";
+    if (customInp) {
+      customInp.style.display = isCustom ? "" : "none";
+      if (isCustom) { customInp.value = ""; customInp.focus(); }
+    }
+  }
+});
+
+// Keyboard shortcuts in session form
+document.getElementById("main").addEventListener("keydown", (ev) => {
+  const tgt = ev.target;
+  const wrap = tgt.closest(".sess-add-wrap");
+  if (!wrap) return;
+  const eidx = parseInt(wrap.id.replace("sess-add-wrap-", ""));
+  if (isNaN(eidx)) return;
+
+  if (tgt.classList.contains("saf-score") && ev.key === "Enter") {
+    ev.preventDefault();
+    wrap.querySelector(".saf-notes")?.focus();
+    return;
+  }
+  if (tgt.classList.contains("saf-notes") && ev.key === "Enter") {
+    ev.preventDefault();
+    doAddSession(eidx);
+    return;
+  }
+  if (tgt.classList.contains("saf-task-custom") && ev.key === "Enter") {
+    ev.preventDefault();
+    wrap.querySelector(".saf-score")?.focus();
+    return;
+  }
+});
+
+boot();
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>

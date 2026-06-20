@@ -1,0 +1,26 @@
+# --- Python ---
+__pycache__/
+*.pyc
+.venv/
+
+# --- Local data / runtime ---
+scheduler.db
+scheduler.db-wal
+scheduler.db-shm
+scheduler.db.bak*
+*.log
+*.pid
+slack_poll_state.json
+pms_projects.json
+build_info.json
+
+# --- Secrets ---
+.env
+secrets/
+*-sa.json
+
+# --- Local agent / editor settings ---
+.claude/
+
+# --- OS cruft ---
+.DS_Store

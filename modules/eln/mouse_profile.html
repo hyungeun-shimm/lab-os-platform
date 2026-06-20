@@ -1,0 +1,573 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Mouse profile</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter); color: #1c2333; min-height: 100vh;
+  }
+  header.app-top {
+    background: var(--navy); color: var(--white);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  header.app-top .brand { font-family: Georgia, serif; font-size: 18px; font-weight: 700; }
+  header.app-top .brand-sub {
+    color: var(--accent); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; margin-left: 4px;
+  }
+  header.app-top a.back {
+    color: var(--ice); text-decoration: none; font-size: 13px;
+  }
+  header.app-top a.back:hover { color: var(--white); }
+  header.app-top .crumbs { color: var(--ice-deep); font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+  header.app-top .crumbs strong { color: var(--white); }
+  header.app-top .spacer { flex: 1; }
+  header.app-top .me { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  header.app-top .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  header.app-top .mode-pill {
+    background: var(--accent); color: var(--navy-deep);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  header.app-top .mode-pill.member { background: var(--ice-deep); color: var(--navy-deep); }
+
+  main { max-width: 1280px; margin: 0 auto; padding: 24px; }
+
+  .mouse-head {
+    background: var(--white); border-radius: 14px;
+    padding: 20px 24px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .mouse-head h1 {
+    margin: 0 0 4px; font-family: Georgia, serif; color: var(--navy);
+    font-size: 24px; display: flex; align-items: center; gap: 10px;
+  }
+  .mouse-head .mid-tag {
+    font-family: 'SF Mono', Consolas, monospace;
+    font-weight: 700; color: var(--navy);
+    background: var(--ice); padding: 4px 12px; border-radius: 8px;
+  }
+  .mouse-head .desc { color: var(--grey); font-size: 12.5px; margin-bottom: 12px; }
+
+  .info-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 12px 18px; margin-top: 12px;
+  }
+  .info-grid .ig-l {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 2px;
+  }
+  .info-grid .ig-v { font-weight: 600; color: var(--navy-deep); font-size: 14px; }
+  .info-grid.manual {
+    background: rgba(242, 179, 61, 0.10); padding: 12px 16px; border-radius: 10px;
+  }
+
+  .stats-row {
+    display: flex; gap: 10px; flex-wrap: wrap; margin-top: 12px;
+  }
+  .stat-chip {
+    background: var(--grey-lighter); border-radius: 10px;
+    padding: 8px 14px;
+  }
+  .stat-chip .l {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .stat-chip .v {
+    font-size: 20px; font-weight: 700; color: var(--navy); line-height: 1; margin-top: 2px;
+  }
+
+  .section {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .section h2 {
+    margin: 0 0 12px; font-family: Georgia, serif; color: var(--navy); font-size: 16px;
+  }
+
+  .timeline { display: flex; flex-direction: column; gap: 10px; }
+  .tl-entry {
+    border: 1px solid var(--grey-light); border-radius: 10px;
+    padding: 12px 16px;
+    transition: border-color 0.15s;
+  }
+  .tl-entry:hover { border-color: var(--ice-deep); }
+  .tl-head {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    margin-bottom: 6px;
+  }
+  .tl-date {
+    font-weight: 700; color: var(--navy); font-size: 14px;
+    font-family: 'SF Mono', Consolas, monospace;
+  }
+  .tl-spacer { flex: 1; }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .pill.slice    { background: rgba(99,102,241,0.13); color: #4338ca; }
+  .pill.behavior { background: rgba(16,185,129,0.13); color: #065f46; }
+  .pill.draft    { background: var(--grey-lighter); color: var(--grey); }
+  .pill.final    { background: var(--green-soft); color: var(--green); }
+  .small-chip {
+    display: inline-block;
+    background: var(--grey-lighter); color: var(--navy);
+    border-radius: 999px; padding: 2px 9px;
+    font-size: 11.5px; margin-right: 4px; margin-bottom: 3px;
+  }
+  .tl-proj {
+    font-size: 13px;
+  }
+  .tl-proj a { color: var(--navy); text-decoration: none; font-weight: 600; }
+  .tl-proj a:hover { text-decoration: underline; }
+  .tl-author {
+    font-size: 12px; color: var(--grey);
+  }
+  .tl-summary { font-size: 13px; line-height: 1.5; color: var(--navy-deep); }
+  .tl-meta { font-size: 11.5px; color: var(--grey); margin-top: 4px; }
+  .tl-detail-toggle {
+    background: transparent; color: var(--navy);
+    border: 0; cursor: pointer;
+    font: inherit; font-size: 12px; font-weight: 600;
+    padding: 0; margin-top: 6px;
+    text-decoration: underline;
+  }
+  .tl-detail {
+    margin-top: 8px; padding: 10px 12px;
+    background: var(--grey-lighter); border-radius: 8px;
+    font-size: 12.5px; font-family: 'SF Mono', Consolas, monospace;
+    white-space: pre-wrap; word-break: break-word;
+    display: none;
+  }
+
+  .filters {
+    background: var(--white); border-radius: 12px;
+    padding: 10px 14px; margin-bottom: 12px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .filter-btn {
+    background: var(--grey-lighter); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 999px;
+    padding: 4px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .filter-btn:hover { background: var(--ice); }
+  .filter-btn.active {
+    background: var(--navy); color: var(--white); border-color: var(--navy);
+  }
+  .filter-label {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+
+  .empty { color: var(--grey); font-style: italic; padding: 30px 20px; text-align: center; }
+  .err { color: #b91c1c; padding: 12px 16px; background: #fef2f2; border-radius: 8px; }
+
+  /* lookup input */
+  .lookup-row {
+    background: var(--white); border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 12px;
+    display: flex; gap: 10px; align-items: center;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    position: relative;
+  }
+  .lookup-row .lookup-wrap { position: relative; flex: 0 0 240px; max-width: 240px; }
+  .lookup-row input {
+    width: 100%;
+    border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 7px 11px; font: inherit; font-size: 14px;
+  }
+  .lookup-row button {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 8px;
+    padding: 7px 14px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .suggest-list {
+    position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+    background: var(--white);
+    border: 1px solid var(--grey-light); border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(15,23,42,0.12);
+    z-index: 50; max-height: 320px; overflow-y: auto;
+    display: none;
+  }
+  .suggest-list.open { display: block; }
+  .suggest-item {
+    padding: 8px 12px; cursor: pointer;
+    border-bottom: 1px solid var(--grey-lighter);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .suggest-item:last-child { border-bottom: 0; }
+  .suggest-item:hover, .suggest-item.active { background: var(--ice); }
+  .suggest-item .si-mid {
+    font-family: 'SF Mono', Consolas, monospace; font-weight: 700; color: var(--navy);
+  }
+  .suggest-item .si-meta { font-size: 11.5px; color: var(--grey); }
+  .suggest-empty { padding: 10px 12px; color: var(--grey); font-style: italic; font-size: 12.5px; }
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div>
+    <span class="brand">Lab OS</span><span class="brand-sub">ELN</span>
+  </div>
+  <a class="back" href="/eln/">← Projects</a>
+  <div class="crumbs">
+    <span>/</span><strong>Mouse profile</strong>
+  </div>
+  <div class="spacer"></div>
+  <div class="me" id="me-area">Loading…</div>
+</header>
+
+<main>
+  <div class="lookup-row">
+    <span class="filter-label">Look up another:</span>
+    <div class="lookup-wrap">
+      <input id="lookup-input" type="text" placeholder="Mouse ID, e.g. WT3479" autocomplete="off" />
+      <div class="suggest-list" id="suggest-list"></div>
+    </div>
+    <button id="lookup-btn">Go</button>
+  </div>
+
+  <div id="content">
+    <div class="section"><p class="empty">Loading…</p></div>
+  </div>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+const pathParts = window.location.pathname.split("/").filter(Boolean);
+const mouseId = decodeURIComponent(pathParts[2] || "");
+
+let currentUser = null;
+let timeline = null;
+let filter = { type: "all", project: "all" };
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function fmtDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso + "T00:00:00");
+  return isNaN(d) ? iso : d.toLocaleDateString(undefined, { weekday: "short", year: "numeric", month: "short", day: "numeric" });
+}
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+async function boot() {
+  if (!mouseId) {
+    $("#content").innerHTML = `<div class="section"><p class="empty">No mouse ID in URL. Use the lookup above.</p></div>`;
+    return;
+  }
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    renderHeader();
+
+    $("#lookup-input").value = "";
+    timeline = await api("GET", `/api/eln/mice/${encodeURIComponent(mouseId)}/timeline`);
+    render();
+  } catch (e) {
+    if (e.status === 401) { window.location.href = "/eln/login"; return; }
+    $("#content").innerHTML = `<div class="section"><div class="err">Failed: ${escapeHtml(e.message)}</div></div>`;
+  }
+}
+
+function renderHeader() {
+  const u = currentUser;
+  const initials = u.initials || (u.display_name || "?")[0];
+  const eff = u.effective_role;
+  const badge = `<span class="mode-pill ${eff === "admin" ? "" : "member"}">${eff === "admin" ? "Admin mode" : "User mode"}</span>`;
+  $("#me-area").innerHTML =
+    `<div class="avatar" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${initials}</div>` +
+    `<div>${u.display_name} ${badge}</div>`;
+}
+
+$("#lookup-btn").addEventListener("click", () => {
+  const v = $("#lookup-input").value.trim();
+  if (v) window.location.href = `/eln/mouse/${encodeURIComponent(v)}`;
+});
+
+// ── Autocomplete ──
+let suggestItems = [];
+let suggestActive = -1;
+let suggestDebounce = null;
+
+function closeSuggest() {
+  $("#suggest-list").classList.remove("open");
+  suggestActive = -1;
+}
+function renderSuggest(items) {
+  const box = $("#suggest-list");
+  suggestItems = items;
+  suggestActive = -1;
+  if (!items.length) {
+    box.innerHTML = `<div class="suggest-empty">No match in animal DB.</div>`;
+    box.classList.add("open");
+    return;
+  }
+  box.innerHTML = items.map((it, i) => `
+    <div class="suggest-item" data-i="${i}">
+      <span class="si-mid">${escapeHtml(it.mouse_id)}</span>
+      <span class="si-meta">${[it.strain, it.sex, it.condition, it.cohort ? `cohort ${it.cohort}` : "", it.dob].filter(Boolean).map(escapeHtml).join(" · ") || "—"}</span>
+    </div>`).join("");
+  box.classList.add("open");
+  $$(".suggest-item").forEach(el => {
+    el.addEventListener("mousedown", (ev) => {
+      ev.preventDefault();
+      const idx = parseInt(el.dataset.i);
+      const it = suggestItems[idx];
+      if (it) window.location.href = `/eln/mouse/${encodeURIComponent(it.mouse_id)}`;
+    });
+    el.addEventListener("mouseenter", () => {
+      $$(".suggest-item").forEach((x, i) => x.classList.toggle("active", i === parseInt(el.dataset.i)));
+      suggestActive = parseInt(el.dataset.i);
+    });
+  });
+}
+
+async function fetchSuggest(q) {
+  try {
+    const r = await api("GET", `/api/eln/mice-search?q=${encodeURIComponent(q)}`);
+    renderSuggest(r.results || []);
+  } catch (_) { closeSuggest(); }
+}
+
+$("#lookup-input").addEventListener("input", () => {
+  const v = $("#lookup-input").value.trim();
+  clearTimeout(suggestDebounce);
+  if (!v) { closeSuggest(); return; }
+  suggestDebounce = setTimeout(() => fetchSuggest(v), 140);
+});
+
+$("#lookup-input").addEventListener("keydown", e => {
+  const box = $("#suggest-list");
+  const open = box.classList.contains("open");
+  if (e.key === "ArrowDown" && open && suggestItems.length) {
+    e.preventDefault();
+    suggestActive = (suggestActive + 1) % suggestItems.length;
+    $$(".suggest-item").forEach((x, i) => x.classList.toggle("active", i === suggestActive));
+    return;
+  }
+  if (e.key === "ArrowUp" && open && suggestItems.length) {
+    e.preventDefault();
+    suggestActive = (suggestActive - 1 + suggestItems.length) % suggestItems.length;
+    $$(".suggest-item").forEach((x, i) => x.classList.toggle("active", i === suggestActive));
+    return;
+  }
+  if (e.key === "Escape") { closeSuggest(); return; }
+  if (e.key === "Enter") {
+    if (open && suggestActive >= 0 && suggestItems[suggestActive]) {
+      window.location.href = `/eln/mouse/${encodeURIComponent(suggestItems[suggestActive].mouse_id)}`;
+      return;
+    }
+    $("#lookup-btn").click();
+  }
+});
+
+$("#lookup-input").addEventListener("blur", () => setTimeout(closeSuggest, 120));
+
+function render() {
+  const m = timeline.mouse;
+  const all = timeline.entries || [];
+
+  // Head card
+  const headHtml = `
+    <div class="mouse-head">
+      <h1><span>🐭</span><span class="mid-tag">${escapeHtml(m.mouse_id || mouseId)}</span></h1>
+      <div class="desc">${m.from_db ? "From animal DB" : "Not in animal DB — referenced in ELN only"}</div>
+      ${m.from_db ? `
+        <div class="info-grid">
+          <div><div class="ig-l">Strain</div><div class="ig-v">${escapeHtml(m.strain || "—")}</div></div>
+          <div><div class="ig-l">Sex</div><div class="ig-v">${escapeHtml(m.sex || "—")}</div></div>
+          <div><div class="ig-l">DOB</div><div class="ig-v">${escapeHtml(m.dob || "—")}</div></div>
+          <div><div class="ig-l">Age</div><div class="ig-v">${m.age_weeks != null ? m.age_weeks + " wks" : "—"}</div></div>
+          <div><div class="ig-l">Condition</div><div class="ig-v">${escapeHtml(m.condition || "—")}</div></div>
+          <div><div class="ig-l">Days in cond</div><div class="ig-v">${m.days_in_condition != null ? m.days_in_condition : "—"}</div></div>
+          <div><div class="ig-l">Cohort</div><div class="ig-v">${escapeHtml(m.cohort || "—")}</div></div>
+          <div><div class="ig-l">Project</div><div class="ig-v">${escapeHtml(m.project || "—")}</div></div>
+          <div><div class="ig-l">Sacrificed</div><div class="ig-v">${m.sacrificed ? "Yes" : "No"}</div></div>
+        </div>
+      ` : `<div class="info-grid manual"><div>This mouse is not in the synced animal DB. Showing ELN entries only.</div></div>`}
+      ${renderStats(all)}
+    </div>`;
+
+  // Filters
+  const sliceN = all.filter(e => e.experiment_type === "slice_recording").length;
+  const behavN = all.filter(e => e.experiment_type === "behavior").length;
+  const projects = Array.from(new Set(all.map(e => e.project_slug))).map(slug => ({
+    slug, title: all.find(e => e.project_slug === slug)?.project_title || slug
+  }));
+  const filtersHtml = !all.length ? "" : `
+    <div class="filters">
+      <span class="filter-label">Type</span>
+      <button class="filter-btn ${filter.type==='all'?'active':''}" data-f-type="all">All (${all.length})</button>
+      <button class="filter-btn ${filter.type==='slice_recording'?'active':''}" data-f-type="slice_recording">🔬 Slice (${sliceN})</button>
+      <button class="filter-btn ${filter.type==='behavior'?'active':''}" data-f-type="behavior">🐭 Behavior (${behavN})</button>
+      ${projects.length > 1 ? `
+        <span class="filter-label" style="margin-left:14px;">Project</span>
+        <button class="filter-btn ${filter.project==='all'?'active':''}" data-f-proj="all">All</button>
+        ${projects.map(p => `<button class="filter-btn ${filter.project===p.slug?'active':''}" data-f-proj="${escapeHtml(p.slug)}">${escapeHtml(p.title)}</button>`).join("")}
+      ` : ""}
+    </div>`;
+
+  // Timeline filtered
+  const filtered = all.filter(e =>
+    (filter.type === "all" || e.experiment_type === filter.type) &&
+    (filter.project === "all" || e.project_slug === filter.project)
+  );
+  const timelineHtml = `
+    <div class="section">
+      <h2>📅 Timeline (${filtered.length})</h2>
+      ${filtered.length ? `<div class="timeline">${filtered.map((e, i) => renderEntry(e, i)).join("")}</div>` : `<p class="empty">No entries match these filters.</p>`}
+    </div>`;
+
+  $("#content").innerHTML = headHtml + filtersHtml + timelineHtml;
+  wireFilters();
+  wireDetails();
+}
+
+function renderStats(all) {
+  const sliceN = all.filter(e => e.experiment_type === "slice_recording").length;
+  const behavN = all.filter(e => e.experiment_type === "behavior").length;
+  const projs = new Set(all.map(e => e.project_slug)).size;
+  const finalN = all.filter(e => e.status !== "draft").length;
+  return `
+    <div class="stats-row">
+      <div class="stat-chip"><div class="l">Entries</div><div class="v">${all.length}</div></div>
+      <div class="stat-chip"><div class="l">🔬 Slice</div><div class="v">${sliceN}</div></div>
+      <div class="stat-chip"><div class="l">🐭 Behavior</div><div class="v">${behavN}</div></div>
+      <div class="stat-chip"><div class="l">Projects</div><div class="v">${projs}</div></div>
+      <div class="stat-chip"><div class="l">Finalized</div><div class="v">${finalN}</div></div>
+    </div>`;
+}
+
+function renderEntry(e, idx) {
+  const ent = e.entry || {};
+  const typePill = e.experiment_type === "slice_recording"
+    ? `<span class="pill slice">🔬 Slice</span>`
+    : `<span class="pill behavior">🐭 Behavior</span>`;
+  const statusPill = e.status === "draft"
+    ? `<span class="pill draft">Draft</span>`
+    : `<span class="pill final">Finalized</span>`;
+  return `
+    <div class="tl-entry">
+      <div class="tl-head">
+        <span class="tl-date">${escapeHtml(e.note_date)}</span>
+        ${typePill}
+        <div class="tl-proj">📁 <a href="/eln/project/${encodeURIComponent(e.project_slug)}/${e.experiment_type === "slice_recording" ? "slice" : "behavior"}">${escapeHtml(e.project_title)}</a></div>
+        <div class="tl-spacer"></div>
+        ${statusPill}
+      </div>
+      <div class="tl-author">by ${escapeHtml(e.author?.display_name || "—")}</div>
+      <div class="tl-summary" style="margin-top:8px;">${entrySummaryHtml(e.experiment_type, ent)}</div>
+      <button class="tl-detail-toggle" data-idx="${idx}">Show details ▾</button>
+      <div class="tl-detail" id="tl-detail-${idx}">${escapeHtml(JSON.stringify(ent, null, 2))}</div>
+      <div class="tl-meta">${escapeHtml(fmtDate(e.note_date))} · updated ${escapeHtml((e.updated_at || "").slice(0,16).replace("T"," "))}</div>
+    </div>`;
+}
+
+function entrySummaryHtml(type, ent) {
+  const bits = [];
+  if (ent.exp_condition) bits.push(`<span class="small-chip">cond: ${escapeHtml(ent.exp_condition)}</span>`);
+  if (ent.cohort)        bits.push(`<span class="small-chip">cohort: ${escapeHtml(ent.cohort)}</span>`);
+
+  if (type === "slice_recording") {
+    if (ent.cell_type)   bits.push(`<span class="small-chip">${escapeHtml(ent.cell_type)}</span>`);
+    const recs = ent.recordings || (ent.cells ? ent.cells.map(c => ({ cell: c.cell, protocol: c.protocol })) : []);
+    const cells  = Array.from(new Set(recs.map(r => r.cell).filter(Boolean)));
+    const protos = Array.from(new Set(recs.map(r => r.protocol).filter(Boolean)));
+    if (cells.length)  bits.push(`<span class="small-chip">${cells.length} cell${cells.length>1?"s":""}: ${escapeHtml(cells.join(", "))}</span>`);
+    if (protos.length) protos.forEach(p => bits.push(`<span class="small-chip" style="background:rgba(99,102,241,0.12);color:#4338ca;">${escapeHtml(p)}</span>`));
+    if (recs.length)   bits.push(`<span class="small-chip">${recs.length} rec${recs.length>1?"s":""}</span>`);
+    if (ent.behavior_exp?.done) bits.push(`<span class="small-chip" style="background:var(--green-soft);color:var(--green);">🐭 behavior accompany</span>`);
+  } else {
+    (ent.behavior_tasks || []).forEach(t => bits.push(`<span class="small-chip">${escapeHtml(t)}</span>`));
+    const rec = ent.recording || {};
+    if (rec.target_region) bits.push(`<span class="small-chip" style="background:#eef2ff;color:var(--navy);">@${escapeHtml(rec.target_region)}</span>`);
+    const mods = [
+      [rec.photometry?.enabled,   "Photometry",   "background:rgba(99,102,241,0.12);color:#4338ca;"],
+      [rec.ephys?.enabled,        "ePhys",        "background:rgba(245,158,11,0.12);color:#92400e;"],
+      [rec.opto?.enabled,         "Opto",         "background:rgba(16,185,129,0.12);color:#065f46;"],
+      [rec.chemogenetic?.enabled, "Chemogenetic", "background:rgba(168,85,247,0.12);color:#6b21a8;"],
+      [rec.drug?.enabled,         "Drug",         "background:rgba(244,114,182,0.12);color:#9d174d;"],
+    ];
+    mods.forEach(([on, lbl, css]) => { if (on) bits.push(`<span class="small-chip" style="${css}">${lbl}</span>`); });
+    const sessN = (ent.sessions || []).length;
+    if (sessN) bits.push(`<span class="small-chip">${sessN} session${sessN>1?"s":""}</span>`);
+    const folders = Object.keys(ent.folders || {}).length;
+    if (folders) bits.push(`<span class="small-chip" style="background:var(--green-soft);color:var(--green);">📁 ${folders} folder${folders>1?"s":""}</span>`);
+  }
+  return bits.join("") || `<span style="color:var(--grey);font-style:italic;">No summary.</span>`;
+}
+
+function wireFilters() {
+  $$(".filter-btn[data-f-type]").forEach(b => {
+    b.addEventListener("click", () => { filter.type = b.dataset.fType; render(); });
+  });
+  $$(".filter-btn[data-f-proj]").forEach(b => {
+    b.addEventListener("click", () => { filter.project = b.dataset.fProj; render(); });
+  });
+}
+
+function wireDetails() {
+  $$(".tl-detail-toggle").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const detail = document.getElementById(`tl-detail-${btn.dataset.idx}`);
+      if (!detail) return;
+      const open = detail.style.display === "block";
+      detail.style.display = open ? "none" : "block";
+      btn.textContent = open ? "Show details ▾" : "Hide details ▴";
+    });
+  });
+}
+
+boot();
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>

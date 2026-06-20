@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#007aff" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+<meta name="apple-mobile-web-app-title" content="Lab OS" />
+<link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png" />
+<title>Lab Notes</title>
+<style>
+  :root{ --accent:#007aff; --bg:#fff; --bg2:#f2f2f7; --line:#e5e5ea; --txt:#1c1c1e; --mut:#8e8e93; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; background:var(--bg); color:var(--txt); font:16px/1.4 -apple-system,"Helvetica Neue",sans-serif; }
+  .mhead{ position:sticky; top:0; z-index:20; background:var(--bg); border-bottom:1px solid var(--line); }
+  .mrow{ display:flex; align-items:center; gap:10px; padding:9px 12px; }
+  .mtitle{ font-size:17px; font-weight:600; flex:1; }
+  .avatar{ flex:none; width:32px; height:32px; border-radius:50%; border:none; background:var(--accent); color:#fff; font-size:12px; font-weight:700; }
+  .iconbtn{ border:none; background:var(--bg2); color:var(--accent); width:34px; height:34px; border-radius:9px; font-size:20px; }
+  .search{ padding:0 12px 10px; }
+  .search input{ width:100%; padding:10px 12px; font-size:15px; border:1px solid var(--line); border-radius:10px; background:var(--bg2); }
+  .seg{ display:flex; gap:6px; padding:0 12px 10px; }
+  .seg button{ border:1px solid var(--line); background:var(--bg); color:var(--txt); font-size:13px; padding:6px 12px; border-radius:16px; }
+  .seg button.on{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  main{ padding:6px 12px 100px; }
+  .card{ border:1px solid var(--line); border-radius:14px; padding:13px 14px; margin-bottom:10px; }
+  .card:active{ background:var(--bg2); }
+  .card-top{ display:flex; align-items:center; gap:8px; }
+  .card-title{ font-size:16px; font-weight:600; flex:1; min-width:0; }
+  .badge{ font-size:11px; font-weight:600; padding:2px 8px; border-radius:8px; }
+  .b-assigned{ background:rgba(0,122,255,.12); color:#0a4a99; }
+  .b-pilot{ background:rgba(242,179,61,.20); color:#8a5b00; }
+  .card-desc{ font-size:13px; color:var(--mut); margin:6px 0 0; }
+  .card-meta{ display:flex; align-items:center; gap:10px; margin-top:9px; font-size:12px; color:var(--mut); }
+  .dots{ display:flex; margin-left:auto; }
+  .dot{ width:22px; height:22px; border-radius:50%; background:var(--accent); color:#fff; font-size:10px; font-weight:700;
+    display:inline-flex; align-items:center; justify-content:center; margin-left:-6px; border:2px solid var(--bg); }
+  .empty{ color:var(--mut); text-align:center; padding:60px 20px; line-height:1.6; }
+  .fab{ position:fixed; right:18px; bottom:20px; width:56px; height:56px; border-radius:50%; background:var(--accent);
+    color:#fff; border:none; font-size:30px; z-index:30; box-shadow:0 4px 16px rgba(0,0,0,.3); }
+  .sheet{ position:fixed; inset:0; z-index:10000; background:rgba(0,0,0,.4); display:none; }
+  .sheet.show{ display:block; }
+  .sheet-inner{ position:absolute; left:0; right:0; bottom:0; max-height:92vh; overflow-y:auto; background:var(--bg);
+    border-radius:18px 18px 0 0; padding:14px 16px calc(20px + env(safe-area-inset-bottom)); }
+  .grab{ width:40px; height:5px; border-radius:3px; background:var(--line); margin:0 auto 10px; }
+  .sheet h3{ margin:4px 0 12px; font-size:18px; }
+  .sheet label{ display:block; font-size:12px; color:var(--mut); margin:10px 0 4px; }
+  .sheet input{ width:100%; padding:11px; font-size:16px; border:1px solid var(--line); border-radius:10px; }
+  .acts{ display:flex; gap:8px; margin-top:16px; }
+  .acts button{ flex:1; padding:13px; font-size:16px; font-weight:600; border-radius:11px; border:none; }
+  .btn-primary{ background:var(--accent); color:#fff; }
+  .btn-grey{ background:var(--bg2); color:var(--txt); }
+  .avatar-lg{ width:46px; height:46px; border-radius:50%; background:var(--accent); color:#fff; display:inline-flex;
+    align-items:center; justify-content:center; font-size:17px; font-weight:700; flex:none; }
+  .menu-link{ display:block; width:100%; text-align:left; text-decoration:none; color:var(--txt); background:none;
+    border:none; border-top:1px solid var(--line); padding:14px 4px; font-size:16px; }
+  .menu-link:active{ background:var(--bg2); }
+  .menu-link.signout{ color:#ff3b30; }
+  .msg{ font-size:13px; margin:8px 0; display:none; color:#ff3b30; }
+</style>
+</head>
+<body>
+<header class="mhead">
+  <div class="mrow">
+    <button class="avatar" id="menuBtn" aria-label="Menu">·</button>
+    <span class="mtitle">Lab Notes</span>
+    <button class="iconbtn" id="newBtn" aria-label="New project">+</button>
+  </div>
+  <div class="seg" id="seg">
+    <button data-k="all" class="on">All</button>
+    <button data-k="assigned">Assigned</button>
+    <button data-k="pilot">Pilot</button>
+  </div>
+  <div class="search"><input id="q" type="search" placeholder="Search projects…" /></div>
+</header>
+
+<main id="main"></main>
+<button class="fab" id="fab" aria-label="New project">+</button>
+
+<!-- Menu sheet -->
+<div class="sheet" id="menuSheet"><div class="sheet-inner">
+  <div class="grab"></div>
+  <div style="display:flex; align-items:center; gap:12px; margin:2px 0 10px;">
+    <span class="avatar-lg" id="menuAv">·</span>
+    <div><div id="menuName" style="font-size:17px;font-weight:600;">—</div>
+      <div id="menuRole" style="font-size:13px;color:var(--mut);"></div></div>
+  </div>
+  <a class="menu-link" href="/m">&#128197; Schedule</a>
+  <a class="menu-link" href="/eln/m">&#128211; Lab Notes (ELN)</a>
+  <a class="menu-link" href="/eln/colony">&#128045; Animal DB</a>
+  <a class="menu-link" href="/eln/breeders">&#129516; Breeders</a>
+  <a class="menu-link" href="/eln/dashboard">&#128202; Dashboard</a>
+  <button class="menu-link signout" id="menuSignout">Sign out</button>
+</div></div>
+
+<!-- New project sheet -->
+<div class="sheet" id="newSheet"><div class="sheet-inner">
+  <div class="grab"></div>
+  <h3>New project</h3>
+  <label>Title</label><input id="npTitle" type="text" placeholder="e.g. Floc plasticity" />
+  <div id="npKindRow" style="display:none;">
+    <label>Type</label>
+    <div class="seg" style="padding:0;">
+      <button type="button" data-k="pilot" class="on" id="npPilot">Pilot (mine)</button>
+      <button type="button" data-k="assigned" id="npAssigned">Assigned (lab)</button>
+    </div>
+  </div>
+  <div class="msg" id="npMsg"></div>
+  <div class="acts">
+    <button class="btn-grey" data-close="newSheet">Cancel</button>
+    <button class="btn-primary" id="npSave">Create</button>
+  </div>
+</div></div>
+
+<script>
+const state={ me:null, projects:[], filter:'all', q:'', npKind:'pilot' };
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function initials(u){ return String((u&&(u.initials||(u.display_name||u.username||'?')[0]))||'?').toUpperCase(); }
+function relTime(iso){ if(!iso) return 'no notes yet';
+  const s=Math.floor((Date.now()-new Date(iso).getTime())/1000);
+  if(s<3600) return Math.max(1,Math.floor(s/60))+'m ago';
+  if(s<86400) return Math.floor(s/3600)+'h ago';
+  return Math.floor(s/86400)+'d ago';
+}
+async function api(path,opts={}){
+  const r=await fetch(path,{credentials:'include',headers:{'Content-Type':'application/json'},...opts});
+  if(!r.ok) throw new Error('API '+path+': '+r.status+' '+(await r.text().catch(()=>'')));
+  return r.json();
+}
+function showSheet(id){ document.getElementById(id).classList.add('show'); }
+function hideSheet(id){ document.getElementById(id).classList.remove('show'); }
+
+function render(){
+  const root=document.getElementById('main');
+  const q=state.q.trim().toLowerCase();
+  const list=state.projects.filter(p=>{
+    if(state.filter!=='all' && p.kind!==state.filter) return false;
+    if(!q) return true;
+    return (p.title||'').toLowerCase().includes(q)||(p.slug||'').toLowerCase().includes(q)||(p.description||'').toLowerCase().includes(q);
+  });
+  if(!list.length){ root.innerHTML='<div class="empty">'+(state.projects.length?'No matching projects.':'No projects yet.<br>Tap + to create one.')+'</div>'; return; }
+  root.innerHTML='';
+  list.forEach(p=>{
+    const c=document.createElement('div'); c.className='card';
+    const dots=(p.members||[]).slice(0,4).map(m=>'<span class="dot" style="'+(m.color?'background:'+m.color:'')+'">'+esc(m.initials||(m.display_name||'?')[0])+'</span>').join('');
+    const more=(p.members&&p.members.length>4)?'<span class="dot" style="background:var(--mut)">+'+(p.members.length-4)+'</span>':'';
+    c.innerHTML=
+      '<div class="card-top">'+
+        '<span class="card-title">'+esc(p.short_name||p.title||p.slug)+'</span>'+
+        '<span class="badge '+(p.kind==='pilot'?'b-pilot':'b-assigned')+'">'+esc(p.kind||'')+'</span>'+
+      '</div>'+
+      (p.description?'<p class="card-desc">'+esc(p.description)+'</p>':'')+
+      '<div class="card-meta">&#128221; '+(p.note_count||0)+' · '+esc(relTime(p.last_note_at))+
+        (dots||more?'<span class="dots">'+dots+more+'</span>':'')+'</div>';
+    c.addEventListener('click',()=>{ location.href='/eln/project/'+encodeURIComponent(p.slug); });
+    root.appendChild(c);
+  });
+}
+
+// menu
+function openMenu(){ const u=state.me||{};
+  const av=document.getElementById('menuAv'); av.textContent=initials(u); if(u.color) av.style.background=u.color;
+  document.getElementById('menuName').textContent=u.display_name||u.username||'—';
+  document.getElementById('menuRole').textContent=(u.effective_role==='admin'?'Admin':'User');
+  showSheet('menuSheet');
+}
+async function signOut(){ try{ await fetch('/api/eln/auth/logout',{method:'POST',credentials:'include'}); }catch(_){ } location.href='/eln/login'; }
+
+// new project
+function openNew(){ document.getElementById('npTitle').value=''; document.getElementById('npMsg').style.display='none';
+  state.npKind='pilot'; setNpKind();
+  document.getElementById('npKindRow').style.display=(state.me&&state.me.effective_role==='admin')?'block':'none';
+  showSheet('newSheet'); }
+function setNpKind(){ document.getElementById('npPilot').classList.toggle('on',state.npKind==='pilot');
+  document.getElementById('npAssigned').classList.toggle('on',state.npKind==='assigned'); }
+async function createProject(){
+  const title=document.getElementById('npTitle').value.trim();
+  const msg=document.getElementById('npMsg');
+  if(!title){ msg.textContent='Title is required.'; msg.style.display='block'; return; }
+  const btn=document.getElementById('npSave'); btn.disabled=true;
+  try{ await api('/api/eln/projects',{method:'POST',body:JSON.stringify({title,kind:state.npKind})});
+    hideSheet('newSheet'); await load(); render();
+  }catch(e){ msg.textContent=String(e.message||e); msg.style.display='block'; }
+  finally{ btn.disabled=false; }
+}
+
+function wire(){
+  document.getElementById('menuBtn').onclick=openMenu;
+  document.getElementById('menuSignout').onclick=signOut;
+  document.getElementById('newBtn').onclick=openNew;
+  document.getElementById('fab').onclick=openNew;
+  document.getElementById('npSave').onclick=createProject;
+  document.getElementById('npPilot').onclick=()=>{ state.npKind='pilot'; setNpKind(); };
+  document.getElementById('npAssigned').onclick=()=>{ state.npKind='assigned'; setNpKind(); };
+  document.querySelectorAll('#seg button').forEach(b=>b.onclick=()=>{ state.filter=b.dataset.k;
+    document.querySelectorAll('#seg button').forEach(x=>x.classList.toggle('on',x===b)); render(); });
+  document.getElementById('q').addEventListener('input',e=>{ state.q=e.target.value; render(); });
+  document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>hideSheet(b.dataset.close));
+  document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',e=>{ if(e.target===s) hideSheet(s.id); }));
+}
+async function load(){ const r=await api('/api/eln/projects'); state.projects=r.projects||[]; }
+async function boot(){
+  if(window.matchMedia('(min-width: 900px)').matches){ location.replace('/eln/'); return; }
+  try{ const r=await fetch('/api/eln/auth/me',{credentials:'include'});
+    if(!r.ok){ location.href='/eln/login?next='+encodeURIComponent('/eln/m'); return; }
+    state.me=(await r.json()).user||null;
+    const b=document.getElementById('menuBtn'); if(state.me){ b.textContent=initials(state.me); if(state.me.color) b.style.background=state.me.color; }
+  }catch(_){ }
+  try{ await load(); }catch(e){ document.getElementById('main').innerHTML='<div class="empty">Can’t load projects.<br>'+esc(e.message)+'</div>'; return; }
+  wire(); render();
+}
+boot();
+</script>
+</body>
+</html>

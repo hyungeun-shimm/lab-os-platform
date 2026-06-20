@@ -1,0 +1,603 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Members</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+    --red: #b91c1c;
+    --red-soft: #fef2f2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter); color: #1c2333; min-height: 100vh;
+  }
+  main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+  .page-head {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    display: flex; align-items: center; gap: 14px;
+  }
+  .page-head h1 { margin: 0; font-family: Georgia, serif; color: var(--navy); font-size: 22px; }
+  .page-head .desc { color: var(--grey); font-size: 13px; margin-top: 2px; }
+
+  .filters {
+    background: var(--white); border-radius: 12px;
+    padding: 10px 14px; margin-bottom: 12px;
+    display: flex; gap: 10px; align-items: center; flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .filter-btn {
+    background: var(--grey-lighter); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 999px;
+    padding: 4px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .filter-btn:hover { background: var(--ice); }
+  .filter-btn.active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+
+  .section { background: var(--white); border-radius: 14px; box-shadow: 0 1px 3px rgba(15,23,42,0.05); overflow: hidden; }
+  table.t { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.t th {
+    text-align: left; padding: 10px 12px;
+    background: var(--grey-lighter);
+    color: var(--grey); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--grey-light); white-space: nowrap;
+  }
+  table.t td { padding: 9px 12px; border-bottom: 1px solid var(--grey-lighter); vertical-align: middle; }
+  table.t tbody tr:last-child td { border-bottom: 0; }
+  table.t tbody tr:hover { background: var(--grey-lighter); cursor: pointer; }
+
+  .who { display: flex; align-items: center; gap: 8px; }
+  .who .av {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 11.5px;
+  }
+  .who .name { font-weight: 600; color: var(--navy); }
+  .who .un { font-size: 11px; color: var(--grey); font-family: 'SF Mono', Consolas, monospace; }
+
+  .pill {
+    display: inline-block;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .pill.current { background: var(--green-soft); color: var(--green); }
+  .pill.alumni  { background: var(--grey-lighter); color: var(--grey); }
+  .pill.admin   { background: rgba(242,179,61,0.20); color: #8a5b00; }
+  .pill.member  { background: rgba(143,179,230,0.30); color: var(--navy); }
+
+  .proj-chip {
+    display: inline-block; padding: 1px 7px; border-radius: 999px;
+    background: var(--grey-lighter); color: var(--navy);
+    font-size: 11px; font-weight: 600; margin: 1px 3px 1px 0;
+  }
+  .proj-chip .role { color: var(--grey); margin-left: 4px; font-weight: 400; }
+  .proj-chip .auth-edit { color: var(--green); }
+  .proj-chip .auth-read { color: var(--ice-deep); }
+  .proj-chip .auth-restricted { color: var(--red); }
+
+  .empty { color: var(--grey); font-style: italic; padding: 40px 20px; text-align: center; }
+  .err { color: var(--red); padding: 12px 16px; background: var(--red-soft); border-radius: 8px; }
+
+  /* ── Modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0; background: rgba(15,23,42,0.45);
+    display: none; align-items: flex-start; justify-content: center;
+    padding: 50px 16px; z-index: 800; overflow-y: auto;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--white); border-radius: 14px;
+    width: 100%; max-width: 720px;
+    box-shadow: 0 24px 60px rgba(15,23,42,0.30);
+  }
+  .modal-head {
+    padding: 14px 22px; border-bottom: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; align-items: center; justify-content: space-between;
+    border-radius: 14px 14px 0 0;
+  }
+  .modal-head h3 { margin: 0; font-family: Georgia, serif; color: var(--navy); font-size: 17px; }
+  .modal-close { background: transparent; border: 0; cursor: pointer; font-size: 22px; color: var(--grey); padding: 0 4px; }
+  .modal-body { padding: 18px 22px; }
+  .modal-foot {
+    padding: 12px 22px; border-top: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; justify-content: flex-end; gap: 8px;
+    border-radius: 0 0 14px 14px;
+  }
+  .modal-foot button {
+    border: 0; border-radius: 9px;
+    padding: 8px 16px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .modal-foot .cancel { background: var(--white); border: 1px solid var(--grey-light); color: var(--navy); }
+  .modal-foot .go { background: var(--navy); color: var(--white); }
+
+  .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 10px; }
+  .form-row.three { grid-template-columns: 1fr 1fr 1fr; }
+  .field-label {
+    display: block; font-size: 10.5px; color: var(--grey); font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.05em; margin: 0 0 4px;
+  }
+  .field-input {
+    width: 100%; border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 7px 10px; font: inherit; font-size: 14px; background: var(--white);
+    box-sizing: border-box;
+  }
+  .modal-msg {
+    margin-top: 10px; padding: 9px 12px; border-radius: 7px;
+    font-size: 12.5px; display: none;
+  }
+  .modal-msg.error { background: var(--red-soft); color: var(--red); }
+  .modal-msg.ok    { background: var(--green-soft); color: var(--green); }
+
+  .proj-row {
+    display: grid; grid-template-columns: 1fr 150px 130px 30px;
+    gap: 8px; align-items: center;
+    padding: 7px 0; border-bottom: 1px dashed var(--grey-light);
+  }
+  .proj-row select, .proj-row input {
+    border: 1px solid #d1d5db; border-radius: 7px;
+    padding: 5px 8px; font: inherit; font-size: 13px; background: var(--white);
+    width: 100%;
+  }
+  .proj-row .proj-title {
+    font-weight: 600; color: var(--navy); font-size: 13px;
+  }
+  .proj-row .proj-title .short { color: var(--grey); font-size: 11px; margin-left: 4px; }
+  .proj-row .del-proj {
+    background: transparent; border: 0; color: var(--red); cursor: pointer; font-size: 16px;
+  }
+  .add-proj-row { display: flex; gap: 8px; align-items: center; margin-top: 8px; }
+  .add-proj-row select {
+    flex: 1; border: 1px solid #d1d5db; border-radius: 7px;
+    padding: 6px 10px; font: inherit; font-size: 13px;
+  }
+  .add-proj-row button {
+    background: var(--navy); color: var(--white); border: 0; border-radius: 7px;
+    padding: 6px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+
+  .section-title-inner {
+    font-size: 11px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em;
+    margin: 14px 0 6px;
+  }
+</style>
+</head>
+<body>
+
+<main>
+  <div class="page-head">
+    <div>
+      <h1>👥 Members</h1>
+      <div class="desc">Roster of all Lab OS users with their per-project roles and access tiers.</div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <button class="filter-btn active" data-fs="all">All</button>
+    <button class="filter-btn" data-fs="current">Current</button>
+    <button class="filter-btn" data-fs="alumni">Alumni</button>
+    <button class="filter-btn" data-fs="admin">Admins</button>
+  </div>
+
+  <div id="content"><div class="section" style="padding:30px;"><p class="empty">Loading…</p></div></div>
+</main>
+
+<!-- Edit modal -->
+<div class="modal-overlay" id="modal-edit">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="edit-title">Edit member</h3>
+      <button class="modal-close" id="edit-close" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="section-title-inner">Profile</div>
+      <div class="form-row">
+        <div>
+          <label class="field-label">Display name *</label>
+          <input type="text" id="ef-display_name" class="field-input" />
+        </div>
+        <div>
+          <label class="field-label">Username (read-only)</label>
+          <input type="text" id="ef-username" class="field-input" readonly />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="field-label">Member ID</label>
+          <input type="text" id="ef-id" class="field-input" readonly />
+        </div>
+        <div>
+          <label class="field-label">Email</label>
+          <input type="email" id="ef-email" class="field-input" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="field-label">Organization</label>
+          <input type="text" id="ef-organization" class="field-input" placeholder="e.g. Stanford University" />
+        </div>
+        <div>
+          <label class="field-label">Position</label>
+          <input type="text" id="ef-position" class="field-input" placeholder="e.g. PhD student, Postdoc" />
+        </div>
+      </div>
+      <div class="form-row three">
+        <div>
+          <label class="field-label">Status</label>
+          <select id="ef-status" class="field-input">
+            <option value="current">Current</option>
+            <option value="alumni">Alumni</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Role (system)</label>
+          <select id="ef-role" class="field-input">
+            <option value="member">Member</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+        <div>
+          <label class="field-label">Color</label>
+          <input type="color" id="ef-color" class="field-input" style="height:36px;padding:2px;" />
+        </div>
+      </div>
+      <div class="form-row">
+        <div>
+          <label class="field-label">Initials</label>
+          <input type="text" id="ef-initials" class="field-input" maxlength="4" />
+        </div>
+        <div>
+          <label class="field-label" style="margin-top:18px;">
+            <input type="checkbox" id="ef-active" style="vertical-align:-2px;margin-right:6px;" /> Active
+          </label>
+          <label class="field-label" style="margin-top:4px;">
+            <input type="checkbox" id="ef-can_edit_colony" style="vertical-align:-2px;margin-right:6px;" /> Can edit colony (Animal DB)
+          </label>
+          <label class="field-label" style="margin-top:4px;">
+            <input type="checkbox" id="ef-email_digest" style="vertical-align:-2px;margin-right:6px;" /> Daily schedule email
+          </label>
+        </div>
+      </div>
+
+      <div class="section-title-inner">Project assignments</div>
+      <div id="proj-list"></div>
+      <div class="add-proj-row">
+        <select id="proj-add-sel"></select>
+        <button id="proj-add-btn" type="button">+ Assign</button>
+      </div>
+
+      <div id="ef-msg" class="modal-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" id="edit-cancel" type="button">Cancel</button>
+      <button class="go" id="edit-save" type="button">Save profile</button>
+    </div>
+  </div>
+</div>
+
+<script src="/labos-nav.js" defer></script>
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+let currentUser = null;
+let members = [];
+let allProjects = [];  // [{slug, title, short_name}]
+let filter = "all";
+let editing = null;
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+async function boot() {
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    if (currentUser.effective_role !== "admin") {
+      $("#content").innerHTML = `<div class="section" style="padding:20px;"><div class="err">👥 Admin only. Switch to Admin mode (top-right) to view this page.</div></div>`;
+      return;
+    }
+    await load();
+  } catch (e) {
+    if (e.status === 401) { window.location.href = "/eln/login"; return; }
+    $("#content").innerHTML = `<div class="section" style="padding:20px;"><div class="err">${escapeHtml(e.message)}</div></div>`;
+  }
+}
+
+async function load() {
+  const d = await api("GET", "/api/eln/members");
+  members = d.members || [];
+  allProjects = d.projects || [];
+  render();
+}
+
+function filtered() {
+  const base = members.filter(m => m.approved);  // pending requests live in their own section
+  if (filter === "current") return base.filter(m => m.status === "current");
+  if (filter === "alumni")  return base.filter(m => m.status === "alumni");
+  if (filter === "admin")   return base.filter(m => m.role === "admin");
+  return base;
+}
+
+const ROLE_LABEL = { first_author: "1st author", collaborator: "Collaborator", ra: "RA" };
+
+function projChipsHtml(projects) {
+  if (!projects.length) return `<span style="color:var(--grey);font-style:italic;">—</span>`;
+  return projects.map(p => {
+    const aCls = p.authority === "edit" ? "auth-edit" : p.authority === "read" ? "auth-read" : "auth-restricted";
+    const lbl = p.short_name || p.title;
+    const role = p.project_role ? `<span class="role">· ${escapeHtml(ROLE_LABEL[p.project_role] || p.project_role)}</span>` : "";
+    return `<span class="proj-chip" title="${escapeHtml(p.title)} · ${escapeHtml(p.authority)}${p.project_role ? ' · ' + ROLE_LABEL[p.project_role] : ''}">${escapeHtml(lbl)}<span class="${aCls}"> ●</span>${role}</span>`;
+  }).join("");
+}
+
+function pendingSectionHtml(pending) {
+  if (!pending.length) return "";
+  const rows = pending.map(u => {
+    const initials = u.initials || (u.display_name || "?")[0];
+    return `
+      <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-top:1px solid rgba(15,23,42,0.07);">
+        <div style="width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;flex:none;background:${u.color || 'var(--navy)'};">${escapeHtml(initials)}</div>
+        <div style="flex:1;min-width:0;">
+          <div class="name">${escapeHtml(u.display_name)}</div>
+          <div class="un">${escapeHtml(u.username || '')} · ${escapeHtml(u.email || 'no email')}</div>
+        </div>
+        <button data-approve="${escapeHtml(u.id)}" style="background:var(--green);color:#fff;border:none;border-radius:8px;padding:7px 14px;font-weight:600;cursor:pointer;">Approve</button>
+        <button data-reject="${escapeHtml(u.id)}" style="background:var(--white);color:var(--red);border:1px solid var(--red);border-radius:8px;padding:7px 12px;font-weight:600;cursor:pointer;">Reject</button>
+      </div>`;
+  }).join("");
+  return `<div class="section" style="margin-bottom:14px;">
+      <div style="padding:14px 16px 4px;font-weight:700;color:var(--navy);">⏳ Pending approval (${pending.length})</div>
+      ${rows}
+    </div>`;
+}
+
+async function decide(uid, action) {
+  const u = members.find(m => m.id === uid);
+  if (action === "reject" &&
+      !confirm(`Reject and delete the join request from ${u ? u.display_name : "this user"}?`)) return;
+  try {
+    await api("POST", `/api/eln/users/${uid}/${action}`);
+    await load();
+  } catch (e) {
+    alert(e.message);
+  }
+}
+
+function render() {
+  $$(".filter-btn[data-fs]").forEach(b => b.classList.toggle("active", b.dataset.fs === filter));
+  const pending = members.filter(m => !m.approved);
+  const rows = filtered();
+  if (!rows.length) {
+    $("#content").innerHTML = pendingSectionHtml(pending) +
+      `<div class="section" style="padding:30px;"><p class="empty">No members match.</p></div>`;
+    wirePending();
+    return;
+  }
+  const tbl = `
+    <table class="t">
+      <thead>
+        <tr>
+          <th>Member</th><th>Org · Position</th><th>Status</th><th>System role</th><th>Projects</th><th>Auth flags</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(u => {
+          const initials = u.initials || (u.display_name || "?")[0];
+          const orgPos = [u.organization, u.position].filter(Boolean).join(" · ") || `<span style="color:var(--grey);font-style:italic;">—</span>`;
+          return `
+            <tr data-uid="${escapeHtml(u.id)}">
+              <td>
+                <div class="who">
+                  <div class="av" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${escapeHtml(initials)}</div>
+                  <div>
+                    <div class="name">${escapeHtml(u.display_name)}</div>
+                    <div class="un">${escapeHtml(u.username || u.id)}</div>
+                  </div>
+                </div>
+              </td>
+              <td>${orgPos}</td>
+              <td><span class="pill ${u.status === 'alumni' ? 'alumni' : 'current'}">${u.status === 'alumni' ? 'Alumni' : 'Current'}</span></td>
+              <td><span class="pill ${u.role}">${u.role}</span></td>
+              <td>${projChipsHtml(u.projects || [])}</td>
+              <td>${u.can_edit_colony ? '<span class="proj-chip">🐭 colony edit</span>' : '<span style="color:var(--grey);font-size:11px;">—</span>'}${u.active ? '' : ' <span class="proj-chip" style="background:var(--red-soft);color:var(--red);">deactivated</span>'}</td>
+            </tr>`;
+        }).join("")}
+      </tbody>
+    </table>`;
+  $("#content").innerHTML = pendingSectionHtml(pending) + `<div class="section">${tbl}</div>`;
+  $$("tr[data-uid]").forEach(tr => {
+    tr.addEventListener("click", () => openEditModal(members.find(m => m.id === tr.dataset.uid)));
+  });
+  wirePending();
+}
+
+function wirePending() {
+  $$("[data-approve]").forEach(b => b.addEventListener("click", () => decide(b.dataset.approve, "approve")));
+  $$("[data-reject]").forEach(b => b.addEventListener("click", () => decide(b.dataset.reject, "reject")));
+}
+
+$$(".filter-btn[data-fs]").forEach(b => {
+  b.addEventListener("click", () => { filter = b.dataset.fs; render(); });
+});
+
+// ───── Edit modal ─────
+function openEditModal(u) {
+  if (!u) return;
+  editing = JSON.parse(JSON.stringify(u));  // working copy
+  $("#edit-title").textContent = `Edit ${u.display_name}`;
+  $("#ef-id").value = u.id;
+  $("#ef-username").value = u.username || "";
+  $("#ef-display_name").value = u.display_name || "";
+  $("#ef-email").value = u.email || "";
+  $("#ef-organization").value = u.organization || "";
+  $("#ef-position").value = u.position || "";
+  $("#ef-status").value = u.status || "current";
+  $("#ef-role").value   = u.role   || "member";
+  $("#ef-color").value  = u.color  || "#5856D6";
+  $("#ef-initials").value = u.initials || "";
+  $("#ef-active").checked = !!u.active;
+  $("#ef-can_edit_colony").checked = !!u.can_edit_colony;
+  $("#ef-email_digest").checked = u.email_digest !== false;
+  $("#ef-msg").style.display = "none";
+  renderProjList();
+  $("#modal-edit").classList.add("open");
+}
+
+function renderProjList() {
+  const list = $("#proj-list");
+  const projects = editing.projects || [];
+  list.innerHTML = projects.length ? projects.map((p, i) => `
+    <div class="proj-row" data-i="${i}">
+      <div class="proj-title">${escapeHtml(p.title)}${p.short_name ? `<span class="short">${escapeHtml(p.short_name)}</span>` : ""}</div>
+      <select data-f="project_role" data-i="${i}">
+        <option value="">— role —</option>
+        <option value="first_author"  ${p.project_role === 'first_author' ? 'selected' : ''}>1st author</option>
+        <option value="collaborator"  ${p.project_role === 'collaborator' ? 'selected' : ''}>Collaborator</option>
+        <option value="ra"            ${p.project_role === 'ra' ? 'selected' : ''}>RA</option>
+      </select>
+      <select data-f="authority" data-i="${i}">
+        <option value="edit"       ${p.authority === 'edit'       ? 'selected' : ''}>Edit</option>
+        <option value="read"       ${p.authority === 'read'       ? 'selected' : ''}>Read-only</option>
+        <option value="restricted" ${p.authority === 'restricted' ? 'selected' : ''}>Restricted</option>
+      </select>
+      <button class="del-proj" data-i="${i}" title="Unassign">×</button>
+    </div>`).join("") : `<div style="color:var(--grey);font-style:italic;font-size:13px;padding:8px 0;">Not assigned to any project.</div>`;
+
+  list.querySelectorAll("select[data-f]").forEach(sel => {
+    sel.addEventListener("change", () => {
+      const idx = parseInt(sel.dataset.i);
+      editing.projects[idx][sel.dataset.f] = sel.value;
+    });
+  });
+  list.querySelectorAll(".del-proj").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt(btn.dataset.i);
+      editing.projects[idx]._deleted = true;
+      editing.projects.splice(idx, 1);
+      renderProjList();
+    });
+  });
+
+  // Populate the add dropdown
+  const sel = $("#proj-add-sel");
+  const assigned = new Set((editing.projects || []).map(p => p.slug));
+  const remaining = allProjects.filter(p => !assigned.has(p.slug));
+  sel.innerHTML = remaining.length
+    ? '<option value="">— pick a project —</option>' + remaining.map(p =>
+        `<option value="${escapeHtml(p.slug)}">${escapeHtml(p.short_name || p.title)}${p.short_name && p.short_name !== p.title ? ' · ' + escapeHtml(p.title) : ''}</option>`).join("")
+    : '<option value="">All projects assigned</option>';
+}
+
+$("#proj-add-btn").addEventListener("click", () => {
+  const slug = $("#proj-add-sel").value;
+  if (!slug) return;
+  const proj = allProjects.find(p => p.slug === slug);
+  if (!proj) return;
+  editing.projects = editing.projects || [];
+  editing.projects.push({
+    slug: proj.slug, title: proj.title, short_name: proj.short_name,
+    project_role: "", authority: "edit",
+  });
+  renderProjList();
+});
+
+["edit-close", "edit-cancel"].forEach(id => {
+  $("#" + id).addEventListener("click", () => $("#modal-edit").classList.remove("open"));
+});
+$("#modal-edit").addEventListener("click", (e) => {
+  if (e.target.id === "modal-edit") $("#modal-edit").classList.remove("open");
+});
+
+$("#edit-save").addEventListener("click", async () => {
+  const msg = $("#ef-msg");
+  msg.className = "modal-msg"; msg.style.display = "none";
+  $("#edit-save").disabled = true;
+  try {
+    // 1) Save user profile
+    const userPayload = {
+      display_name: $("#ef-display_name").value.trim(),
+      email:        $("#ef-email").value.trim(),
+      role:         $("#ef-role").value,
+      color:        $("#ef-color").value,
+      initials:     $("#ef-initials").value.trim().toUpperCase(),
+      active:       $("#ef-active").checked,
+      can_edit_colony: $("#ef-can_edit_colony").checked,
+      email_digest: $("#ef-email_digest").checked,
+      organization: $("#ef-organization").value.trim(),
+      position:     $("#ef-position").value.trim(),
+      status:       $("#ef-status").value,
+    };
+    await api("PATCH", `/api/eln/users/${editing.id}`, userPayload);
+
+    // 2) Save per-project assignments (upsert each, delete removed)
+    const original = members.find(m => m.id === editing.id);
+    const origMap  = Object.fromEntries((original?.projects || []).map(p => [p.slug, p]));
+    const newMap   = Object.fromEntries((editing.projects || []).map(p => [p.slug, p]));
+
+    // Upsert/update
+    for (const p of (editing.projects || [])) {
+      const before = origMap[p.slug];
+      if (!before || before.project_role !== p.project_role || before.authority !== p.authority) {
+        await api("PUT", `/api/eln/projects/${encodeURIComponent(p.slug)}/members/${editing.id}`, {
+          project_role: p.project_role || null,
+          authority:    p.authority    || "edit",
+        });
+      }
+    }
+    // Delete removed assignments
+    for (const slug of Object.keys(origMap)) {
+      if (!newMap[slug]) {
+        await api("DELETE", `/api/eln/projects/${encodeURIComponent(slug)}/members/${editing.id}`);
+      }
+    }
+    $("#modal-edit").classList.remove("open");
+    await load();
+  } catch (e) {
+    msg.className = "modal-msg error";
+    msg.textContent = e.message;
+    msg.style.display = "block";
+  } finally {
+    $("#edit-save").disabled = false;
+  }
+});
+
+boot();
+</script>
+</body>
+</html>

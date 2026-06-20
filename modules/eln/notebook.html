@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — ELN</title>
+<script>if(window.matchMedia('(max-width: 640px)').matches){location.replace('/eln/m');}</script>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter);
+    color: #1c2333;
+    min-height: 100vh;
+  }
+  header.app-top {
+    background: var(--navy); color: var(--white);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.10);
+  }
+  header.app-top .brand {
+    font-family: Georgia, serif; font-size: 18px; font-weight: 700;
+  }
+  header.app-top .brand-sub {
+    color: var(--accent); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; margin-left: 4px;
+  }
+  header.app-top .spacer { flex: 1; }
+  header.app-top .me {
+    display: flex; align-items: center; gap: 10px;
+    font-size: 14px;
+  }
+  header.app-top .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  header.app-top .role-pill {
+    background: rgba(255,255,255,0.15); color: var(--ice);
+    padding: 2px 9px; border-radius: 999px;
+    font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  header.app-top button.signout,
+  header.app-top button.switch-mode {
+    background: transparent; border: 1px solid rgba(255,255,255,0.30);
+    color: var(--white); border-radius: 8px;
+    padding: 6px 12px; font: inherit; font-size: 12px; cursor: pointer;
+  }
+  header.app-top button.signout:hover,
+  header.app-top button.switch-mode:hover { background: rgba(255,255,255,0.10); }
+
+  header.app-top .mode-pill {
+    background: var(--accent); color: var(--navy-deep);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  header.app-top .mode-pill.member {
+    background: var(--ice-deep); color: var(--navy-deep);
+  }
+
+  /* ── Mode picker overlay ── */
+  .mode-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.55);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; z-index: 1000;
+  }
+  .mode-card {
+    background: var(--white); border-radius: 16px;
+    width: 100%; max-width: 560px;
+    padding: 32px;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.30);
+  }
+  .mode-card h2 {
+    margin: 0 0 6px;
+    font-family: Georgia, serif; color: var(--navy); font-size: 22px;
+  }
+  .mode-card .greet { color: var(--grey); font-size: 14px; margin: 0 0 20px; }
+  .mode-choices {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 14px;
+  }
+  @media (max-width: 560px) { .mode-choices { grid-template-columns: 1fr; } }
+  .mode-choice {
+    border: 2px solid var(--grey-light);
+    border-radius: 12px;
+    padding: 20px;
+    text-align: left;
+    cursor: pointer;
+    background: var(--white);
+    transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
+    font: inherit;
+  }
+  .mode-choice:hover {
+    border-color: var(--navy);
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(30, 39, 97, 0.10);
+  }
+  .mode-choice .ico {
+    width: 42px; height: 42px; border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 22px;
+    margin-bottom: 10px;
+  }
+  .mode-choice.admin .ico { background: rgba(242, 179, 61, 0.18); }
+  .mode-choice.member .ico { background: rgba(143, 179, 230, 0.20); }
+  .mode-choice h3 {
+    margin: 0 0 4px;
+    font-family: Georgia, serif; color: var(--navy); font-size: 17px;
+  }
+  .mode-choice p {
+    margin: 0;
+    color: var(--grey); font-size: 12.5px; line-height: 1.5;
+  }
+  .mode-card .footnote {
+    margin-top: 18px;
+    color: var(--grey); font-size: 12px; text-align: center;
+  }
+  .mode-card .footnote a { color: var(--navy); cursor: pointer; text-decoration: underline; }
+
+  main {
+    max-width: 1180px; margin: 0 auto;
+    padding: 28px 24px 64px;
+  }
+
+  /* ── projects header / filters ── */
+  .page-head {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 18px;
+  }
+  .page-head h1 {
+    margin: 0;
+    font-family: Georgia, serif; color: var(--navy); font-size: 26px;
+  }
+  .page-head .spacer { flex: 1; }
+  .filter-bar {
+    display: flex; align-items: center; gap: 14px;
+    margin-bottom: 18px;
+  }
+  .search {
+    flex: 1; max-width: 360px;
+    position: relative;
+  }
+  .search input {
+    width: 100%;
+    border: 1px solid var(--grey-light); border-radius: 10px;
+    padding: 9px 12px 9px 36px;
+    background: var(--white); font: inherit; font-size: 14px;
+  }
+  .search input:focus {
+    outline: none; border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(30, 39, 97, 0.10);
+  }
+  .search::before {
+    content: "🔍"; position: absolute;
+    left: 12px; top: 50%; transform: translateY(-50%);
+    font-size: 13px; opacity: 0.6;
+  }
+  .pill-row {
+    display: flex; gap: 4px;
+    background: var(--white); border: 1px solid var(--grey-light); border-radius: 999px;
+    padding: 3px;
+  }
+  .pill-row button {
+    border: 0; background: transparent;
+    padding: 6px 14px; border-radius: 999px;
+    font: inherit; font-size: 12px; font-weight: 600;
+    color: var(--grey); cursor: pointer;
+  }
+  .pill-row button.active { background: var(--navy); color: var(--white); }
+  .btn-new {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 10px 16px;
+    font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .btn-new:hover { background: var(--navy-deep); }
+
+  /* ── grid + cards ── */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(290px, 1fr));
+    gap: 16px;
+  }
+  .card {
+    background: var(--white);
+    border: 1px solid var(--grey-light); border-radius: 14px;
+    padding: 18px 18px 16px;
+    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    cursor: pointer;
+    position: relative;
+    display: flex; flex-direction: column;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    border-color: var(--navy);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+  }
+  .card-top {
+    display: flex; justify-content: space-between; gap: 10px;
+    margin-bottom: 6px;
+  }
+  .card-title {
+    font-family: Georgia, serif; font-weight: 700;
+    color: var(--navy); font-size: 17px;
+    margin: 0;
+    line-height: 1.25;
+  }
+  .kind-badge {
+    flex-shrink: 0;
+    padding: 2px 9px; border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    align-self: flex-start;
+  }
+  .kind-badge.assigned { background: rgba(143, 179, 230, 0.30); color: var(--navy); }
+  .kind-badge.pilot    { background: rgba(242, 179, 61, 0.20); color: #8a5b00; }
+
+  .card-slug {
+    font-family: "SF Mono", Consolas, monospace;
+    color: var(--grey); font-size: 11.5px;
+    margin: 0 0 10px;
+    word-break: break-all;
+  }
+  .card-desc {
+    color: var(--grey); font-size: 13px;
+    margin: 0 0 14px;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .card-foot {
+    margin-top: auto;
+    display: flex; gap: 8px; flex-wrap: wrap;
+    padding-top: 12px; border-top: 1px solid var(--grey-light);
+  }
+  .chip {
+    background: var(--grey-lighter); color: var(--navy);
+    border-radius: 999px;
+    padding: 3px 9px;
+    font-size: 11px; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  .members-row {
+    display: flex; gap: 4px; margin-left: auto;
+  }
+  .member-dot {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--ice-deep); color: var(--white);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 10px; font-weight: 700;
+    border: 2px solid var(--white);
+    margin-left: -8px;
+  }
+  .member-dot:first-child { margin-left: 0; }
+
+  .card-actions {
+    position: absolute; top: 12px; right: 12px;
+    display: flex; gap: 4px;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .card:hover .card-actions { opacity: 1; }
+  .icon-btn {
+    background: var(--white); border: 1px solid var(--grey-light); border-radius: 7px;
+    padding: 3px 7px; cursor: pointer; font-size: 12px;
+    color: var(--navy);
+  }
+  .icon-btn:hover { background: var(--grey-lighter); }
+  .icon-btn.danger { color: #b91c1c; }
+  .icon-btn.danger:hover { background: #fef2f2; border-color: #fecaca; }
+  .modal-foot .danger {
+    background: #b91c1c; color: #fff;
+  }
+  .modal-foot .danger:hover { background: #991b1b; }
+
+  /* ── empty state ── */
+  .empty {
+    background: var(--white); border-radius: 14px;
+    border: 2px dashed var(--grey-light);
+    padding: 56px 24px; text-align: center;
+    color: var(--grey);
+  }
+  .empty .e-ico { font-size: 42px; margin-bottom: 12px; }
+  .empty h3 { color: var(--navy); margin: 0 0 6px; font-family: Georgia, serif; }
+  .empty p { margin: 4px 0; }
+  .empty button {
+    margin-top: 16px;
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 10px 18px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+
+  /* ── modal ── */
+  .modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px; z-index: 800;
+  }
+  .modal {
+    background: var(--white); border-radius: 14px;
+    width: 100%; max-width: 520px;
+    max-height: calc(100vh - 48px);
+    display: flex; flex-direction: column;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.30);
+    overflow: hidden;
+  }
+  .modal-head {
+    padding: 16px 22px;
+    border-bottom: 1px solid var(--grey-light);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--grey-lighter);
+  }
+  .modal-head h3 {
+    margin: 0;
+    font-family: Georgia, serif; color: var(--navy); font-size: 17px;
+  }
+  .modal-close {
+    background: transparent; border: 0; cursor: pointer;
+    font-size: 22px; color: var(--grey);
+  }
+  .modal-body { padding: 20px 22px; overflow-y: auto; }
+  .modal-body label {
+    display: block; color: var(--grey); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.05em; text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+  .modal-body input[type="text"],
+  .modal-body textarea {
+    width: 100%;
+    border: 1px solid #d1d5db; border-radius: 9px;
+    padding: 9px 12px;
+    font: inherit; font-size: 14px;
+    background: var(--white);
+  }
+  .modal-body input:focus, .modal-body textarea:focus {
+    outline: none; border-color: var(--navy);
+    box-shadow: 0 0 0 3px rgba(30, 39, 97, 0.13);
+  }
+  .modal-body textarea { min-height: 64px; resize: vertical; font-family: inherit; }
+  .modal-body .field { margin-bottom: 14px; }
+  .modal-body .kind-radio {
+    display: flex; gap: 8px;
+  }
+  .modal-body .kind-radio label {
+    flex: 1;
+    border: 1.5px solid var(--grey-light);
+    border-radius: 10px; padding: 10px 12px;
+    cursor: pointer; text-transform: none; letter-spacing: 0;
+    font-size: 13px; color: var(--navy-deep);
+    text-align: center; font-weight: 600;
+  }
+  .modal-body .kind-radio input { display: none; }
+  .modal-body .kind-radio label.checked {
+    border-color: var(--navy); background: rgba(30, 39, 97, 0.06);
+  }
+  .slug-preview {
+    margin-top: 4px;
+    background: var(--grey-lighter);
+    padding: 7px 10px; border-radius: 6px;
+    font-family: "SF Mono", Consolas, monospace; font-size: 12px;
+    color: var(--navy);
+  }
+  .user-pick-row {
+    display: flex; flex-wrap: wrap; gap: 6px;
+  }
+  .user-pick {
+    display: inline-flex; align-items: center; gap: 6px;
+    border: 1.5px solid var(--grey-light); border-radius: 999px;
+    padding: 4px 10px;
+    font-size: 12px; cursor: pointer;
+    background: var(--white);
+  }
+  .user-pick.checked { border-color: var(--navy); background: rgba(30, 39, 97, 0.06); }
+  .user-pick .dot {
+    width: 18px; height: 18px; border-radius: 50%;
+    background: var(--ice-deep); color: var(--white);
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 9px; font-weight: 700;
+  }
+  .modal-foot {
+    padding: 14px 22px;
+    border-top: 1px solid var(--grey-light);
+    background: var(--grey-lighter);
+    display: flex; justify-content: flex-end; gap: 8px;
+  }
+  .modal-foot button {
+    border: 0; border-radius: 9px;
+    padding: 8px 16px;
+    font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .modal-foot .cancel { background: var(--white); border: 1px solid var(--grey-light); color: var(--navy); }
+  .modal-foot .save   { background: var(--navy); color: var(--white); }
+  .modal-foot .save:disabled { background: #c7d2fe; cursor: progress; }
+
+  .modal-msg {
+    margin-top: 10px;
+    padding: 9px 12px; border-radius: 7px;
+    font-size: 12.5px;
+    display: none;
+  }
+  .modal-msg.error { background: #fef2f2; color: #b91c1c; display: block; }
+  .modal-msg.info  { background: #eef2ff; color: var(--navy); display: block; }
+
+  .members-list { display: flex; flex-direction: column; gap: 6px; }
+  .member-row {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 8px;
+    background: var(--grey-lighter);
+  }
+  .member-row .dot {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--ice-deep); color: var(--white);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+  }
+  .member-row .name { flex: 1; font-size: 13.5px; color: var(--navy-deep); }
+  .member-row .role-chip {
+    background: var(--white); color: var(--navy);
+    border-radius: 999px; padding: 2px 9px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .member-row .rm {
+    background: transparent; border: 0; cursor: pointer;
+    color: var(--grey); font-size: 16px; padding: 0 4px;
+  }
+  .member-row .rm:hover { color: #b91c1c; }
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div>
+    <span class="brand">Lab OS</span><span class="brand-sub">ELN</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="me" id="me-area">Loading…</div>
+  <button class="switch-mode" id="switch-mode" style="display:none;">Switch mode</button>
+  <button class="switch-mode" id="change-pw" title="Change password">🔑 Password</button>
+  <button class="signout" id="signout">Sign out</button>
+</header>
+
+<!-- Mode picker overlay (only shown when admin user needs to choose) -->
+<div class="mode-overlay" id="mode-overlay" style="display:none;">
+  <div class="mode-card">
+    <h2 id="mode-greet">Welcome back.</h2>
+    <p class="greet">You have admin privileges on this account. How would you like to enter today?</p>
+    <div class="mode-choices">
+      <button class="mode-choice admin" data-pick="admin" type="button">
+        <div class="ico">🔧</div>
+        <h3>Admin mode</h3>
+        <p>Full control — manage users, assign projects, view team activity, configure naming conventions, and write your own notes.</p>
+      </button>
+      <button class="mode-choice member" data-pick="member" type="button">
+        <div class="ico">📝</div>
+        <h3>User mode</h3>
+        <p>Just record experiments — same experience as a regular lab member. Only see projects assigned to you, no admin panels.</p>
+      </button>
+    </div>
+    <div class="footnote">
+      You can switch any time from the header.<br>
+      <a id="mode-signout">Sign out instead</a>
+    </div>
+  </div>
+</div>
+
+<main>
+  <div class="page-head">
+    <h1>Projects</h1>
+    <div class="spacer"></div>
+    <a href="/eln/dashboard" class="btn-new" style="background:var(--white);color:var(--navy);border:1px solid var(--grey-light);text-decoration:none;margin-right:8px;">📊 Dashboard</a>
+    <button class="btn-new" id="btn-new-project">+ New project</button>
+  </div>
+
+  <div class="filter-bar">
+    <div class="search">
+      <input id="search" type="text" placeholder="Search title or slug…" autocomplete="off" />
+    </div>
+    <div class="pill-row" id="kind-filter">
+      <button data-kind="all" class="active" type="button">All</button>
+      <button data-kind="assigned" type="button">Assigned</button>
+      <button data-kind="pilot" type="button">Pilot</button>
+    </div>
+  </div>
+
+  <div id="projects-area"></div>
+</main>
+
+<!-- Create project modal (shared shell — content varies by mode) -->
+<div class="modal-overlay" id="modal-create" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="mc-title">New project</h3>
+      <button class="modal-close" data-close="modal-create" type="button">×</button>
+    </div>
+    <form id="form-create" class="modal-body">
+      <div class="field" id="mc-kind-wrap" style="display:none;">
+        <label>Project type</label>
+        <div class="kind-radio">
+          <label data-kind="assigned" class="checked">
+            <input type="radio" name="kind" value="assigned" checked />
+            🗂  Assigned
+          </label>
+          <label data-kind="pilot">
+            <input type="radio" name="kind" value="pilot" />
+            🧪  Pilot
+          </label>
+        </div>
+      </div>
+      <div class="field" id="mc-pm-wrap" style="display:none;">
+        <label for="mc-pm-sel">Project (from PM system)</label>
+        <select id="mc-pm-sel" style="width:100%;padding:8px 11px;border:1px solid #d1d5db;border-radius:8px;font:inherit;font-size:14px;background:#fff;">
+          <option value="">— pick a PM project (or leave blank for custom title) —</option>
+        </select>
+        <div class="slug-preview" style="margin-top:6px;color:var(--text-muted);font-size:12px;">Picking auto-fills Title + Short name.</div>
+      </div>
+      <div class="field">
+        <label for="mc-title-in">Title</label>
+        <input id="mc-title-in" type="text" required maxlength="160" placeholder="e.g. Temporal plasticity rules" />
+      </div>
+      <div class="field">
+        <label for="mc-short-in">Short name (for tight spaces)</label>
+        <input id="mc-short-in" type="text" maxlength="40" placeholder="e.g. TeMP-tuning" />
+      </div>
+      <div class="field" id="mc-slug-wrap">
+        <label>Slug</label>
+        <div class="slug-preview" id="mc-slug-preview">(generated from title)</div>
+      </div>
+      <div class="field">
+        <label for="mc-desc">Description (optional)</label>
+        <textarea id="mc-desc" maxlength="500" placeholder="One-line summary…"></textarea>
+      </div>
+      <div class="field" id="mc-assign-wrap" style="display:none;">
+        <label>Assign to (optional — admin can add later)</label>
+        <div class="user-pick-row" id="mc-assign-list">(loading users…)</div>
+      </div>
+      <div class="modal-msg" id="mc-msg"></div>
+    </form>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-create" type="button">Cancel</button>
+      <button class="save" id="mc-save" type="button">Create project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Rename project modal -->
+<div class="modal-overlay" id="modal-rename" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Rename project</h3>
+      <button class="modal-close" data-close="modal-rename" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label for="mr-title">Title</label>
+        <input id="mr-title" type="text" required maxlength="120" />
+      </div>
+      <div class="field">
+        <label for="mr-desc">Description</label>
+        <textarea id="mr-desc" maxlength="500"></textarea>
+      </div>
+      <div class="field" id="mr-slug-wrap">
+        <label for="mr-slug">Slug <span style="color:var(--grey); font-weight:400; text-transform:none; letter-spacing:0;">(admin only — caution: changes the URL)</span></label>
+        <input id="mr-slug" type="text" required maxlength="80" />
+        <div class="hint" id="mr-slug-hint" style="color:var(--grey); font-size:11px; margin-top:4px;"></div>
+      </div>
+      <div class="modal-msg" id="mr-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-rename" type="button">Cancel</button>
+      <button class="save" id="mr-save" type="button">Save changes</button>
+    </div>
+  </div>
+</div>
+
+<!-- Delete project confirm modal -->
+<div class="modal-overlay" id="modal-delete" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Archive project</h3>
+      <button class="modal-close" data-close="modal-delete" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="margin: 0 0 14px; color: var(--navy-deep); font-size: 14px;">
+        This will <strong>archive</strong> <code id="md-slug" style="font-family:'SF Mono',Consolas,monospace; color:var(--navy); background:var(--grey-lighter); padding:2px 6px; border-radius:4px;"></code>.<br/>
+        Notes and members are preserved. The project will disappear from the list.
+      </p>
+      <p style="margin: 0 0 14px; color: var(--grey); font-size: 12.5px;">
+        Type the slug to confirm:
+      </p>
+      <div class="field">
+        <input id="md-confirm" type="text" autocomplete="off" />
+      </div>
+      <div id="md-hard-row" style="display:none;">
+        <label style="display:flex; align-items:center; gap:6px; color:var(--grey); font-size:12.5px; text-transform:none; letter-spacing:0; font-weight:400;">
+          <input type="checkbox" id="md-hard" /> Also delete all notes permanently (cannot be undone)
+        </label>
+      </div>
+      <div class="modal-msg" id="md-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-delete" type="button">Cancel</button>
+      <button class="danger" id="md-go" type="button">Archive project</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manage members modal -->
+<div class="modal-overlay" id="modal-members" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3 id="mm-title">Manage members</h3>
+      <button class="modal-close" data-close="modal-members" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Current members</label>
+        <div class="members-list" id="mm-list"></div>
+      </div>
+      <div class="field">
+        <label>Add member</label>
+        <div class="user-pick-row" id="mm-add-list"></div>
+      </div>
+      <div class="modal-msg" id="mm-msg"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-members" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-change-pw" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>Change password</h3>
+      <button class="modal-close" data-close="modal-change-pw" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <label>Current password</label>
+      <input type="password" id="cpw-current" autocomplete="current-password" style="width:100%;box-sizing:border-box;" />
+      <label style="margin-top:10px;display:block;">New password (4+ characters)</label>
+      <input type="password" id="cpw-new" autocomplete="new-password" style="width:100%;box-sizing:border-box;" />
+      <label style="margin-top:10px;display:block;">Confirm new password</label>
+      <input type="password" id="cpw-new2" autocomplete="new-password" style="width:100%;box-sizing:border-box;" />
+      <div id="cpw-msg" style="font-size:13px;margin-top:10px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-change-pw" type="button">Cancel</button>
+      <button class="save" id="cpw-save" type="button">Change</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const $ = (s) => document.querySelector(s);
+
+let currentUser = null;
+
+async function load() {
+  try {
+    const r = await fetch("/api/eln/auth/me", { credentials: "include" });
+    if (!r.ok) {
+      window.location.href = "/eln/login";
+      return;
+    }
+    const data = await r.json();
+    currentUser = data.user;
+    renderHeader();
+    decideModeFlow();
+  } catch (e) {
+    window.location.href = "/eln/login";
+  }
+}
+
+function renderHeader() {
+  const u = currentUser;
+  const initials = u.initials || (u.display_name || "?")[0];
+  const isAdminAccount = u.role === "admin";
+  const eff = u.effective_role;            // 'admin' or 'member'
+  const modeBadgeText = (eff === "admin") ? "Admin mode" : "User mode";
+  const badgeClass = (eff === "admin") ? "mode-pill" : "mode-pill member";
+
+  $("#me-area").innerHTML =
+    `<div class="avatar" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${initials}</div>` +
+    `<div>${u.display_name} ` +
+      `<span class="${badgeClass}">${modeBadgeText}</span></div>`;
+
+  // The "Switch mode" header button only shows for accounts that actually have admin role.
+  // A pure member account would have nothing to switch to.
+  $("#switch-mode").style.display = isAdminAccount ? "" : "none";
+}
+
+function decideModeFlow() {
+  const u = currentUser;
+  // Non-admin accounts: skip picker entirely.
+  if (u.role !== "admin") {
+    hidePicker();
+    loadProjects();
+    return;
+  }
+  // Admin account with no mode picked yet for this session → show picker.
+  if (!u.session_mode) {
+    showPicker();
+  } else {
+    hidePicker();
+    loadProjects();
+  }
+}
+
+function showPicker() {
+  $("#mode-greet").textContent = `Welcome, ${currentUser.display_name.split(" ")[0]}.`;
+  $("#mode-overlay").style.display = "flex";
+}
+function hidePicker() {
+  $("#mode-overlay").style.display = "none";
+}
+
+async function pickMode(mode) {
+  try {
+    const r = await fetch("/api/eln/auth/set-mode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ mode }),
+    });
+    if (!r.ok) {
+      const data = await r.json().catch(() => ({}));
+      alert(data.detail || `Failed to set mode (HTTP ${r.status})`);
+      return;
+    }
+    const data = await r.json();
+    currentUser = data.user;
+    renderHeader();
+    hidePicker();
+    loadProjects();
+  } catch (e) {
+    alert("Could not switch mode: " + e.message);
+  }
+}
+
+document.querySelectorAll(".mode-choice").forEach(btn => {
+  btn.addEventListener("click", () => pickMode(btn.dataset.pick));
+});
+
+$("#switch-mode").addEventListener("click", () => {
+  // Re-open the picker so the user can switch.
+  showPicker();
+});
+
+$("#mode-signout").addEventListener("click", async () => {
+  await fetch("/api/eln/auth/logout", { method: "POST", credentials: "include" });
+  window.location.href = "/eln/login";
+});
+
+$("#signout").addEventListener("click", async () => {
+  await fetch("/api/eln/auth/logout", { method: "POST", credentials: "include" });
+  window.location.href = "/eln/login";
+});
+
+$("#change-pw").addEventListener("click", () => {
+  $("#cpw-current").value = ""; $("#cpw-new").value = ""; $("#cpw-new2").value = "";
+  $("#cpw-msg").textContent = "";
+  $("#modal-change-pw").style.display = "flex";
+  $("#cpw-current").focus();
+});
+$("#cpw-save").addEventListener("click", async () => {
+  const cur = $("#cpw-current").value, nw = $("#cpw-new").value, nw2 = $("#cpw-new2").value;
+  const msg = $("#cpw-msg");
+  const fail = (t) => { msg.style.color = "#b91c1c"; msg.textContent = t; };
+  if (!cur || !nw) return fail("Fill in all fields.");
+  if (nw.length < 4) return fail("New password must be at least 4 characters.");
+  if (nw !== nw2) return fail("New passwords don't match.");
+  msg.style.color = "#5A6378"; msg.textContent = "Changing…";
+  try {
+    const r = await fetch("/api/eln/auth/change-password", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ current_password: cur, new_password: nw }),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(typeof d.detail === "string" ? d.detail : `HTTP ${r.status}`);
+    msg.style.color = "#1F7A3A"; msg.textContent = "✓ Password changed.";
+    setTimeout(() => { $("#modal-change-pw").style.display = "none"; }, 900);
+  } catch (e) { fail("Failed: " + e.message); }
+});
+
+// ───────────────────────────────────────────────────────────────
+// Projects: list, filter, create, manage members
+// ───────────────────────────────────────────────────────────────
+let projectsCache = [];
+let usersCache = [];                // loaded only when admin opens create/members modal
+let filterState = { kind: "all", query: "" };
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+function relTime(iso) {
+  if (!iso) return "";
+  const t = new Date(iso); if (isNaN(t)) return "";
+  const sec = (Date.now() - t.getTime()) / 1000;
+  if (sec < 60) return "just now";
+  if (sec < 3600) return Math.floor(sec/60) + "m ago";
+  if (sec < 86400) return Math.floor(sec/3600) + "h ago";
+  if (sec < 86400*30) return Math.floor(sec/86400) + "d ago";
+  return t.toISOString().slice(0,10);
+}
+
+async function loadProjects() {
+  $("#projects-area").innerHTML = '<p style="color:var(--grey); padding: 24px;">Loading projects…</p>';
+  try {
+    const r = await fetch("/api/eln/projects", { credentials: "include" });
+    if (!r.ok) {
+      $("#projects-area").innerHTML = '<p style="color: #b91c1c;">Failed to load projects.</p>';
+      return;
+    }
+    const data = await r.json();
+    projectsCache = data.projects || [];
+    renderProjects();
+  } catch (e) {
+    $("#projects-area").innerHTML = `<p style="color: #b91c1c;">${e.message}</p>`;
+  }
+}
+
+function renderProjects() {
+  const root = $("#projects-area");
+  const q = filterState.query.trim().toLowerCase();
+  const k = filterState.kind;
+  const filtered = projectsCache.filter(p => {
+    if (k !== "all" && p.kind !== k) return false;
+    if (!q) return true;
+    return (p.title || "").toLowerCase().includes(q)
+        || (p.slug  || "").toLowerCase().includes(q)
+        || (p.description || "").toLowerCase().includes(q);
+  });
+
+  if (!filtered.length) {
+    if (!projectsCache.length) {
+      const isAdmin = currentUser && currentUser.effective_role === "admin";
+      root.innerHTML = `
+        <div class="empty">
+          <div class="e-ico">📋</div>
+          <h3>No projects yet</h3>
+          <p>${isAdmin ? "Create an assigned project for the lab, or" : ""} start a pilot project to begin writing notes.</p>
+          <button id="empty-new">+ Create your first project</button>
+        </div>`;
+      $("#empty-new").addEventListener("click", openCreateModal);
+    } else {
+      root.innerHTML = `<div class="empty"><div class="e-ico">🔍</div><h3>No matches</h3><p>Try a different search or filter.</p></div>`;
+    }
+    return;
+  }
+
+  const isAdmin = currentUser && currentUser.effective_role === "admin";
+  root.innerHTML = '<div class="grid" id="grid"></div>';
+  const grid = $("#grid");
+  filtered.forEach(p => {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.dataset.slug = p.slug;
+    const memberDots = (p.members || []).slice(0, 5).map(m => `
+      <div class="member-dot" style="${m.color ? `background:${m.color};` : ""}" title="${escapeHtml(m.display_name)} · ${m.role}">${escapeHtml(m.initials || (m.display_name||"?")[0])}</div>
+    `).join("");
+    const extraDot = (p.members && p.members.length > 5) ? `<div class="member-dot" style="background:var(--grey);">+${p.members.length - 5}</div>` : "";
+    const desc = p.description ? `<p class="card-desc">${escapeHtml(p.description)}</p>` : "";
+    const lastN = p.last_note_at ? `📝 ${relTime(p.last_note_at)}` : "📝 no notes yet";
+    const isOwner = p.owner_id === currentUser.id;
+    const canMutate = isAdmin || (isOwner && p.kind === "pilot");
+    const adminBtn = isAdmin ? `<button class="icon-btn" data-act="members" title="Manage members">👥</button>` : "";
+    const renameBtn = canMutate ? `<button class="icon-btn" data-act="rename" title="Rename project">✏️</button>` : "";
+    const deleteBtn = canMutate ? `<button class="icon-btn danger" data-act="delete" title="Archive project">🗑</button>` : "";
+    const shortBadge = p.short_name
+      ? `<span class="kind-badge" style="background:rgba(242,179,61,0.20);color:#8a5b00;" title="${escapeHtml(p.title)}">${escapeHtml(p.short_name)}</span>`
+      : "";
+    card.innerHTML = `
+      <div class="card-actions">${adminBtn}${renameBtn}${deleteBtn}</div>
+      <div class="card-top">
+        <h3 class="card-title">${escapeHtml(p.short_name || p.title)}</h3>
+        ${shortBadge && p.short_name !== p.title ? `<span class="kind-badge" style="background:transparent;color:var(--text-muted);font-weight:500;" title="${escapeHtml(p.title)}">${escapeHtml(p.title.length > 38 ? p.title.slice(0,36)+'…' : p.title)}</span>` : ""}
+        <span class="kind-badge ${p.kind}">${p.kind}</span>
+      </div>
+      <p class="card-slug">${escapeHtml(p.slug)}</p>
+      ${desc}
+      <div class="card-foot">
+        <span class="chip" title="Notes recorded">📝 ${p.note_count || 0}</span>
+        <span class="chip" title="Last activity">${lastN}</span>
+        <div class="members-row">${memberDots}${extraDot}</div>
+      </div>
+    `;
+    card.addEventListener("click", (e) => {
+      // Don't navigate when clicking an action button.
+      if (e.target.closest(".icon-btn")) return;
+      window.location.href = `/eln/project/${encodeURIComponent(p.slug)}`;
+    });
+    const mBtn = card.querySelector('[data-act="members"]');
+    if (mBtn) mBtn.addEventListener("click", (e) => { e.stopPropagation(); openMembersModal(p); });
+    const rBtn = card.querySelector('[data-act="rename"]');
+    if (rBtn) rBtn.addEventListener("click", (e) => { e.stopPropagation(); openRenameModal(p); });
+    const dBtn = card.querySelector('[data-act="delete"]');
+    if (dBtn) dBtn.addEventListener("click", (e) => { e.stopPropagation(); confirmDelete(p); });
+    grid.appendChild(card);
+  });
+}
+
+// filter wiring
+$("#search").addEventListener("input", (e) => {
+  filterState.query = e.target.value;
+  renderProjects();
+});
+$("#kind-filter").addEventListener("click", (e) => {
+  const b = e.target.closest("button[data-kind]");
+  if (!b) return;
+  $$("#kind-filter button").forEach(x => x.classList.toggle("active", x === b));
+  filterState.kind = b.dataset.kind;
+  renderProjects();
+});
+
+// modal close helpers
+document.querySelectorAll("[data-close]").forEach(el => {
+  el.addEventListener("click", () => { $("#" + el.dataset.close).style.display = "none"; });
+});
+document.querySelectorAll(".modal-overlay").forEach(ov => {
+  ov.addEventListener("click", (e) => { if (e.target === ov) ov.style.display = "none"; });
+});
+
+// ── Create project modal ────────────────────────────────────────
+$("#btn-new-project").addEventListener("click", openCreateModal);
+
+async function openCreateModal() {
+  // The kind toggle is visible whenever the *account* has admin role —
+  // even if the current session is in member mode. Picking "Assigned"
+  // while in member mode will silently elevate the session on save.
+  const hasAdminRole = currentUser && currentUser.role === "admin";
+  const inAdminMode  = currentUser && currentUser.effective_role === "admin";
+  $("#mc-title").textContent = hasAdminRole ? "New project" : "New pilot project";
+  $("#mc-kind-wrap").style.display = hasAdminRole ? "" : "none";
+  $("#mc-title-in").value = "";
+  $("#mc-short-in").value = "";
+  $("#mc-desc").value = "";
+  // PM picker: admin-only, populated lazily.
+  if (hasAdminRole) {
+    await populatePmPicker();
+    $("#mc-pm-wrap").style.display = "";
+  } else {
+    $("#mc-pm-wrap").style.display = "none";
+  }
+  $("#mc-msg").className = "modal-msg"; $("#mc-msg").style.display = "none";
+  // Default selection: in member mode default to "pilot" (less surprising);
+  // in admin mode default to "assigned".
+  setCreateKind(inAdminMode ? "assigned" : "pilot");
+  await updateSlugPreview();
+  if (hasAdminRole) {
+    await ensureUsersLoaded();
+    renderAssignList([]);
+  } else {
+    $("#mc-assign-wrap").style.display = "none";
+  }
+  $("#modal-create").style.display = "flex";
+  setTimeout(() => $("#mc-title-in").focus(), 30);
+}
+
+let createKind = "assigned";
+function setCreateKind(k) {
+  createKind = k;
+  document.querySelectorAll("#mc-kind-wrap label").forEach(l => l.classList.toggle("checked", l.dataset.kind === k));
+  const inp = document.querySelector(`#mc-kind-wrap input[value="${k}"]`);
+  if (inp) inp.checked = true;
+  // Assign list is admin-only because /users requires admin mode.
+  // Show it whenever we're picking 'assigned' AND we're currently in admin mode.
+  $("#mc-assign-wrap").style.display = (k === "assigned" && currentUser?.effective_role === "admin") ? "" : "none";
+
+  // Notice: admin user picking Assigned while in member mode → auto-elevate on save
+  const hasAdminRole = currentUser?.role === "admin";
+  const inAdminMode  = currentUser?.effective_role === "admin";
+  const msg = $("#mc-msg");
+  if (k === "assigned" && hasAdminRole && !inAdminMode) {
+    msg.className = "modal-msg info";
+    msg.textContent = "You're in user mode — saving an Assigned project will switch you to admin mode.";
+  } else {
+    msg.className = "modal-msg";
+    msg.style.display = "none";
+  }
+  updateSlugPreview();
+}
+document.querySelectorAll("#mc-kind-wrap label").forEach(l => {
+  l.addEventListener("click", () => setCreateKind(l.dataset.kind));
+});
+
+// ── PM picker (lazily populated, admin-only) ──
+let pmProjectsCache = null;
+async function populatePmPicker() {
+  const sel = $("#mc-pm-sel");
+  if (!sel) return;
+  if (!pmProjectsCache) {
+    try {
+      const r = await fetch("/api/projects", { credentials: "include" });
+      const d = await r.json();
+      pmProjectsCache = (d.projects || [])
+        .filter(p => p.source !== "pms")  // only show PM-managed ones for now
+        .sort((a, b) => (a.short_name || a.name || "").localeCompare(b.short_name || b.name || ""));
+    } catch (_) { pmProjectsCache = []; }
+  }
+  sel.innerHTML = '<option value="">— pick a PM project (or leave blank for custom title) —</option>' +
+    pmProjectsCache.map(p => {
+      const lbl = p.short_name ? `${p.short_name} · ${p.name}` : p.name;
+      return `<option value="${escapeHtml(p.slug)}" data-name="${escapeHtml(p.name)}" data-short="${escapeHtml(p.short_name || '')}">${escapeHtml(lbl)}</option>`;
+    }).join("");
+  sel.onchange = () => {
+    const opt = sel.selectedOptions[0];
+    if (!opt || !opt.value) return;
+    $("#mc-title-in").value = opt.dataset.name || "";
+    $("#mc-short-in").value = opt.dataset.short || "";
+    updateSlugPreview();
+  };
+}
+
+async function updateSlugPreview() {
+  const title = ($("#mc-title-in").value || "").trim();
+  if (!title) {
+    $("#mc-slug-preview").textContent = createKind === "pilot" ? "pilot_N-{titleslug}" : "(generated from title)";
+    return;
+  }
+  const titleSlug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60) || "untitled";
+  if (createKind === "pilot") {
+    // Compute N by counting current user's pilot projects + 1 (simple estimate).
+    const myPilots = projectsCache.filter(p => p.kind === "pilot" && p.owner_id === currentUser.id);
+    const n = myPilots.length + 1;
+    $("#mc-slug-preview").textContent = `pilot_${n}-${titleSlug}`;
+  } else {
+    $("#mc-slug-preview").textContent = titleSlug;
+  }
+}
+$("#mc-title-in").addEventListener("input", updateSlugPreview);
+
+async function ensureUsersLoaded() {
+  if (usersCache.length) return;
+  try {
+    const r = await fetch("/api/eln/users", { credentials: "include" });
+    if (r.ok) {
+      const data = await r.json();
+      usersCache = (data.users || []).filter(u => u.active && u.id !== currentUser.id);
+    }
+  } catch (e) { /* admin endpoint unreachable */ }
+}
+
+let assignSelected = new Set();
+function renderAssignList(initialIds) {
+  assignSelected = new Set(initialIds || []);
+  const root = $("#mc-assign-list");
+  if (!usersCache.length) {
+    root.innerHTML = '<span style="color: var(--grey); font-size: 12px;">No other users yet.</span>';
+    return;
+  }
+  root.innerHTML = "";
+  usersCache.forEach(u => {
+    const span = document.createElement("span");
+    span.className = "user-pick" + (assignSelected.has(u.id) ? " checked" : "");
+    span.innerHTML = `<span class="dot" style="${u.color ? `background:${u.color};` : ""}">${escapeHtml(u.initials || (u.display_name||"?")[0])}</span>${escapeHtml(u.display_name)} <span style="color:var(--grey); font-size:11px;">@${escapeHtml(u.username)}</span>`;
+    span.addEventListener("click", () => {
+      if (assignSelected.has(u.id)) { assignSelected.delete(u.id); span.classList.remove("checked"); }
+      else { assignSelected.add(u.id); span.classList.add("checked"); }
+    });
+    root.appendChild(span);
+  });
+}
+
+$("#mc-save").addEventListener("click", async () => {
+  const title = ($("#mc-title-in").value || "").trim();
+  const desc  = ($("#mc-desc").value || "").trim();
+  const msg = $("#mc-msg");
+  if (!title) {
+    msg.className = "modal-msg error"; msg.textContent = "Title is required."; return;
+  }
+  $("#mc-save").disabled = true;
+  try {
+    // If the user is an admin-account in user mode but is creating an Assigned project,
+    // silently elevate to admin mode first. The backend would otherwise reject this
+    // (Assigned requires admin effective role).
+    const needsElevation =
+      createKind === "assigned"
+      && currentUser?.role === "admin"
+      && currentUser?.effective_role !== "admin";
+    if (needsElevation) {
+      const mr = await fetch("/api/eln/auth/set-mode", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ mode: "admin" }),
+      });
+      if (!mr.ok) {
+        const d = await mr.json().catch(()=>({}));
+        msg.className = "modal-msg error";
+        msg.textContent = d.detail || "Could not switch to admin mode.";
+        return;
+      }
+      const md = await mr.json();
+      currentUser = md.user;
+      renderHeader();
+    }
+
+    const short = ($("#mc-short-in").value || "").trim();
+    const pmSlugSel = $("#mc-pm-sel");
+    const pmSlug = pmSlugSel ? (pmSlugSel.value || "").trim() : "";
+    const body = { title, description: desc, kind: createKind };
+    if (short)  body.short_name = short;
+    if (pmSlug) body.pm_slug = pmSlug;
+    if (createKind === "assigned" && currentUser?.effective_role === "admin") {
+      body.assign_user_ids = Array.from(assignSelected);
+    }
+    const r = await fetch("/api/eln/projects", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      msg.className = "modal-msg error"; msg.textContent = data.detail || `HTTP ${r.status}`;
+      return;
+    }
+    $("#modal-create").style.display = "none";
+    await loadProjects();
+  } catch (e) {
+    msg.className = "modal-msg error"; msg.textContent = e.message;
+  } finally {
+    $("#mc-save").disabled = false;
+  }
+});
+
+// ── Manage members modal (admin only) ──────────────────────────
+let membersModalProject = null;
+
+async function openMembersModal(project) {
+  membersModalProject = project;
+  $("#mm-title").textContent = `Members · ${project.title}`;
+  await ensureUsersLoaded();
+  renderMembersModal();
+  $("#mm-msg").style.display = "none";
+  $("#modal-members").style.display = "flex";
+}
+
+function renderMembersModal() {
+  const p = membersModalProject; if (!p) return;
+  const list = $("#mm-list");
+  list.innerHTML = "";
+  (p.members || []).forEach(m => {
+    const row = document.createElement("div");
+    row.className = "member-row";
+    row.innerHTML = `
+      <div class="dot" style="${m.color ? `background:${m.color};` : ""}">${escapeHtml(m.initials || (m.display_name||"?")[0])}</div>
+      <div class="name">${escapeHtml(m.display_name)} <span style="color:var(--grey); font-size:11px;">@${escapeHtml(m.username)}</span></div>
+      <span class="role-chip">${m.role}</span>
+      ${m.id === currentUser.id ? "" : '<button class="rm" title="Remove">×</button>'}
+    `;
+    const rm = row.querySelector(".rm");
+    if (rm) rm.addEventListener("click", () => removeMember(p.slug, m.id));
+    list.appendChild(row);
+  });
+  // Add list — exclude current members + self
+  const memberIds = new Set((p.members || []).map(m => m.id));
+  memberIds.add(currentUser.id);
+  const addList = $("#mm-add-list");
+  addList.innerHTML = "";
+  const candidates = usersCache.filter(u => !memberIds.has(u.id));
+  if (!candidates.length) {
+    addList.innerHTML = '<span style="color: var(--grey); font-size: 12px;">All available users already assigned.</span>';
+    return;
+  }
+  candidates.forEach(u => {
+    const span = document.createElement("span");
+    span.className = "user-pick";
+    span.innerHTML = `<span class="dot" style="${u.color ? `background:${u.color};` : ""}">${escapeHtml(u.initials || (u.display_name||"?")[0])}</span>${escapeHtml(u.display_name)}`;
+    span.addEventListener("click", () => addMember(p.slug, u.id));
+    addList.appendChild(span);
+  });
+}
+
+async function addMember(slug, uid) {
+  $("#mm-msg").style.display = "none";
+  try {
+    const r = await fetch(`/api/eln/projects/${encodeURIComponent(slug)}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ user_ids: [uid], role: "write" }),
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(()=>({}));
+      $("#mm-msg").className = "modal-msg error"; $("#mm-msg").textContent = d.detail || `HTTP ${r.status}`;
+      return;
+    }
+    await refreshOneProject(slug);
+  } catch (e) {
+    $("#mm-msg").className = "modal-msg error"; $("#mm-msg").textContent = e.message;
+  }
+}
+
+async function removeMember(slug, uid) {
+  $("#mm-msg").style.display = "none";
+  try {
+    const r = await fetch(`/api/eln/projects/${encodeURIComponent(slug)}/members/${encodeURIComponent(uid)}`, {
+      method: "DELETE", credentials: "include",
+    });
+    if (!r.ok) {
+      const d = await r.json().catch(()=>({}));
+      $("#mm-msg").className = "modal-msg error"; $("#mm-msg").textContent = d.detail || `HTTP ${r.status}`;
+      return;
+    }
+    await refreshOneProject(slug);
+  } catch (e) {
+    $("#mm-msg").className = "modal-msg error"; $("#mm-msg").textContent = e.message;
+  }
+}
+
+// ── Rename project modal ──────────────────────────────────────
+let renamingSlug = null;
+
+function openRenameModal(p) {
+  renamingSlug = p.slug;
+  $("#mr-title").value = p.title || "";
+  $("#mr-desc").value = p.description || "";
+  $("#mr-slug").value = p.slug;
+  $("#mr-msg").className = "modal-msg"; $("#mr-msg").style.display = "none";
+
+  const isAdmin = currentUser?.effective_role === "admin";
+  const isOwner = p.owner_id === currentUser.id;
+  // Only admin mode can rename the slug. Pilot owners can edit title/description only.
+  if (isAdmin) {
+    $("#mr-slug-wrap").style.display = "";
+    $("#mr-slug").readOnly = false;
+    $("#mr-slug-hint").textContent = "Renaming the slug rewrites all member + note references.";
+  } else if (isOwner && p.kind === "pilot") {
+    $("#mr-slug-wrap").style.display = "";
+    $("#mr-slug").readOnly = true;
+    $("#mr-slug-hint").textContent = "Pilot slugs are auto-generated; admin only can change them.";
+  } else {
+    $("#mr-slug-wrap").style.display = "none";
+  }
+  $("#modal-rename").style.display = "flex";
+  setTimeout(() => $("#mr-title").focus(), 30);
+}
+
+$("#mr-save").addEventListener("click", async () => {
+  if (!renamingSlug) return;
+  const body = {
+    title: ($("#mr-title").value || "").trim(),
+    description: ($("#mr-desc").value || "").trim(),
+  };
+  const newSlug = ($("#mr-slug").value || "").trim().toLowerCase();
+  if (newSlug && newSlug !== renamingSlug) body.new_slug = newSlug;
+  if (!body.title) {
+    $("#mr-msg").className = "modal-msg error"; $("#mr-msg").textContent = "Title cannot be blank.";
+    return;
+  }
+  $("#mr-save").disabled = true;
+  try {
+    const r = await fetch(`/api/eln/projects/${encodeURIComponent(renamingSlug)}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify(body),
+    });
+    const data = await r.json();
+    if (!r.ok) {
+      $("#mr-msg").className = "modal-msg error";
+      $("#mr-msg").textContent = data.detail || `HTTP ${r.status}`;
+      return;
+    }
+    $("#modal-rename").style.display = "none";
+    await loadProjects();
+  } catch (e) {
+    $("#mr-msg").className = "modal-msg error"; $("#mr-msg").textContent = e.message;
+  } finally {
+    $("#mr-save").disabled = false;
+  }
+});
+
+// ── Delete (archive) confirm modal ────────────────────────────
+let deletingSlug = null;
+function confirmDelete(p) {
+  deletingSlug = p.slug;
+  $("#md-slug").textContent = p.slug;
+  $("#md-confirm").value = "";
+  $("#md-msg").className = "modal-msg"; $("#md-msg").style.display = "none";
+  // Show hard-delete checkbox only for admin
+  $("#md-hard-row").style.display = (currentUser?.effective_role === "admin") ? "" : "none";
+  $("#md-hard").checked = false;
+  $("#md-go").textContent = "Archive project";
+  $("#modal-delete").style.display = "flex";
+  setTimeout(() => $("#md-confirm").focus(), 30);
+}
+
+$("#md-hard").addEventListener("change", () => {
+  $("#md-go").textContent = $("#md-hard").checked ? "Permanently delete project" : "Archive project";
+});
+
+$("#md-go").addEventListener("click", async () => {
+  if (!deletingSlug) return;
+  if ($("#md-confirm").value.trim() !== deletingSlug) {
+    $("#md-msg").className = "modal-msg error";
+    $("#md-msg").textContent = "Slug did not match — type it exactly to confirm.";
+    return;
+  }
+  const hard = $("#md-hard").checked;
+  $("#md-go").disabled = true;
+  try {
+    const url = `/api/eln/projects/${encodeURIComponent(deletingSlug)}${hard ? "?hard=true" : ""}`;
+    const r = await fetch(url, { method: "DELETE", credentials: "include" });
+    const data = await r.json();
+    if (!r.ok) {
+      $("#md-msg").className = "modal-msg error";
+      $("#md-msg").textContent = data.detail || `HTTP ${r.status}`;
+      return;
+    }
+    $("#modal-delete").style.display = "none";
+    await loadProjects();
+  } catch (e) {
+    $("#md-msg").className = "modal-msg error"; $("#md-msg").textContent = e.message;
+  } finally {
+    $("#md-go").disabled = false;
+  }
+});
+
+async function refreshOneProject(slug) {
+  try {
+    const r = await fetch(`/api/eln/projects/${encodeURIComponent(slug)}`, { credentials: "include" });
+    if (!r.ok) return;
+    const data = await r.json();
+    const fresh = data.project;
+    // Replace in cache + re-render
+    const idx = projectsCache.findIndex(p => p.slug === slug);
+    if (idx >= 0) projectsCache[idx] = fresh; else projectsCache.unshift(fresh);
+    membersModalProject = fresh;
+    renderMembersModal();
+    renderProjects();
+  } catch (e) { /* ignore */ }
+}
+
+load();
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>

@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Project</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter);
+    color: #1c2333;
+    min-height: 100vh;
+  }
+  header.app-top {
+    background: var(--navy); color: var(--white);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 16px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.10);
+  }
+  header.app-top .brand { font-family: Georgia, serif; font-size: 18px; font-weight: 700; }
+  header.app-top .brand-sub {
+    color: var(--accent); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; margin-left: 4px;
+  }
+  header.app-top a.back {
+    color: var(--ice); text-decoration: none; font-size: 14px;
+    margin-left: 16px;
+    display: inline-flex; align-items: center; gap: 5px;
+  }
+  header.app-top a.back:hover { color: var(--white); }
+  header.app-top .spacer { flex: 1; }
+  header.app-top .me { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  header.app-top .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  header.app-top .mode-pill {
+    background: var(--accent); color: var(--navy-deep);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  header.app-top .mode-pill.member {
+    background: var(--ice-deep); color: var(--navy-deep);
+  }
+
+  main { max-width: 1180px; margin: 0 auto; padding: 28px 24px; }
+
+  .project-head {
+    background: var(--white); border-radius: 14px;
+    padding: 24px 28px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    margin-bottom: 20px;
+  }
+  .project-head .row {
+    display: flex; align-items: baseline; gap: 12px; margin-bottom: 6px;
+  }
+  .project-head h1 {
+    margin: 0;
+    font-family: Georgia, serif; color: var(--navy); font-size: 24px;
+  }
+  .kind-badge {
+    padding: 2px 9px; border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+  }
+  .kind-badge.assigned { background: rgba(143, 179, 230, 0.30); color: var(--navy); }
+  .kind-badge.pilot    { background: rgba(242, 179, 61, 0.20); color: #8a5b00; }
+  .project-head .slug {
+    font-family: "SF Mono", Consolas, monospace;
+    color: var(--grey); font-size: 12px;
+  }
+  .project-head .desc { color: var(--grey); margin: 8px 0 0; }
+
+  /* experiment-type grid (Step D placeholder) */
+  .h2 {
+    font-family: Georgia, serif; color: var(--navy); font-size: 18px;
+    margin: 4px 0 14px;
+  }
+  .exp-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+    gap: 14px;
+  }
+  .exp-card {
+    background: var(--white); border-radius: 14px;
+    border: 1px solid var(--grey-light);
+    padding: 22px 20px;
+    cursor: pointer;
+    transition: transform 0.15s, box-shadow 0.15s, border-color 0.15s;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .exp-card:hover {
+    transform: translateY(-3px);
+    border-color: var(--navy);
+    box-shadow: 0 12px 30px rgba(15, 23, 42, 0.10);
+  }
+  .exp-card.coming { opacity: 0.55; cursor: not-allowed; }
+  .exp-card.coming:hover { transform: none; box-shadow: none; border-color: var(--grey-light); }
+  .exp-ico { font-size: 28px; margin-bottom: 4px; }
+  .exp-card h3 {
+    margin: 0;
+    font-family: Georgia, serif; color: var(--navy); font-size: 17px;
+  }
+  .exp-card p { color: var(--grey); font-size: 12.5px; margin: 0; }
+  .coming-soon {
+    display: inline-block;
+    background: var(--grey-lighter); color: var(--grey);
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 10px; font-weight: 700;
+    letter-spacing: 0.1em; text-transform: uppercase;
+    margin-top: 4px;
+  }
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div>
+    <span class="brand">Lab OS</span><span class="brand-sub">ELN</span>
+  </div>
+  <a class="back" href="/eln/">← Projects</a>
+  <div class="spacer"></div>
+  <div class="me" id="me-area">Loading…</div>
+</header>
+
+<main>
+  <div class="project-head" id="project-head">
+    <div class="row">
+      <h1 id="ph-title">Loading…</h1>
+      <span class="kind-badge" id="ph-kind"></span>
+    </div>
+    <div class="slug" id="ph-slug"></div>
+    <div class="desc" id="ph-desc"></div>
+  </div>
+
+  <h2 class="h2">Pick an experiment type</h2>
+  <div class="exp-grid">
+    <div class="exp-card" data-exp="overview">
+      <div class="exp-ico">📋</div>
+      <h3>Overview</h3>
+      <p>Quick summary of each experiment — when, which mouse, what protocol.</p>
+    </div>
+    <div class="exp-card" data-exp="slice">
+      <div class="exp-ico">🔬</div>
+      <h3>Slice recording</h3>
+      <p>Slice ePhys + imaging — per-date notes with mouse auto-fill and naming conventions.</p>
+    </div>
+    <div class="exp-card" data-exp="behavior">
+      <div class="exp-ico">🐭</div>
+      <h3>Behavior</h3>
+      <p>Behavior only · Photometry · Optogenetics · Chemogenetics · VOR/OKR.</p>
+    </div>
+    <div class="exp-card coming" data-exp="histology">
+      <div class="exp-ico">🧪</div>
+      <h3>Histology</h3>
+      <p>Section/staining notes per cohort.</p>
+      <span class="coming-soon">coming soon</span>
+    </div>
+  </div>
+</main>
+
+<script>
+const slug = decodeURIComponent(window.location.pathname.split("/").pop());
+
+async function load() {
+  try {
+    const meR = await fetch("/api/eln/auth/me", { credentials: "include" });
+    if (!meR.ok) { window.location.href = "/eln/login"; return; }
+    const me = (await meR.json()).user;
+    const initials = me.initials || (me.display_name || "?")[0];
+    const eff = me.effective_role;
+    const badgeClass = (eff === "admin") ? "mode-pill" : "mode-pill member";
+    document.getElementById("me-area").innerHTML =
+      `<div class="avatar" style="${me.color ? `background:${me.color}; color:#fff;` : ""}">${initials}</div>` +
+      `<div>${me.display_name} <span class="${badgeClass}">${eff === "admin" ? "Admin mode" : "User mode"}</span></div>`;
+
+    const pR = await fetch(`/api/eln/projects/${encodeURIComponent(slug)}`, { credentials: "include" });
+    if (!pR.ok) {
+      const d = await pR.json().catch(()=>({}));
+      document.getElementById("ph-title").textContent = d.detail || `Cannot load project (HTTP ${pR.status})`;
+      return;
+    }
+    const { project } = await pR.json();
+    document.getElementById("ph-title").textContent = project.title;
+    const kb = document.getElementById("ph-kind");
+    kb.textContent = project.kind;
+    kb.classList.add(project.kind);
+    document.getElementById("ph-slug").textContent = project.slug;
+    document.getElementById("ph-desc").textContent = project.description || "";
+  } catch (e) {
+    document.getElementById("ph-title").textContent = "Load failed: " + e.message;
+  }
+}
+
+document.querySelectorAll(".exp-card").forEach(c => {
+  c.addEventListener("click", () => {
+    if (c.classList.contains("coming")) {
+      alert("Coming in a later step.");
+      return;
+    }
+    const exp = c.dataset.exp;
+    if (exp === "slice") {
+      window.location.href = `/eln/project/${encodeURIComponent(slug)}/slice`;
+    } else if (exp === "behavior") {
+      window.location.href = `/eln/project/${encodeURIComponent(slug)}/behavior`;
+    } else if (exp === "overview") {
+      window.location.href = `/eln/project/${encodeURIComponent(slug)}/overview`;
+    } else {
+      alert(`${exp} — placeholder.`);
+    }
+  });
+});
+
+load();
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>

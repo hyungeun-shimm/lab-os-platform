@@ -1,0 +1,307 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Sync</title>
+<style>
+  :root {
+    --navy: #1E2761; --navy-deep: #131A40;
+    --ice: #CADCFC; --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378; --grey-light: #ECEEF3; --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --green: #1F7A3A; --green-soft: #ecfdf5;
+    --red: #b91c1c; --red-soft: #fef2f2;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter); color: #1c2333; min-height: 100vh;
+  }
+  main { max-width: 920px; margin: 0 auto; padding: 24px; }
+
+  .page-head {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .page-head h1 { margin: 0 0 4px; font-family: Georgia, serif; color: var(--navy); font-size: 22px; }
+  .page-head .desc { color: var(--grey); font-size: 13px; }
+
+  .section {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px; margin-bottom: 16px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .section h2 {
+    margin: 0 0 12px; font-family: Georgia, serif;
+    color: var(--navy); font-size: 16px;
+  }
+  .section .desc { color: var(--grey); font-size: 12.5px; margin-bottom: 12px; }
+
+  .form-grid { display: grid; grid-template-columns: 140px 1fr; gap: 10px 14px; align-items: center; }
+  .form-grid label { font-size: 12px; color: var(--grey); font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+  .form-grid input, .form-grid select {
+    border: 1px solid #d1d5db; border-radius: 8px;
+    padding: 7px 11px; font: inherit; font-size: 14px; background: var(--white);
+  }
+  .form-grid input:focus, .form-grid select:focus {
+    outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(30,39,97,0.13);
+  }
+  .form-grid input[disabled] { background: var(--grey-lighter); color: var(--grey); }
+
+  .btn-primary {
+    background: var(--navy); color: var(--white);
+    border: 0; border-radius: 10px;
+    padding: 9px 18px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-primary:hover { background: var(--navy-deep); }
+  .btn-primary:disabled { background: var(--ice-deep); cursor: not-allowed; }
+  .btn-secondary {
+    background: var(--white); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 10px;
+    padding: 9px 14px; font: inherit; font-size: 13px; font-weight: 600;
+    cursor: pointer;
+  }
+  .btn-secondary:hover { background: var(--grey-lighter); }
+  .btn-secondary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+  .pill {
+    display: inline-block; padding: 3px 10px;
+    border-radius: 999px; font-size: 11px; font-weight: 700;
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+  .pill.main { background: rgba(242,179,61,0.20); color: #8a5b00; }
+  .pill.rig  { background: rgba(99,102,241,0.13); color: #4338ca; }
+
+  .out {
+    background: var(--grey-lighter); border-radius: 8px;
+    padding: 10px 14px; margin-top: 10px;
+    font-family: 'SF Mono', Consolas, monospace; font-size: 12px;
+    white-space: pre-wrap; color: var(--navy-deep);
+    max-height: 280px; overflow: auto;
+  }
+  .out.error { background: var(--red-soft); color: var(--red); }
+  .out.ok    { background: var(--green-soft); color: var(--green); }
+
+  .meta-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 24px; font-size: 13px; }
+  .meta-grid .l { color: var(--grey); font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; }
+  .meta-grid .v { color: var(--navy-deep); font-weight: 600; font-family: 'SF Mono', Consolas, monospace; font-size: 12px; }
+
+  .role-badges { display: flex; gap: 6px; margin-bottom: 12px; }
+
+  .err {
+    color: var(--red); padding: 12px 16px; background: var(--red-soft); border-radius: 8px;
+  }
+</style>
+</head>
+<body>
+
+<main>
+  <div class="page-head">
+    <h1>🔄 Multi-machine sync</h1>
+    <div class="desc">Push notes from a rig to the main, or pull canonical data from main to a rig. All sync happens through a shared Drive folder.</div>
+  </div>
+
+  <div id="content">
+    <div class="section"><p style="color:var(--grey);font-style:italic;">Loading…</p></div>
+  </div>
+</main>
+
+<script src="/labos-nav.js" defer></script>
+<script>
+const $ = (s) => document.querySelector(s);
+function escapeHtml(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+let cfg = null;
+let currentUser = null;
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+async function boot() {
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    cfg = await api("GET", "/api/sync/config");
+    render();
+  } catch (e) {
+    if (e.status === 401) {
+      // Pull a no-auth diagnostic so the user can see why the cookie didn't land.
+      let diag = null;
+      try { diag = await (await fetch("/api/sync/_diag", { credentials: "include" })).json(); }
+      catch (_) {}
+      const diagBlock = diag
+        ? `<pre style="font-size:11px;background:#f6f7fb;padding:10px;border-radius:6px;overflow:auto;">${escapeHtml(JSON.stringify(diag, null, 2))}</pre>`
+        : "";
+      $("#content").innerHTML = `<div class="section"><div class="err">401 — not signed in for /api/sync. <a href="/eln/login">Sign in</a></div>${diagBlock}</div>`;
+      return;
+    }
+    $("#content").innerHTML = `<div class="section"><div class="err">${escapeHtml(e.message)}</div></div>`;
+  }
+}
+
+function render() {
+  const role = cfg.role || "main";
+  const isAdmin = currentUser?.effective_role === "admin";
+
+  const identitySection = isAdmin ? `
+    <div class="section">
+      <h2>Machine identity</h2>
+      <div class="desc">Each machine has its own role + ID. The sync folder is the cloud-synced directory shared across all machines (e.g. a Google Drive folder).</div>
+      <div class="form-grid">
+        <label>Role</label>
+        <select id="cf-role">
+          <option value="main" ${role === "main" ? "selected" : ""}>main (this is the canonical Lab OS)</option>
+          <option value="rig"  ${role === "rig"  ? "selected" : ""}>rig (experiment computer, syncs to main)</option>
+        </select>
+        <label>Machine ID</label>
+        <input type="text" id="cf-mid" value="${escapeHtml(cfg.machine_id || '')}" placeholder="e.g. main · slice-rig · behavior-rig" />
+        <label>Sync folder</label>
+        <input type="text" id="cf-root" value="${escapeHtml(cfg.sync_root || '')}" placeholder="/Users/.../Google Drive/.../LabOS_sync" />
+      </div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+        <button class="btn-primary" id="cf-save">Save</button>
+        <span id="cf-msg" style="font-size:12px;"></span>
+      </div>
+    </div>` : "";
+
+  $("#content").innerHTML = `
+    ${identitySection}
+
+    <div class="section">
+      <h2>Current status</h2>
+      <div class="role-badges">
+        <span class="pill ${role}">${escapeHtml(role)}</span>
+        ${cfg.machine_id ? `<span class="pill" style="background:var(--grey-lighter);color:var(--navy);">${escapeHtml(cfg.machine_id)}</span>` : ""}
+      </div>
+      <div class="meta-grid">
+        <div><div class="l">Last export</div><div class="v">${escapeHtml(cfg.last_export || "—")}</div></div>
+        <div><div class="l">Last import</div><div class="v">${escapeHtml(cfg.last_import || "—")}</div></div>
+        <div><div class="l">Last push (notes)</div><div class="v">${escapeHtml(cfg.last_push || "—")}</div></div>
+        <div><div class="l">Last pull (notes)</div><div class="v">${escapeHtml(cfg.last_pull || "—")}</div></div>
+      </div>
+    </div>
+
+    ${role === "main" ? renderMainActions(isAdmin) : renderRigActions(isAdmin)}
+  `;
+
+  if (isAdmin) {
+    $("#cf-save").addEventListener("click", saveConfig);
+  }
+  if (role === "main") {
+    if (isAdmin) {
+      $("#btn-export").addEventListener("click", () => doAction("export"));
+      $("#btn-pull").addEventListener("click",   () => doAction("pull"));
+    }
+  } else {
+    $("#btn-import").addEventListener("click", () => doAction("import"));
+    $("#btn-push").addEventListener("click",   () => doAction("push"));
+  }
+}
+
+function renderMainActions(isAdmin) {
+  if (!isAdmin) {
+    return `<div class="section"><div class="desc">Snapshot export and note pulls are admin-only. Switch to Admin mode (top-right) to use them.</div></div>`;
+  }
+  return `
+    <div class="section">
+      <h2>📤 Export snapshot (main → rigs)</h2>
+      <div class="desc">Dumps animals, users, projects, and naming conventions to <code>snapshot.json</code>. Rigs read this file on their next Import.</div>
+      <div class="actions"><button class="btn-primary" id="btn-export">Export now</button></div>
+      <div id="out-export" class="out" style="display:none;"></div>
+    </div>
+    <div class="section">
+      <h2>📥 Pull notes from rigs</h2>
+      <div class="desc">Reads every unprocessed JSONL in each rig's outbox and upserts the rows into local <code>eln_notes</code>. Conflict: last <code>updated_at</code> wins.</div>
+      <div class="actions"><button class="btn-primary" id="btn-pull">Pull now</button></div>
+      <div id="out-pull" class="out" style="display:none;"></div>
+    </div>
+  `;
+}
+
+function renderRigActions(isAdmin) {
+  return `
+    <div class="section">
+      <h2>📥 Import snapshot (main → this rig)</h2>
+      <div class="desc"><strong>This replaces</strong> the rig's local copies of animals, users, projects, naming conventions, and members from <code>snapshot.json</code>. Your local notes are not touched.</div>
+      <div class="actions"><button class="btn-primary" id="btn-import">Import now</button></div>
+      <div id="out-import" class="out" style="display:none;"></div>
+    </div>
+    <div class="section">
+      <h2>📤 Push notes (this rig → main)</h2>
+      <div class="desc">Writes notes updated since last push to a new JSONL in the outbox folder. Main will consume them on its next Pull.</div>
+      <div class="actions"><button class="btn-primary" id="btn-push">Push now</button></div>
+      <div id="out-push" class="out" style="display:none;"></div>
+    </div>
+  `;
+}
+
+async function saveConfig() {
+  const msg = $("#cf-msg");
+  msg.textContent = "Saving…"; msg.style.color = "var(--grey)";
+  try {
+    const body = {
+      role: $("#cf-role").value,
+      machine_id: $("#cf-mid").value.trim(),
+      sync_root: $("#cf-root").value.trim(),
+    };
+    const r = await api("PUT", "/api/sync/config", body);
+    cfg = r.config;
+    msg.textContent = "Saved ✓"; msg.style.color = "var(--green)";
+    setTimeout(render, 600);
+  } catch (e) {
+    msg.textContent = "Failed: " + e.message; msg.style.color = "var(--red)";
+  }
+}
+
+async function doAction(kind) {
+  const url = {
+    export: "/api/sync/snapshot/export",
+    import: "/api/sync/snapshot/import",
+    push:   "/api/sync/notes/push",
+    pull:   "/api/sync/notes/pull",
+  }[kind];
+  const outEl = $("#out-" + kind);
+  outEl.style.display = "block";
+  outEl.className = "out";
+  outEl.textContent = "Working…";
+  try {
+    const data = await api("POST", url, {});
+    outEl.className = "out ok";
+    outEl.textContent = JSON.stringify(data, null, 2);
+    // Refresh status
+    cfg = await api("GET", "/api/sync/config");
+    document.querySelector(".meta-grid").innerHTML = `
+      <div><div class="l">Last export</div><div class="v">${escapeHtml(cfg.last_export || "—")}</div></div>
+      <div><div class="l">Last import</div><div class="v">${escapeHtml(cfg.last_import || "—")}</div></div>
+      <div><div class="l">Last push (notes)</div><div class="v">${escapeHtml(cfg.last_push || "—")}</div></div>
+      <div><div class="l">Last pull (notes)</div><div class="v">${escapeHtml(cfg.last_pull || "—")}</div></div>
+    `;
+  } catch (e) {
+    outEl.className = "out error";
+    outEl.textContent = e.message;
+  }
+}
+
+boot();
+</script>
+</body>
+</html>

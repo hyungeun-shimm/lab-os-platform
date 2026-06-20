@@ -1,0 +1,617 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Lab OS — Project Overview</title>
+<style>
+  :root {
+    --navy: #1E2761;
+    --navy-deep: #131A40;
+    --ice: #CADCFC;
+    --ice-deep: #8FB3E6;
+    --accent: #F2B33D;
+    --grey: #5A6378;
+    --grey-light: #ECEEF3;
+    --grey-lighter: #F6F7FB;
+    --white: #FFFFFF;
+    --green: #1F7A3A;
+    --green-soft: #ecfdf5;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, "Helvetica Neue", Calibri, sans-serif;
+    background: var(--grey-lighter); color: #1c2333; min-height: 100vh;
+  }
+  header.app-top {
+    background: var(--navy); color: var(--white);
+    padding: 12px 20px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  header.app-top .brand { font-family: Georgia, serif; font-size: 18px; font-weight: 700; }
+  header.app-top .brand-sub {
+    color: var(--accent); font-size: 11px; letter-spacing: 0.2em;
+    text-transform: uppercase; margin-left: 4px;
+  }
+  header.app-top a.back {
+    color: var(--ice); text-decoration: none; font-size: 13px;
+    display: inline-flex; align-items: center; gap: 4px;
+  }
+  header.app-top a.back:hover { color: var(--white); }
+  header.app-top .crumbs { color: var(--ice-deep); font-size: 12.5px; display: flex; align-items: center; gap: 6px; }
+  header.app-top .crumbs strong { color: var(--white); }
+  header.app-top .spacer { flex: 1; }
+  header.app-top .me { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+  header.app-top .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--accent); color: var(--navy-deep);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  header.app-top .mode-pill {
+    background: var(--accent); color: var(--navy-deep);
+    padding: 3px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  header.app-top .mode-pill.member { background: var(--ice-deep); color: var(--navy-deep); }
+
+  main { max-width: 1400px; margin: 0 auto; padding: 24px; }
+
+  .page-head {
+    background: var(--white); border-radius: 14px;
+    padding: 18px 22px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    margin-bottom: 16px;
+  }
+  .page-head h1 { margin: 0 0 6px; font-family: Georgia, serif; color: var(--navy); font-size: 22px; }
+  .page-head .desc { color: var(--grey); font-size: 13px; }
+
+  .stats-row {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px; margin-bottom: 16px;
+  }
+  .stat-card {
+    background: var(--white); border-radius: 12px;
+    padding: 12px 16px; border: 1px solid var(--grey-light);
+  }
+  .stat-card .stat-label {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px;
+  }
+  .stat-card .stat-value { font-size: 26px; font-weight: 700; color: var(--navy); line-height: 1; }
+  .stat-card .stat-sub { font-size: 11.5px; color: var(--grey); margin-top: 3px; }
+
+  .filters {
+    background: var(--white); border-radius: 12px;
+    padding: 12px 16px; margin-bottom: 12px;
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+  }
+  .filter-group { display: flex; align-items: center; gap: 6px; }
+  .filter-label {
+    font-size: 10.5px; font-weight: 700; color: var(--grey);
+    text-transform: uppercase; letter-spacing: 0.06em;
+  }
+  .filter-btn {
+    background: var(--grey-lighter); color: var(--navy);
+    border: 1px solid var(--grey-light); border-radius: 999px;
+    padding: 4px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer;
+  }
+  .filter-btn:hover { background: var(--ice); }
+  .filter-btn.active {
+    background: var(--navy); color: var(--white); border-color: var(--navy);
+  }
+  .filters input[type="text"], .filters input[type="date"], .filters select {
+    border: 1px solid #d1d5db; border-radius: 7px;
+    padding: 5px 9px; font: inherit; font-size: 13px; background: var(--white);
+  }
+  .filters .spacer { flex: 1; }
+  .filters .reset-btn {
+    background: transparent; color: var(--grey); border: 0; cursor: pointer;
+    font: inherit; font-size: 12.5px; text-decoration: underline;
+  }
+
+  .table-wrap {
+    background: var(--white); border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(15,23,42,0.05);
+    overflow: hidden;
+  }
+  table.ov {
+    width: 100%; border-collapse: collapse; font-size: 13px;
+  }
+  table.ov th {
+    text-align: left; padding: 10px 12px;
+    background: var(--grey-lighter);
+    color: var(--grey); font-size: 10.5px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    border-bottom: 1px solid var(--grey-light);
+    cursor: pointer; user-select: none;
+    white-space: nowrap;
+  }
+  table.ov th:hover { background: var(--grey-light); }
+  table.ov th .arrow { color: var(--navy); font-size: 11px; margin-left: 3px; }
+  table.ov td {
+    padding: 9px 12px; border-bottom: 1px solid var(--grey-lighter);
+    vertical-align: top;
+  }
+  table.ov tbody tr:hover { background: var(--grey-lighter); cursor: pointer; }
+  table.ov tbody tr:last-child td { border-bottom: 0; }
+
+  .mid-link {
+    color: var(--navy); font-weight: 700; font-family: 'SF Mono', Consolas, monospace;
+    text-decoration: none; cursor: pointer;
+  }
+  .mid-link:hover { text-decoration: underline; color: var(--navy-deep); }
+  .pill {
+    display: inline-block;
+    padding: 2px 8px; border-radius: 999px;
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 0.05em; text-transform: uppercase;
+  }
+  .pill.slice    { background: rgba(99,102,241,0.13); color: #4338ca; }
+  .pill.behavior { background: rgba(16,185,129,0.13); color: #065f46; }
+  .pill.draft    { background: var(--grey-lighter); color: var(--grey); }
+  .pill.approved { background: var(--green-soft); color: var(--green); }
+  .small-chip {
+    display: inline-block;
+    background: var(--grey-lighter); color: var(--navy);
+    border-radius: 999px; padding: 1px 7px;
+    font-size: 11px; margin-right: 3px; margin-bottom: 2px;
+  }
+
+  .empty {
+    color: var(--grey); font-style: italic; padding: 40px 20px; text-align: center;
+  }
+  .err {
+    color: #b91c1c; padding: 12px 16px; background: #fef2f2; border-radius: 8px;
+  }
+  .loading-spin {
+    display: inline-block; width: 14px; height: 14px;
+    border: 2px solid var(--grey-light); border-top-color: var(--navy);
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+    margin-right: 6px; vertical-align: -2px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div>
+    <span class="brand">Lab OS</span><span class="brand-sub">ELN</span>
+  </div>
+  <a class="back" id="back-link" href="/eln/">← Projects</a>
+  <div class="crumbs">
+    <span>/</span><span id="crumb-proj">…</span>
+    <span>/</span><strong>Overview</strong>
+  </div>
+  <div class="spacer"></div>
+  <div class="me" id="me-area">Loading…</div>
+</header>
+
+<main>
+  <div class="page-head">
+    <h1 id="ph-title">Project overview</h1>
+    <div class="desc">All experiments across this project — one row per mouse × date × experiment type.</div>
+  </div>
+
+  <div id="stats" class="stats-row"></div>
+
+  <div class="filters">
+    <div class="filter-group">
+      <span class="filter-label">Type</span>
+      <button class="filter-btn active" data-type="all">All</button>
+      <button class="filter-btn" data-type="slice_recording">🔬 Slice</button>
+      <button class="filter-btn" data-type="behavior">🐭 Behavior</button>
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">From</span>
+      <input type="date" id="f-from" />
+      <span class="filter-label">To</span>
+      <input type="date" id="f-to" />
+    </div>
+    <div class="filter-group">
+      <span class="filter-label">Mouse</span>
+      <input type="text" id="f-mid" placeholder="e.g. WT3479" autocomplete="off" style="width:130px;" />
+    </div>
+    <div class="filter-group" id="author-filter-grp" style="display:none;">
+      <span class="filter-label">Author</span>
+      <select id="f-author"><option value="">— all —</option></select>
+    </div>
+    <div class="spacer"></div>
+    <button class="filter-btn" id="btn-export" title="Download current view as CSV (opens in Excel)">📥 Export CSV</button>
+    <button class="reset-btn" id="btn-reset">Reset</button>
+  </div>
+
+  <div class="table-wrap">
+    <table class="ov" id="ov-table">
+      <thead>
+        <tr>
+          <th data-sort="date">Date <span class="arrow">↓</span></th>
+          <th data-sort="type">Type</th>
+          <th data-sort="mouse_id">Mouse</th>
+          <th data-sort="exp_condition">Cond</th>
+          <th data-sort="cohort">Cohort</th>
+          <th>Summary</th>
+          <th data-sort="author">Author</th>
+          <th data-sort="status">Status</th>
+        </tr>
+      </thead>
+      <tbody id="ov-body">
+        <tr><td colspan="8" class="empty"><span class="loading-spin"></span>Loading…</td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const $$ = (s) => Array.from(document.querySelectorAll(s));
+
+const pathParts = window.location.pathname.split("/").filter(Boolean);
+const projectSlug = decodeURIComponent(pathParts[2] || "");
+
+let currentUser = null;
+let project = null;
+let allRows = [];               // raw flattened rows
+let filter = { type: "all", from: "", to: "", mid: "", author: "" };
+let sort = { key: "date", dir: "desc" };
+
+function escapeHtml(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
+
+async function api(method, path, body) {
+  const opts = { method, credentials: "include", headers: { "Content-Type": "application/json" } };
+  if (body) opts.body = JSON.stringify(body);
+  const r = await fetch(path, opts);
+  let data = null;
+  try { data = await r.json(); } catch (_) {}
+  if (!r.ok) {
+    const detail = data?.detail;
+    const msg = typeof detail === "string" ? detail : (detail?.detail || `HTTP ${r.status}`);
+    const err = new Error(msg); err.status = r.status;
+    throw err;
+  }
+  return data;
+}
+
+async function boot() {
+  try {
+    const me = await api("GET", "/api/eln/auth/me");
+    currentUser = me.user;
+    renderHeader();
+
+    const proj = await api("GET", `/api/eln/projects/${encodeURIComponent(projectSlug)}`);
+    project = proj.project;
+    $("#ph-title").textContent = `${project.title} — overview`;
+    $("#crumb-proj").innerHTML = `<a href="/eln/project/${encodeURIComponent(projectSlug)}" style="color:var(--ice); text-decoration:none;">${escapeHtml(project.title)}</a>`;
+    $("#back-link").href = `/eln/project/${encodeURIComponent(projectSlug)}`;
+
+    if (currentUser.effective_role === "admin") {
+      $("#author-filter-grp").style.display = "";
+    }
+
+    await loadAll();
+  } catch (e) {
+    if (e.status === 401) { window.location.href = "/eln/login"; return; }
+    $("#ov-body").innerHTML = `<tr><td colspan="8"><div class="err">Load failed: ${escapeHtml(e.message)}</div></td></tr>`;
+  }
+}
+
+function renderHeader() {
+  const u = currentUser;
+  const initials = u.initials || (u.display_name || "?")[0];
+  const eff = u.effective_role;
+  const badge = `<span class="mode-pill ${eff === "admin" ? "" : "member"}">${eff === "admin" ? "Admin mode" : "User mode"}</span>`;
+  $("#me-area").innerHTML =
+    `<div class="avatar" style="${u.color ? `background:${u.color}; color:#fff;` : ""}">${initials}</div>` +
+    `<div>${u.display_name} ${badge}</div>`;
+}
+
+// ───────────────────────────────────────────
+// Load + flatten
+// ───────────────────────────────────────────
+async function loadAll() {
+  $("#ov-body").innerHTML = `<tr><td colspan="8" class="empty"><span class="loading-spin"></span>Loading all notes…</td></tr>`;
+  try {
+    const [sliceRes, behavRes] = await Promise.all([
+      api("GET", `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes?experiment_type=slice_recording`),
+      api("GET", `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes?experiment_type=behavior`),
+    ]);
+    const sliceNotes = sliceRes.notes || [];
+    const behavNotes = behavRes.notes || [];
+
+    const rows = [];
+    const authorSet = new Map();
+
+    for (const n of sliceNotes) {
+      const author = n.author?.display_name || n.author?.username || "—";
+      if (n.author) authorSet.set(n.author.id, n.author);
+      const entries = n.payload?.entries || [];
+      for (const e of entries) {
+        const recs = e.recordings || (e.cells ? e.cells.map(c => ({ cell: c.cell, protocol: c.protocol })) : []);
+        const protos = Array.from(new Set(recs.map(r => r.protocol).filter(Boolean)));
+        const cells  = Array.from(new Set(recs.map(r => r.cell).filter(Boolean)));
+        rows.push({
+          date:          n.note_date,
+          type:          "slice_recording",
+          mouse_id:      e.mouse_id || "",
+          exp_condition: e.exp_condition || "",
+          cohort:        e.cohort || "",
+          author,
+          author_id:     n.author?.id || "",
+          status:        n.status || "draft",
+          summary:       {
+            cellType: e.cell_type || "",
+            cells, protos,
+            recCount: recs.length,
+            behaviorAccompany: !!(e.behavior_exp?.done),
+          },
+        });
+      }
+    }
+
+    for (const n of behavNotes) {
+      const author = n.author?.display_name || n.author?.username || "—";
+      if (n.author) authorSet.set(n.author.id, n.author);
+      const entries = n.payload?.entries || [];
+      for (const e of entries) {
+        const rec  = e.recording || {};
+        const mods = [
+          rec.photometry?.enabled    ? "Photometry"   : null,
+          rec.ephys?.enabled         ? "ePhys"        : null,
+          rec.opto?.enabled          ? "Opto"         : null,
+          rec.chemogenetic?.enabled  ? "Chemogenetic" : null,
+          rec.drug?.enabled          ? "Drug"         : null,
+        ].filter(Boolean);
+        rows.push({
+          date:          n.note_date,
+          type:          "behavior",
+          mouse_id:      e.mouse_id || "",
+          exp_condition: e.exp_condition || "",
+          cohort:        e.cohort || "",
+          author,
+          author_id:     n.author?.id || "",
+          status:        n.status || "draft",
+          summary:       {
+            tasks:         (e.behavior_tasks || []),
+            mods,
+            targetRegion:  rec.target_region || "",
+            sessionCount:  (e.sessions || []).length,
+          },
+        });
+      }
+    }
+
+    allRows = rows;
+
+    // Populate author filter
+    const sel = $("#f-author");
+    sel.innerHTML = '<option value="">— all —</option>' +
+      Array.from(authorSet.values()).map(a =>
+        `<option value="${a.id}">${escapeHtml(a.display_name || a.username || a.id)}</option>`
+      ).join("");
+
+    renderStats();
+    renderTable();
+  } catch (e) {
+    $("#ov-body").innerHTML = `<tr><td colspan="8"><div class="err">Load failed: ${escapeHtml(e.message)}</div></td></tr>`;
+  }
+}
+
+// ───────────────────────────────────────────
+// Stats + table
+// ───────────────────────────────────────────
+function filteredRows() {
+  return allRows.filter(r => {
+    if (filter.type !== "all" && r.type !== filter.type) return false;
+    if (filter.from && r.date < filter.from) return false;
+    if (filter.to   && r.date > filter.to)   return false;
+    if (filter.mid  && !r.mouse_id.toLowerCase().includes(filter.mid.toLowerCase())) return false;
+    if (filter.author && r.author_id !== filter.author) return false;
+    return true;
+  });
+}
+
+function renderStats() {
+  const rows = filteredRows();
+  const uniqMice = new Set(rows.map(r => r.mouse_id).filter(Boolean)).size;
+  const sliceN   = rows.filter(r => r.type === "slice_recording").length;
+  const behavN   = rows.filter(r => r.type === "behavior").length;
+  const finalN   = rows.filter(r => r.status !== "draft").length;
+  $("#stats").innerHTML = `
+    <div class="stat-card">
+      <div class="stat-label">Total rows</div>
+      <div class="stat-value">${rows.length}</div>
+      <div class="stat-sub">mouse × date × type</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Unique mice</div>
+      <div class="stat-value">${uniqMice}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Slice</div>
+      <div class="stat-value">${sliceN}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Behavior</div>
+      <div class="stat-value">${behavN}</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">Finalized</div>
+      <div class="stat-value">${finalN}</div>
+      <div class="stat-sub">${rows.length - finalN} draft</div>
+    </div>
+  `;
+}
+
+function sortRows(rows) {
+  const k = sort.key, dir = sort.dir === "asc" ? 1 : -1;
+  return rows.slice().sort((a, b) => {
+    const va = (a[k] ?? "").toString().toLowerCase();
+    const vb = (b[k] ?? "").toString().toLowerCase();
+    if (va < vb) return -1 * dir;
+    if (va > vb) return  1 * dir;
+    return 0;
+  });
+}
+
+function summaryCell(row) {
+  if (row.type === "slice_recording") {
+    const s = row.summary;
+    const bits = [];
+    if (s.cellType)        bits.push(`<span class="small-chip">${escapeHtml(s.cellType)}</span>`);
+    if (s.cells.length)    bits.push(`<span class="small-chip">${s.cells.length} cell${s.cells.length>1?"s":""}</span>`);
+    if (s.recCount)        bits.push(`<span class="small-chip">${s.recCount} rec${s.recCount>1?"s":""}</span>`);
+    s.protos.forEach(p => bits.push(`<span class="small-chip">${escapeHtml(p)}</span>`));
+    if (s.behaviorAccompany) bits.push(`<span class="small-chip" style="background:var(--green-soft);color:var(--green);">🐭 behavior</span>`);
+    return bits.join("") || `<span style="color:var(--grey);font-style:italic;">—</span>`;
+  } else {
+    const s = row.summary;
+    const bits = [];
+    s.tasks.forEach(t => bits.push(`<span class="small-chip">${escapeHtml(t)}</span>`));
+    s.mods.forEach(m => {
+      const cls = m === "Photometry" ? "background:rgba(99,102,241,0.12);color:#4338ca;" :
+                  m === "ePhys"      ? "background:rgba(245,158,11,0.12);color:#92400e;" :
+                  m === "Opto"       ? "background:rgba(16,185,129,0.12);color:#065f46;" :
+                  m === "Chemogenetic" ? "background:rgba(168,85,247,0.12);color:#6b21a8;" :
+                                       "background:rgba(244,114,182,0.12);color:#9d174d;";
+      bits.push(`<span class="small-chip" style="${cls}">${escapeHtml(m)}</span>`);
+    });
+    if (s.targetRegion) bits.push(`<span class="small-chip" style="background:#eef2ff;color:var(--navy);">@${escapeHtml(s.targetRegion)}</span>`);
+    if (s.sessionCount) bits.push(`<span class="small-chip">${s.sessionCount} session${s.sessionCount>1?"s":""}</span>`);
+    return bits.join("") || `<span style="color:var(--grey);font-style:italic;">—</span>`;
+  }
+}
+
+function renderTable() {
+  // Update sort arrows
+  $$("#ov-table th[data-sort]").forEach(th => {
+    const arrow = th.querySelector(".arrow") || (() => {
+      const sp = document.createElement("span"); sp.className = "arrow"; th.appendChild(sp); return sp;
+    })();
+    if (th.dataset.sort === sort.key) {
+      arrow.textContent = sort.dir === "asc" ? " ↑" : " ↓";
+      arrow.style.display = "";
+    } else {
+      arrow.textContent = "";
+    }
+  });
+
+  const rows = sortRows(filteredRows());
+  if (!rows.length) {
+    $("#ov-body").innerHTML = `<tr><td colspan="8" class="empty">No entries match these filters.</td></tr>`;
+    return;
+  }
+  $("#ov-body").innerHTML = rows.map(r => {
+    const typePill = r.type === "slice_recording"
+      ? `<span class="pill slice">🔬 Slice</span>`
+      : `<span class="pill behavior">🐭 Behavior</span>`;
+    const statusPill = r.status === "draft"
+      ? `<span class="pill draft">Draft</span>`
+      : `<span class="pill approved">Finalized</span>`;
+    const dest = r.type === "slice_recording" ? "slice" : "behavior";
+    return `
+      <tr data-dest="${dest}">
+        <td style="white-space:nowrap;">${escapeHtml(r.date)}</td>
+        <td>${typePill}</td>
+        <td>${r.mouse_id ? `<a class="mid-link" href="/eln/mouse/${encodeURIComponent(r.mouse_id)}" onclick="event.stopPropagation();">${escapeHtml(r.mouse_id)}</a>` : "—"}</td>
+        <td>${escapeHtml(r.exp_condition || "—")}</td>
+        <td>${escapeHtml(r.cohort || "—")}</td>
+        <td>${summaryCell(r)}</td>
+        <td>${escapeHtml(r.author)}</td>
+        <td>${statusPill}</td>
+      </tr>`;
+  }).join("");
+
+  $$("#ov-body tr[data-dest]").forEach(tr => {
+    tr.addEventListener("click", () => {
+      window.location.href = `/eln/project/${encodeURIComponent(projectSlug)}/${tr.dataset.dest}`;
+    });
+  });
+}
+
+// ───────────────────────────────────────────
+// Filter / sort handlers
+// ───────────────────────────────────────────
+$$(".filter-btn[data-type]").forEach(b => {
+  b.addEventListener("click", () => {
+    $$(".filter-btn[data-type]").forEach(x => x.classList.remove("active"));
+    b.classList.add("active");
+    filter.type = b.dataset.type;
+    renderStats(); renderTable();
+  });
+});
+$("#f-from").addEventListener("change", () => { filter.from = $("#f-from").value; renderStats(); renderTable(); });
+$("#f-to")  .addEventListener("change", () => { filter.to   = $("#f-to").value;   renderStats(); renderTable(); });
+$("#f-mid") .addEventListener("input",  () => { filter.mid  = $("#f-mid").value;  renderStats(); renderTable(); });
+$("#f-author").addEventListener("change", () => { filter.author = $("#f-author").value; renderStats(); renderTable(); });
+
+$("#btn-reset").addEventListener("click", () => {
+  filter = { type: "all", from: "", to: "", mid: "", author: "" };
+  $$(".filter-btn[data-type]").forEach(x => x.classList.toggle("active", x.dataset.type === "all"));
+  $("#f-from").value = ""; $("#f-to").value = ""; $("#f-mid").value = ""; $("#f-author").value = "";
+  renderStats(); renderTable();
+});
+
+$$("#ov-table th[data-sort]").forEach(th => {
+  th.addEventListener("click", () => {
+    const k = th.dataset.sort;
+    if (sort.key === k) sort.dir = sort.dir === "asc" ? "desc" : "asc";
+    else { sort.key = k; sort.dir = "asc"; }
+    renderTable();
+  });
+});
+
+// CSV export — UTF-8 BOM for Excel compatibility
+function csvEscape(v) {
+  const s = String(v ?? "");
+  if (/[",\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+  return s;
+}
+function rowToCSV(r) {
+  const s = r.summary || {};
+  let summaryText = "";
+  if (r.type === "slice_recording") {
+    const bits = [];
+    if (s.cellType) bits.push(`cell_type=${s.cellType}`);
+    if (s.cells?.length)  bits.push(`cells=${s.cells.join("|")}`);
+    if (s.protos?.length) bits.push(`protocols=${s.protos.join("|")}`);
+    if (s.recCount)       bits.push(`n_recordings=${s.recCount}`);
+    if (s.behaviorAccompany) bits.push("behavior_accompany=yes");
+    summaryText = bits.join("; ");
+  } else {
+    const bits = [];
+    if (s.tasks?.length)   bits.push(`tasks=${s.tasks.join("|")}`);
+    if (s.mods?.length)    bits.push(`modality=${s.mods.join("|")}`);
+    if (s.targetRegion)    bits.push(`target_region=${s.targetRegion}`);
+    if (s.sessionCount)    bits.push(`n_sessions=${s.sessionCount}`);
+    summaryText = bits.join("; ");
+  }
+  return [r.date, r.type, r.mouse_id, r.exp_condition, r.cohort, summaryText, r.author, r.status]
+    .map(csvEscape).join(",");
+}
+
+$("#btn-export").addEventListener("click", () => {
+  const rows = sortRows(filteredRows());
+  if (!rows.length) { alert("No rows to export."); return; }
+  const header = ["date","type","mouse_id","exp_condition","cohort","summary","author","status"].join(",");
+  const csv = "﻿" + header + "\n" + rows.map(rowToCSV).join("\n") + "\n";
+  const today = new Date().toISOString().slice(0, 10);
+  const fname = `${project?.slug || "overview"}_overview_${today}.csv`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url; a.download = fname;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
+
+boot();
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>
