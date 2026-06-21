@@ -10,6 +10,7 @@ How to *use* Lab OS day to day, once it's running. (Setting it up is covered in
 - [Electronic Lab Notebook (ELN)](#electronic-lab-notebook-eln)
 - [Animal database & cage-card intake](#animal-database)
 - [Dashboard](#dashboard)
+- [On your phone (mobile & installing as an app)](#on-your-phone)
 - [Slack bot](#slack-bot)
 
 ---
@@ -191,6 +192,32 @@ project, status rollups, and (admins) a link to the append-only **audit log**, w
 records every meaningful action (logins, note edits, approvals, member changes, etc.).
 
 ---
+
+## On your phone
+
+Lab OS adapts to phones automatically — **just open the same URL on your phone**, no
+separate app or address needed.
+
+- Opening the **scheduler** on a phone (screen ≤ 640px wide) auto-redirects to a
+  touch-optimized mobile scheduler at **`/m`** — an iCal-style **Agenda / Day / Week**
+  view built for one-handed use.
+- Opening the **ELN** (`/eln/`) on a phone auto-redirects to a mobile home at
+  **`/eln/m`** — a card list of your projects with a menu to Schedule, Lab Notes,
+  Animal DB, Breeders, and Dashboard.
+- On a wide screen those mobile pages send you back to the full desktop UI, so you
+  always get the right layout for the device (no redirect loops).
+
+### Install it like an app (PWA)
+
+Lab OS is a **Progressive Web App**, so you can add it to your home screen and launch it
+full-screen like a native app (it keeps you logged in):
+
+- **iPhone / iPad (Safari):** Share → **Add to Home Screen**.
+- **Android (Chrome):** menu **⋮** → **Install app** (or *Add to Home screen*).
+
+It installs as **"Lab OS"**, opens standalone (no browser bars), in portrait. Because
+it's served over HTTPS with a service worker, the shell loads fast and the icon behaves
+like any other app on the phone.
 
 ## Slack bot
 

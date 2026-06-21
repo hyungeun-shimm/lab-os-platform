@@ -44,6 +44,8 @@ is a self-contained HTML file of vanilla JS.
   rollups, and an append-only audit log.
 - **Slack bot** (optional) — natural-language scheduling and cage-card intake from a
   phone photo. (Bot replies are Korean by design; the rest of the UI is English.)
+- **Mobile + installable** — phones auto-redirect to touch-optimized scheduler/ELN
+  views, and the app is a PWA you can add to your home screen. See [USAGE.md](USAGE.md#on-your-phone).
 
 ## How it works
 
