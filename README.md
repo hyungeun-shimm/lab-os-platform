@@ -190,6 +190,9 @@ hard-code single-user assumptions.
 
 ## Documentation
 
+- **[USAGE.md](USAGE.md)** — how to *use* the app day to day: admin vs member accounts,
+  signing in & recovering a lost ID/password, AI scheduling, the ELN review workflow,
+  animal DB & cage-card intake.
 - **[SELF_HOSTING.md](SELF_HOSTING.md)** — full step-by-step production deploy (VM,
   domain, HTTPS, service, integrations, backups), AI-assistant friendly.
 - **[ARCHITECTURE.md](ARCHITECTURE.md)** — data model, API reference, frontend

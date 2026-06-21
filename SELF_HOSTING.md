@@ -378,15 +378,17 @@ Gmail app password) into `/opt/labos/secrets/smtp.env`:
 
 ```bash
 sudo tee /opt/labos/secrets/smtp.env >/dev/null <<'ENV'
-SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_USER=you@example.com
-SMTP_PASS=REPLACE_APP_PASSWORD
-SMTP_FROM=you@example.com
+LABOS_SMTP_HOST=smtp.gmail.com
+LABOS_SMTP_PORT=587
+LABOS_SMTP_USER=you@example.com
+LABOS_SMTP_PASS=REPLACE_APP_PASSWORD
+LABOS_SMTP_FROM=you@example.com
+LABOS_SMTP_FROM_NAME=Lab OS
 ENV
 sudo chown labos:labos /opt/labos/secrets/smtp.env && sudo chmod 600 /opt/labos/secrets/smtp.env
 sudo systemctl restart labos
 ```
+(Gmail requires a 16-character **App Password**, not your normal login password.)
 
 Without SMTP, password-reset codes are returned in the API response (fine for a
 small lab; switch to real email for anything bigger).
@@ -520,7 +522,7 @@ changes need the restart shown above.
 | `LABOS_SECURE_COOKIES` | app | `1` → mark the session cookie Secure (HTTPS only) |
 | `LABOS_API_TOKEN` | app + bot | Shared token for machine callers (bot/rigs); browsers use the session cookie |
 | `GEMINI_API_KEY`, `GEMINI_MODEL` | app | AI autoschedule (free Google AI Studio key) |
-| `SMTP_HOST/PORT/USER/PASS/FROM` | app | Password-reset emails (optional) |
+| `LABOS_SMTP_HOST/PORT/USER/PASS/FROM/FROM_NAME` | app | Password-reset emails (optional; Gmail needs an App Password) |
 | `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN` | bot | Slack credentials (Socket Mode) |
 | `OPENAI_API_KEY` | bot / animal_updater | LLM cage-card parsing (optional; rule-based fallback) |
 | `SLACK_POLL_CHANNELS` | bot | Channel(s) the bot watches |
