@@ -175,13 +175,30 @@ cohort, or experiment; open a mouse for its full profile; manage breeders and co
   clicks **Sync now**; the sync is validating and non-destructive (it diffs, never blindly
   overwrites, and snapshots first). Column mapping is in
   [ARCHITECTURE.md](ARCHITECTURE.md#animal-db-sync).
-- **Cage-card intake:** instead of typing a new mouse, photograph the cage card — OCR +
-  an LLM (or rule-based parser) read it and register the mouse. Do it from the **Slack
-  bot** (send the photo) or from a terminal:
-  ```python
-  from animal_updater import register_from_image
-  register_from_image("/path/to/cage_card.jpg", project="my-project")
-  ```
+### Scan a cage card with your phone camera
+
+Instead of typing a new mouse in by hand, photograph the cage card and let the app read
+it. This is the fastest way to add animals, and it's built for phones:
+
+1. On a phone, open **Animal DB → 📷 Scan card**, or tap **📷 Scan cage card** in the
+   mobile menu (the page is `/eln/cage-card`).
+2. Tap **Take / choose photo** — your phone's **camera opens directly** (you can also pick
+   an existing image).
+3. The photo is read automatically by **GPT-4o-mini vision**, and the extracted fields
+   (mouse ID, strain, sex, DOB, cohort, condition, …) appear in an **editable form**.
+   Anything the AI couldn't read is flagged so you can fill it in.
+4. Check/fix the fields and tap **Save to colony** — the mouse is written into the animal
+   database. Then **Scan another** to continue.
+
+> Requires `OPENAI_API_KEY` on the server (the vision step). Without it, the scan reports
+> that the AI isn't available — see [SELF_HOSTING.md](SELF_HOSTING.md).
+
+You can also register a cage card **from the Slack bot** (send it the photo), or from a
+terminal:
+```python
+from animal_updater import register_from_image
+register_from_image("/path/to/cage_card.jpg", project="my-project")
+```
 
 ---
 
@@ -206,6 +223,9 @@ separate app or address needed.
   Animal DB, Breeders, and Dashboard.
 - On a wide screen those mobile pages send you back to the full desktop UI, so you
   always get the right layout for the device (no redirect loops).
+- **Scan cage cards with the camera:** from **Animal DB → 📷 Scan card** (or the mobile
+  menu's 📷 Scan cage card), take a photo and the mouse is read and saved — see
+  [Animal database](#animal-database) above.
 
 ### Install it like an app (PWA)
 

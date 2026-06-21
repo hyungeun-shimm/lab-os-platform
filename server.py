@@ -1420,6 +1420,86 @@ _ANIMAL_EDITABLE = frozenset({
 })
 
 
+# ---------- Cage-card scan: photo → GPT vision → colony ----------
+# Mobile flow: photo → GPT-4o-mini vision → confirm → write. Production writes to
+# the Google-Sheet master then syncs (the PRIVATE blocks below); the generic build
+# writes straight to the DB.
+
+_CAGE_CARD_FIELDS = _ANIMAL_EDITABLE | {"mouse_id"}
+
+
+def _write_animals_to_db(animals: list[dict]) -> dict:
+    """Generic colony write — upsert each animal straight into the DB.
+    Used when there is no Google-Sheet master (e.g. the open-source build)."""
+    written, errors = [], []
+    with db_conn() as con:
+        for a in animals:
+            mid = str(a.get("mouse_id") or "").strip()
+            if not mid:
+                errors.append({"mouse_id": "", "error": "missing mouse_id"})
+                continue
+            fields = {k: v for k, v in a.items()
+                      if k in _ANIMAL_EDITABLE and v not in (None, "")}
+            try:
+                if animals_dal.exists(con, mid, case_insensitive=False):
+                    animals_dal.update(con, mid, **fields)
+                    written.append({"mouse_id": mid, "action": "updated"})
+                else:
+                    animals_dal.insert(con, mid, **fields)
+                    written.append({"mouse_id": mid, "action": "created"})
+            except Exception as e:
+                errors.append({"mouse_id": mid, "error": str(e)})
+    return {"written": written, "errors": errors}
+
+
+
+
+class _CageExtractIn(BaseModel):
+    image_b64: str
+    mime: str = "image/jpeg"
+
+
+@app.post("/api/animals/cage-card/extract")
+def cage_card_extract(payload: _CageExtractIn,
+                      _user: dict = Depends(auth_helpers.require_colony_editor)) -> dict[str, Any]:
+    """Cage-card photo (base64) → GPT-4o-mini vision → editable animal dicts.
+    No write happens here — the client confirms before committing."""
+    if not payload.image_b64:
+        raise HTTPException(400, "image_b64 required")
+    try:
+        import animal_updater
+    except Exception as e:
+        raise HTTPException(500, f"vision module unavailable: {e}")
+    animals = animal_updater.parse_cage_card_b64(payload.image_b64, payload.mime or "image/jpeg")
+    if animals is None:
+        raise HTTPException(503, "Cage-card AI not available — set OPENAI_API_KEY on the server, "
+                                 "or the vision call failed (check server logs).")
+    return {"ok": True, "animals": animals, "model": "gpt-4o-mini"}
+
+
+@app.post("/api/animals/cage-card/commit")
+async def cage_card_commit(req: Request,
+                           _user: dict = Depends(auth_helpers.require_colony_editor)) -> dict[str, Any]:
+    """Write confirmed cage-card animals to the colony. Production writes to the
+    Google-Sheet master and syncs the DB; the generic build writes to the DB
+    directly. Strain aliases are canonicalised on the production sync path."""
+    payload = await req.json()
+    raw = payload.get("animals") or []
+    clean = []
+    for a in raw:
+        if not isinstance(a, dict):
+            continue
+        keep = {k: v for k, v in a.items() if k in _CAGE_CARD_FIELDS}
+        if str(keep.get("mouse_id") or "").strip():
+            clean.append(keep)
+    if not clean:
+        raise HTTPException(400, "No animals with a mouse_id to write.")
+    result, sync = None, None
+    if result is None:                       # generic build: no Sheet master
+        result = _write_animals_to_db(clean)
+    return {"ok": True, **result, "sync": sync}
+
+
 # ---------- DB → Excel writeback (manual, separate from Excel→DB sync) ----------
 
 def _norm_for_compare(v: Any) -> str:
@@ -1848,6 +1928,12 @@ def eln_home_mobile() -> FileResponse:
 @app.get("/eln/login")
 def eln_login() -> FileResponse:
     return FileResponse(ROOT / "modules" / "eln" / "login.html",
+                        headers={"Cache-Control": "no-store"})
+
+@app.get("/eln/cage-card")
+def eln_cage_card_page() -> FileResponse:
+    # Mobile: snap a cage card → GPT vision → confirm → write to colony Sheet.
+    return FileResponse(ROOT / "modules" / "eln" / "cage_card.html",
                         headers={"Cache-Control": "no-store"})
 
 @app.get("/eln/project/{slug}")

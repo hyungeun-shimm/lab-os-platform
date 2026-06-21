@@ -168,6 +168,40 @@ def parse_with_gpt_vision(image_path: str) -> list[dict] | None:
         return None
 
 
+def parse_cage_card_b64(image_b64: str, mime: str = "image/jpeg",
+                        model: str = "gpt-4o-mini") -> list[dict] | None:
+    """GPT vision on a base64 cage-card image → animal dicts.
+
+    Web/mobile counterpart of parse_with_gpt_vision (which takes a file path).
+    Defaults to gpt-4o-mini for cost. Returns a list (possibly empty) on success,
+    None if OpenAI is unavailable or the call errored — caller surfaces that.
+    """
+    if not OPENAI_API_KEY:
+        return None
+    try:
+        raw = openai_chat(
+            [{"role": "system", "content": _CAGE_CARD_SYS},
+             {"role": "user", "content": [
+                 {"type": "image_url",
+                  "image_url": {"url": f"data:{mime};base64,{image_b64}", "detail": "high"}},
+                 {"type": "text",
+                  "text": "Parse this cage card image and return all animal data as JSON."},
+             ]}],
+            json_mode=True,
+            model=model,
+        )
+        data = json.loads(raw)
+        animals: list[dict] = data.get("animals", data) if isinstance(data, dict) else data
+        if not isinstance(animals, list):
+            return None
+        animals = _normalise_mouse_ids(animals)
+        print(f"[GPT vision b64] parsed {len(animals)} animals via {model}")
+        return animals
+    except Exception as e:
+        print(f"[GPT vision b64] error: {e}")
+        return None
+
+
 def _normalise_mouse_ids(animals: list[dict]) -> list[dict]:
     for a in animals:
         mid = str(a.get("mouse_id") or "").strip()

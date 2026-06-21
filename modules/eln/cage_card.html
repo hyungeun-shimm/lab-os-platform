@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+<meta name="theme-color" content="#007aff" />
+<link rel="manifest" href="/manifest.webmanifest" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-title" content="Lab OS" />
+<link rel="apple-touch-icon" href="/pwa/apple-touch-icon.png" />
+<title>Scan cage card</title>
+<style>
+  :root{ --accent:#007aff; --bg:#fff; --bg2:#f2f2f7; --line:#e5e5ea; --txt:#1c1c1e; --mut:#8e8e93; --ok:#34c759; --err:#ff3b30; }
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; background:var(--bg); color:var(--txt); font:16px/1.4 -apple-system,"Helvetica Neue",sans-serif; }
+  .mhead{ position:sticky; top:0; z-index:20; background:var(--bg); border-bottom:1px solid var(--line); }
+  .mrow{ display:flex; align-items:center; gap:10px; padding:9px 12px; }
+  .back{ border:none; background:var(--bg2); color:var(--accent); width:34px; height:34px; border-radius:9px; font-size:20px; text-decoration:none; display:inline-flex; align-items:center; justify-content:center; }
+  .mtitle{ font-size:17px; font-weight:600; flex:1; }
+  main{ padding:14px 14px calc(40px + env(safe-area-inset-bottom)); max-width:560px; margin:0 auto; }
+  .hero{ text-align:center; padding:30px 14px 10px; color:var(--mut); }
+  .hero .big{ font-size:46px; }
+  .hero p{ margin:10px 0 0; font-size:14px; }
+  .cap{ display:block; margin:18px 0 8px; }
+  .cap input{ display:none; }
+  .cap-btn{ width:100%; padding:16px; font-size:17px; font-weight:600; border:none; border-radius:13px; background:var(--accent); color:#fff; }
+  .cap-btn.alt{ background:var(--bg2); color:var(--accent); margin-top:10px; }
+  .preview{ width:100%; border-radius:13px; border:1px solid var(--line); margin-top:6px; display:none; }
+  .msg{ font-size:14px; margin:14px 0; padding:11px 13px; border-radius:11px; display:none; }
+  .msg.show{ display:block; }
+  .msg.err{ background:rgba(255,59,48,.10); color:#a3271f; }
+  .msg.info{ background:var(--bg2); color:var(--txt); }
+  .spin{ text-align:center; color:var(--mut); padding:24px; display:none; }
+  .spin.show{ display:block; }
+  .spin .dot{ display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--accent); margin:0 3px; animation:b 1s infinite; }
+  .spin .dot:nth-child(2){ animation-delay:.15s } .spin .dot:nth-child(3){ animation-delay:.3s }
+  @keyframes b{ 0%,80%,100%{opacity:.25} 40%{opacity:1} }
+  .card{ border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-top:14px; }
+  .card h3{ margin:2px 0 4px; font-size:16px; }
+  .manual{ font-size:12px; font-weight:600; color:#8a5b00; background:rgba(242,179,61,.20); padding:2px 8px; border-radius:8px; }
+  label{ display:block; font-size:12px; color:var(--mut); margin:11px 0 4px; }
+  input.f{ width:100%; padding:11px; font-size:16px; border:1px solid var(--line); border-radius:10px; background:#fff; }
+  .grid2{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .seg{ display:flex; gap:6px; }
+  .seg button{ flex:1; border:1px solid var(--line); background:var(--bg); color:var(--txt); font-size:14px; padding:9px; border-radius:10px; }
+  .seg button.on{ background:var(--accent); color:#fff; border-color:var(--accent); }
+  .acts{ position:sticky; bottom:0; background:var(--bg); padding:12px 0 calc(12px + env(safe-area-inset-bottom)); margin-top:18px; display:flex; gap:8px; }
+  .acts button{ flex:1; padding:14px; font-size:16px; font-weight:600; border-radius:12px; border:none; }
+  .btn-primary{ background:var(--accent); color:#fff; }
+  .btn-grey{ background:var(--bg2); color:var(--txt); }
+  .done{ text-align:center; padding:36px 14px; display:none; }
+  .done.show{ display:block; }
+  .done .chk{ font-size:54px; color:var(--ok); }
+  .done h2{ margin:10px 0 4px; font-size:20px; }
+  .done p{ color:var(--mut); margin:0 0 20px; }
+  .hidden{ display:none !important; }
+</style>
+</head>
+<body>
+<header class="mhead">
+  <div class="mrow">
+    <a class="back" href="/eln/colony" aria-label="Back">‹</a>
+    <span class="mtitle">Scan cage card</span>
+  </div>
+</header>
+
+<main>
+  <!-- Capture step -->
+  <section id="step-capture">
+    <div class="hero"><div class="big">📷</div><p>Take a photo of a cage card.<br>The fields are read automatically — you confirm before saving.</p></div>
+    <label class="cap">
+      <input id="file" type="file" accept="image/*" capture="environment" />
+      <span class="cap-btn" id="capBtn">Take / choose photo</span>
+    </label>
+    <img id="preview" class="preview" alt="preview" />
+  </section>
+
+  <div class="spin" id="spin"><div>Reading the card…</div><div style="margin-top:8px;"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div></div>
+  <div class="msg" id="msg"></div>
+
+  <!-- Confirm step -->
+  <section id="step-confirm" class="hidden">
+    <div id="forms"></div>
+    <div class="acts">
+      <button class="btn-grey" id="retake">Retake</button>
+      <button class="btn-primary" id="save">Save to colony</button>
+    </div>
+  </section>
+
+  <!-- Done step -->
+  <section class="done" id="step-done">
+    <div class="chk">✓</div>
+    <h2 id="doneTitle">Saved</h2>
+    <p id="doneSub"></p>
+    <div class="acts" style="position:static;">
+      <a class="btn-grey" href="/eln/colony" style="text-decoration:none;text-align:center;line-height:1.3;display:flex;align-items:center;justify-content:center;">Colony</a>
+      <button class="btn-primary" id="again">Scan another</button>
+    </div>
+  </section>
+</main>
+
+<script>
+const FIELDS = [
+  ["mouse_id","Mouse ID","text"], ["strain","Strain","text"],
+  ["project","Project","text"], ["cohort","Cohort","text"],
+  ["dob","DOB (YYYY-MM-DD)","text"], ["dos","Surgery / DOS","text"],
+  ["condition","Condition","text"], ["date_cond1","Condition date","text"],
+  ["barcode","Barcode","text"], ["notes","Note","text"],
+];
+const state = { animals: [] };
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function show(id){ document.getElementById(id).classList.remove('hidden'); }
+function hide(id){ document.getElementById(id).classList.add('hidden'); }
+function msg(text, kind){ const m=document.getElementById('msg'); if(!text){ m.className='msg'; return; }
+  m.textContent=text; m.className='msg show '+(kind||'info'); }
+
+async function compress(file){
+  const buf = await file.arrayBuffer();
+  const blob = new Blob([buf]);
+  const url = URL.createObjectURL(blob);
+  try{
+    const img = await new Promise((res,rej)=>{ const i=new Image(); i.onload=()=>res(i); i.onerror=rej; i.src=url; });
+    const max = 1280;
+    let { width:w, height:h } = img;
+    if(Math.max(w,h) > max){ const s = max/Math.max(w,h); w=Math.round(w*s); h=Math.round(h*s); }
+    const cv = document.createElement('canvas'); cv.width=w; cv.height=h;
+    cv.getContext('2d').drawImage(img,0,0,w,h);
+    const dataUrl = cv.toDataURL('image/jpeg', 0.7);
+    return dataUrl.split(',')[1];          // base64 body only
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function field(a, key, label, idx){
+  if(key === 'sex'){
+    const v = (a.sex||'').toUpperCase();
+    return '<label>Sex</label><div class="seg" data-sex="'+idx+'">'+
+      '<button type="button" data-v="M" class="'+(v==='M'?'on':'')+'">♂ M</button>'+
+      '<button type="button" data-v="F" class="'+(v==='F'?'on':'')+'">♀ F</button></div>';
+  }
+  return '<label>'+esc(label)+'</label>'+
+    '<input class="f" data-k="'+key+'" data-i="'+idx+'" value="'+esc(a[key]||'')+'" '+
+    (key==='mouse_id'?'autocapitalize="characters"':'')+' />';
+}
+
+function renderForms(){
+  const root = document.getElementById('forms');
+  root.innerHTML = state.animals.map((a, idx) => {
+    const manual = (a._manual ? ' <span class="manual">manual</span>' : '');
+    let html = '<div class="card"><h3>Mouse '+(idx+1)+manual+'</h3>';
+    html += field(a,'mouse_id','Mouse ID',idx);
+    html += '<div class="grid2"><div>'+field(a,'strain','Strain',idx)+'</div>'+
+            '<div>'+field(a,'sex','Sex',idx)+'</div></div>';
+    html += '<div class="grid2"><div>'+field(a,'project','Project',idx)+'</div>'+
+            '<div>'+field(a,'cohort','Cohort',idx)+'</div></div>';
+    html += '<div class="grid2"><div>'+field(a,'dob','DOB',idx)+'</div>'+
+            '<div>'+field(a,'dos','Surgery / DOS',idx)+'</div></div>';
+    html += '<div class="grid2"><div>'+field(a,'condition','Condition',idx)+'</div>'+
+            '<div>'+field(a,'date_cond1','Condition date',idx)+'</div></div>';
+    html += field(a,'barcode','Barcode',idx);
+    html += field(a,'notes','Note',idx);
+    html += '</div>';
+    return html;
+  }).join('');
+  root.querySelectorAll('input.f').forEach(inp=>{
+    inp.addEventListener('input',()=>{ state.animals[+inp.dataset.i][inp.dataset.k] = inp.value; });
+  });
+  root.querySelectorAll('[data-sex] button').forEach(b=>{
+    b.addEventListener('click',()=>{
+      const wrap=b.closest('[data-sex]'); const i=+wrap.dataset.sex;
+      wrap.querySelectorAll('button').forEach(x=>x.classList.toggle('on',x===b));
+      state.animals[i].sex = b.dataset.v;
+    });
+  });
+}
+
+async function onFile(e){
+  const file = e.target.files && e.target.files[0];
+  if(!file) return;
+  msg('');
+  const pv = document.getElementById('preview');
+  let b64;
+  try{ b64 = await compress(file); }
+  catch(err){ msg('Could not read that image. Try another photo.','err'); return; }
+  pv.src = 'data:image/jpeg;base64,'+b64; pv.style.display='block';
+  document.getElementById('spin').classList.add('show');
+  document.getElementById('capBtn').textContent = 'Retake photo';
+  try{
+    const r = await fetch('/api/animals/cage-card/extract',{
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ image_b64: b64, mime:'image/jpeg' }),
+    });
+    const data = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.detail || (r.status+' error'));
+    let animals = data.animals || [];
+    if(!animals.length){ animals = [{ _manual:true }]; }   // nothing read → manual entry
+    state.animals = animals;
+    renderForms();
+    hide('step-capture'); show('step-confirm');
+    if(animals[0] && animals[0]._manual) msg('Nothing could be read — enter the fields manually.','info');
+  }catch(err){
+    msg('Extraction failed: '+esc(err.message||err), 'err');
+  }finally{
+    document.getElementById('spin').classList.remove('show');
+  }
+}
+
+async function save(){
+  msg('');
+  const btn = document.getElementById('save'); btn.disabled = true; btn.textContent = 'Saving…';
+  try{
+    const payload = state.animals.map(a=>{ const o={...a}; delete o._manual; return o; });
+    const r = await fetch('/api/animals/cage-card/commit',{
+      method:'POST', credentials:'include',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ animals: payload }),
+    });
+    const data = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.detail || (r.status+' error'));
+    const w = (data.written||[]).length, errs = (data.errors||[]);
+    hide('step-confirm');
+    document.getElementById('doneTitle').textContent = w ? 'Saved to colony' : 'Nothing saved';
+    document.getElementById('doneSub').textContent =
+      (w ? w+' animal'+(w>1?'s':'')+' saved to the colony.' : '') +
+      (errs.length ? '  '+errs.length+' had errors.' : '');
+    document.getElementById('step-done').classList.add('show');
+  }catch(err){
+    msg('Save failed: '+esc(err.message||err), 'err');
+  }finally{
+    btn.disabled = false; btn.textContent = 'Save to colony';
+  }
+}
+
+function reset(){
+  state.animals = [];
+  document.getElementById('file').value='';
+  document.getElementById('preview').style.display='none';
+  document.getElementById('capBtn').textContent='Take / choose photo';
+  document.getElementById('forms').innerHTML='';
+  document.getElementById('step-done').classList.remove('show');
+  hide('step-confirm'); show('step-capture'); msg('');
+}
+
+async function boot(){
+  try{
+    const r = await fetch('/api/eln/auth/me',{credentials:'include'});
+    if(!r.ok){ location.href='/eln/login?next='+encodeURIComponent('/eln/cage-card'); return; }
+  }catch(_){ }
+  document.getElementById('file').addEventListener('change', onFile);
+  document.getElementById('save').addEventListener('click', save);
+  document.getElementById('retake').addEventListener('click', reset);
+  document.getElementById('again').addEventListener('click', reset);
+}
+boot();
+</script>
+</body>
+</html>

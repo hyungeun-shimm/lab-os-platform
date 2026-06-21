@@ -35,8 +35,9 @@ is a self-contained HTML file of vanilla JS.
   reminders, and a natural-language **AI auto-schedule** (Gemini) button.
 - **Animal DB** — a colony database synced from a spreadsheet (validating,
   non-destructive, audited sync). Mouse profiles, breeders, cohorts, conditions, and a
-  searchable picker shared with the scheduler and ELN. **Cage-card photo → DB**
-  auto-registration via OCR + LLM parsing.
+  searchable picker shared with the scheduler and ELN. **Cage-card → DB**
+  auto-registration: snap a photo (right from your phone camera) and GPT-4o-mini vision
+  reads the fields; you confirm and save.
 - **ELN (Electronic Lab Notebook)** — multi-user, per-project, per-date notes with a
   Submit → Approve workflow, mouse-ID auto-fill, and experiment-type pages (slice
   recording, behavior, histology, overview).
@@ -126,9 +127,9 @@ cp .env.example .env
 - **Gemini AI scheduling** (optional) — set `GEMINI_API_KEY` (a free Google AI Studio
   key) to enable the scheduler's natural-language "AI" button. It only fills in
   parameters you preview; a deterministic engine creates the actual events.
-- **Cage-card intake** (optional) — photograph a cage card; OCR + an LLM (or a built-in
-  rule-based parser) read it and register the mouse into the animal DB — via the Slack
-  bot or `animal_updater.register_from_image(...)`.
+- **Cage-card intake** (optional) — on a phone, **Animal DB → 📷 Scan card** opens the
+  camera; GPT-4o-mini vision reads the card and you confirm before saving. Also works via
+  the Slack bot or `animal_updater.register_from_image(...)`. Needs `OPENAI_API_KEY`.
 - **Slack bot** (optional) — set `SLACK_BOT_TOKEN`, `SLACK_APP_TOKEN`, and optionally
   `OPENAI_API_KEY`, then run `python slack_bot.py` (or `./start_bot.command`).
 - **Email** (optional) — SMTP credentials enable password-reset emails; without them,
