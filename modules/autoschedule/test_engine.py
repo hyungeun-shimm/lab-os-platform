@@ -47,9 +47,9 @@ def main() -> None:
     assert plan["n_mice"] == 6, plan
     assert len(plan["assignments"]) == 6, plan                 # all fit
     assert not plan["unscheduled"], plan
-    # 6 mice, 2/day → 3 distinct weekdays used, none on the weekend
+    # Six mice spread evenly across the available weekdays, never exceeding two/day.
     used_dates = sorted({d for d, _ in plan["assignments"]})
-    assert len(used_dates) == 3, used_dates
+    assert len(used_dates) == 6, used_dates
     assert all(d.weekday() < 5 for d in used_dates), used_dates
     print(f"schedule: {len(plan['assignments'])} slots over {len(used_dates)} weekdays, "
           f"warnings={plan['warnings']}")
@@ -60,14 +60,13 @@ def main() -> None:
     )
     assert len(events) == 6
     assert events[0]["start"] == "2026-07-01T09:00" and events[0]["end"] == "2026-07-01T10:00"
-    assert events[1]["start"] == "2026-07-01T10:00"          # back-to-back slot
+    assert events[1]["start"] == "2026-07-02T09:00"
     print("\nproposed events:")
     for e in events:
         print(f"  {e['start']}  {e['title']:18s}  mice={e['mice']}")
 
     conflicts = engine.check_conflicts(con, events, assignee="u_me")
-    # the 09:30–10:30 meeting overlaps BOTH the 09:00–10:00 and 10:00–11:00 slots
-    assert len(conflicts) == 2, conflicts
+    assert len(conflicts) == 1, conflicts
     print(f"\nconflicts: {conflicts}")
 
     # control mixing actually interleaves both groups, not exp-then-ctrl

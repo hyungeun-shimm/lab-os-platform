@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script src="/labos-ui.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Lab OS — Slice Recording</title>
 <style>
@@ -228,6 +229,28 @@
   }
   .chip.warn { background: rgba(242, 179, 61, 0.18); color: #8a5b00; }
   .chip.man  { background: rgba(143, 179, 230, 0.20); color: var(--navy); }
+
+  /* ── disposition bar ── */
+  .entry-dispo {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    margin: 6px 0 10px; padding: 7px 10px;
+    background: var(--grey-lighter); border-radius: 9px;
+  }
+  .entry-dispo .dispo-label {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--grey); margin-right: 2px;
+  }
+  .dispo-btn {
+    border: 1px solid var(--grey-light); background: var(--white);
+    color: var(--grey); border-radius: 999px; padding: 3px 11px;
+    font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .dispo-btn:hover { border-color: var(--ice-deep); color: var(--navy); }
+  .dispo-btn.active { font-weight: 700; }
+  .dispo-btn.dispo-clear { padding: 3px 8px; color: var(--grey); }
+  .dispo-pill { border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; }
+  .dispo-at { font-size: 11.5px; color: var(--grey); font-weight: 600; }
   .entry-filename {
     font-family: "SF Mono", Consolas, monospace;
     color: var(--grey); font-size: 11.5px;
@@ -270,6 +293,11 @@
     letter-spacing: 0.04em;
   }
   .btn-finalize:hover { background: var(--navy-deep); }
+  .btn-draft-save {
+    padding: 6px 14px; border-radius: 6px; border: 1.5px solid var(--navy); background: var(--white);
+    color: var(--navy); font-size: 13px; font-weight: 600; cursor: pointer; letter-spacing: .02em;
+  }
+  .btn-draft-save:hover { background: var(--ice); }
   .btn-return {
     background: var(--white); color: var(--navy);
     border: 1px solid var(--grey-light); border-radius: 10px;
@@ -350,10 +378,15 @@
   }
   .mouse-info .l { color: var(--grey); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
   .mouse-info .v { color: var(--navy-deep); font-weight: 600; }
-  .mouse-info.manual {
-    background: rgba(242, 179, 61, 0.10);
-    grid-template-columns: 1fr;
+  .mouse-info.manual { background: rgba(242, 179, 61, 0.10); }
+  .mouse-info .man-head { grid-column: 1 / -1; color: var(--navy-deep); }
+  .mouse-info .man-f { display: flex; flex-direction: column; gap: 3px; }
+  .mouse-info .man-f .l { color: var(--grey); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .mouse-info .man-inp {
+    border: 1px solid #d1d5db; border-radius: 7px; padding: 5px 8px;
+    font: inherit; font-size: 12.5px; box-sizing: border-box; width: 100%;
   }
+  .mouse-info .man-inp:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 2px rgba(30,39,97,0.12); }
   .mouse-info .src-note {
     grid-column: 1 / -1;
     color: var(--grey); font-size: 11px; font-style: italic;
@@ -421,6 +454,28 @@
   .rec-row-excluded .rec-fn { text-decoration: line-through; }
   .rec-excl-btn { font-size: 11px !important; padding: 2px 6px !important; opacity: 0.7; }
   .rec-excl-btn.is-excluded { background: var(--red) !important; color: #fff !important; opacity: 1; border-color: var(--red) !important; }
+  /* ── Freeform timestamped logs (experiment-level + per-protocol) ── */
+  .exp-log-panel { border: 1px solid var(--grey-light); border-radius: 12px; background: var(--grey-lighter); padding: 12px 14px; margin: 4px 0 16px; }
+  .log-panel-head { font-size: 13px; font-weight: 700; color: var(--navy); margin-bottom: 8px; }
+  .log-panel-sub { font-weight: 500; color: var(--grey); font-size: 12px; }
+  .exp-log-panel .log-lines { max-height: 190px; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; }
+  .log-line { display: flex; align-items: baseline; gap: 8px; font-size: 13px; line-height: 1.45; padding: 1px 0; }
+  .log-time { flex: 0 0 auto; font-family: 'SF Mono', Consolas, monospace; font-size: 11.5px; font-weight: 700; color: var(--ice-deep); background: var(--white); border: 1px solid var(--grey-light); border-radius: 5px; padding: 0 5px; }
+  .log-text { flex: 1 1 auto; color: var(--navy); white-space: pre-wrap; word-break: break-word; }
+  .log-del { flex: 0 0 auto; border: none; background: transparent; color: var(--grey); cursor: pointer; font-size: 14px; line-height: 1; padding: 0 4px; opacity: 0; transition: opacity .12s; }
+  .log-line:hover .log-del { opacity: 0.75; }
+  .log-del:hover { color: var(--red); }
+  .log-add-row { display: flex; gap: 6px; margin-top: 8px; }
+  .exp-log-input { flex: 1 1 auto; border: 1px solid var(--grey-light); border-radius: 7px; padding: 7px 10px; font: inherit; font-size: 13px; background: var(--white); }
+  .exp-log-input:focus { outline: 2px solid var(--ice-deep); border-color: transparent; }
+  .exp-log-add, .rec-log-add { white-space: nowrap; }
+  .rec-log-row > td { padding: 4px 10px 8px 10px !important; background: var(--grey-lighter); border-top: none !important; }
+  .rec-log { display: flex; flex-direction: column; gap: 4px; }
+  .rec-log .log-lines { display: flex; flex-direction: column; gap: 2px; }
+  .rec-log .log-line { font-size: 12.5px; }
+  .rec-log-add-row { display: flex; gap: 6px; align-items: center; }
+  .rec-log-input { flex: 1 1 auto; border: 1px solid var(--grey-light); border-radius: 6px; padding: 4px 8px; font: inherit; font-size: 12.5px; background: var(--white); }
+  .rec-log-input:focus { outline: 2px solid var(--ice-deep); border-color: transparent; }
   .raf-suffix-wrap { margin-top: 6px; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
   .raf-sfx-btn { font-size: 12px !important; padding: 4px 10px !important; font-family: "SF Mono", Consolas, monospace !important; }
   .raf-sfx-btn.raf-sfx-active { background: var(--navy) !important; color: #fff !important; border-color: var(--navy) !important; }
@@ -530,11 +585,13 @@
     <div class="cal-grid" id="cal-grid"></div>
     <div class="cal-legend">
       <span class="lg"><span class="swatch" style="background:var(--ice-deep);"></span>Draft</span>
+      <span class="lg"><span class="swatch" style="background:var(--accent);"></span>Submitted</span>
       <span class="lg"><span class="swatch" style="background:var(--green);"></span>Finalized</span>
     </div>
     <div class="cal-foot">
       <button id="btn-export" type="button">📄 Export Lab notes</button>
       <span class="hint">Generates a date-sorted, locked PDF.</span>
+      <button id="btn-match-files" type="button" style="margin-top:8px;width:100%;">🔗 Match & rename existing .abf files</button>
       <button id="btn-manage-lists" type="button" style="display:none;margin-top:8px;width:100%;">⚙ Manage lists</button>
     </div>
     <!-- Admin-only: data root setting -->
@@ -598,6 +655,15 @@
           <input id="ef-exp-type" type="text" placeholder="Custom value…" autocomplete="off"
             style="display:none;margin-top:6px;width:100%;box-sizing:border-box;" />
         </div>
+        <div class="field">
+          <label for="ef-header-name-sel">Header name (e.g. MTDT)</label>
+          <select id="ef-header-name-sel" style="width:100%;"></select>
+          <input id="ef-header-name" type="text" placeholder="Custom header…" autocomplete="off"
+            style="display:none;margin-top:6px;width:100%;box-sizing:border-box;" />
+        </div>
+      </div>
+
+      <div class="form-row">
         <div class="field">
           <label for="ef-cohort">Cohort number</label>
           <input id="ef-cohort" type="text" placeholder="e.g. 0302" />
@@ -741,6 +807,35 @@
   </div>
 </div>
 
+<!-- Match & rename .abf files modal -->
+<div class="modal-overlay" id="modal-match-files" style="display:none;">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-head">
+      <h3 style="margin:0;font-size:15px;">Match & Rename Existing .abf Files</h3>
+      <button class="modal-close" data-close="modal-match-files" type="button">×</button>
+    </div>
+    <div class="modal-body" style="padding:20px 24px;">
+      <p style="font-size:13px;color:var(--grey);margin-top:0;">Scans the data folder for existing .abf files and matches them to today's note entries by file modification time. Files will be renamed based on the entry metadata (exp condition, type, cohort, etc.).</p>
+      <div id="match-progress" style="display:none;margin:16px 0;">
+        <p style="font-size:12px;margin:0 0 8px;color:var(--grey);">Processing...</p>
+        <div style="height:4px;background:var(--grey-light);border-radius:2px;overflow:hidden;">
+          <div id="match-progress-bar" style="height:100%;background:var(--ice-deep);width:0%;transition:width 0.3s;"></div>
+        </div>
+      </div>
+      <div id="match-results" style="display:none;margin:16px 0;padding:12px;background:var(--grey-lighter);border-radius:8px;border-left:3px solid var(--green);">
+        <p style="margin:0 0 8px;font-weight:600;font-size:13px;">Results</p>
+        <p id="match-summary" style="margin:0;font-size:12px;color:var(--grey);"></p>
+        <ul id="match-list" style="margin:8px 0 0;padding-left:20px;font-size:12px;color:var(--grey);"></ul>
+      </div>
+      <p id="match-error" style="display:none;color:var(--red);font-size:12px;margin:8px 0 0;"></p>
+    </div>
+    <div class="modal-foot" style="gap:8px;">
+      <button class="cancel" data-close="modal-match-files" type="button">Close</button>
+      <button class="save" id="match-do-scan" type="button">🔍 Scan and Match</button>
+    </div>
+  </div>
+</div>
+
 <!-- Past day viewer popup -->
 <div class="modal-overlay" id="modal-viewer" style="display:none;">
   <div class="modal wide">
@@ -780,6 +875,80 @@
   </div>
 </div>
 
+<!-- ── Ephys Analysis Modal ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="modal-analyze" style="display:none;">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-head">
+      <h3>⚗️ Push & Analyze</h3>
+      <button class="modal-close" data-close="modal-analyze" type="button">×</button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:13px;">
+
+      <div style="background:rgba(30,39,97,.06);border-radius:8px;padding:10px 13px;font-size:12px;color:var(--grey);">
+        Select the <strong>.abf files</strong> for this recording session. They will be uploaded to the server, analyzed automatically, and deleted after analysis.
+      </div>
+
+      <div>
+        <label style="font-size:12px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;">ABF Files</label>
+        <input type="file" id="az-files" accept=".abf" multiple style="display:block;margin-top:5px;font:inherit;font-size:13px;" />
+        <div id="az-file-count" style="font-size:12px;color:var(--grey);margin-top:3px;"></div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label style="font-size:12px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;">Exp Condition</label>
+          <input id="az-exp-cond" type="text" placeholder="e.g. MTDT" style="display:block;width:100%;margin-top:4px;border:1px solid var(--grey-light);border-radius:7px;padding:6px 9px;font:inherit;font-size:13px;" />
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;">Test Pulse Position</label>
+          <select id="az-protocol-mode" style="display:block;width:100%;margin-top:4px;border:1px solid var(--grey-light);border-radius:7px;padding:6px 9px;font:inherit;font-size:13px;">
+            <option value="">Auto-detect</option>
+            <option value="Test Pulse First">First (before EPSC)</option>
+            <option value="Test Pulse Later">Later (after EPSC)</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div>
+          <label style="font-size:12px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;">EPSC Min (pA)</label>
+          <input id="az-epsc-min" type="number" value="20" style="display:block;width:100%;margin-top:4px;border:1px solid var(--grey-light);border-radius:7px;padding:6px 9px;font:inherit;font-size:13px;" />
+        </div>
+        <div>
+          <label style="font-size:12px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;">EPSC Max (pA)</label>
+          <input id="az-epsc-max" type="number" value="1000" style="display:block;width:100%;margin-top:4px;border:1px solid var(--grey-light);border-radius:7px;padding:6px 9px;font:inherit;font-size:13px;" />
+        </div>
+      </div>
+
+      <div>
+        <label style="font-size:12px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;">Report Email</label>
+        <input id="az-email" type="email" placeholder="you@example.com" style="display:block;width:100%;margin-top:4px;border:1px solid var(--grey-light);border-radius:7px;padding:6px 9px;font:inherit;font-size:13px;" />
+      </div>
+
+      <div>
+        <label style="font-size:12px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;">Secondary Output Path (optional)</label>
+        <input id="az-extra-out" type="text" placeholder="/Users/… or leave blank" style="display:block;width:100%;margin-top:4px;border:1px solid var(--grey-light);border-radius:7px;padding:6px 9px;font:inherit;font-size:13px;" />
+        <div style="font-size:11px;color:var(--grey);margin-top:3px;">Results are always saved on the server. Enter a second path (e.g. external drive) to copy there too.</div>
+      </div>
+
+      <!-- Progress -->
+      <div id="az-progress" style="display:none;">
+        <div style="font-size:12px;font-weight:700;color:var(--grey);margin-bottom:6px;" id="az-progress-label">Uploading…</div>
+        <div style="background:var(--grey-light);border-radius:999px;height:8px;overflow:hidden;">
+          <div id="az-progress-bar" style="background:var(--navy);height:100%;width:0%;transition:width .3s;border-radius:999px;"></div>
+        </div>
+      </div>
+
+      <!-- Job status -->
+      <div id="az-status" style="display:none;border-radius:8px;padding:10px 13px;font-size:13px;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-analyze" type="button">Cancel</button>
+      <button class="save" id="az-start-btn" type="button">Upload & Analyze</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const $ = (s) => document.querySelector(s);
 const $$ = (s) => Array.from(document.querySelectorAll(s));
@@ -797,15 +966,20 @@ let allTodayNotes = [];          // admin: every user's note for the currently l
 let viewerUserId = null;         // admin: which user's note is being viewed
 let calendarYear, calendarMonth; // current cal view
 let selectedDate = null;         // YYYY-MM-DD; null = today (the main view)
+let selectedNoteId = new URLSearchParams(location.search).get('note');
 let calendarDays = [];           // server-returned days[]
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+function actualDateISO() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
 function todayISO() {
   const d = new Date();
-  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 function fmtLong(iso) {
   if (!iso) return "";
@@ -842,13 +1016,16 @@ async function boot() {
     $("#crumb-proj").innerHTML = `<a href="/eln/project/${encodeURIComponent(projectSlug)}" style="color:var(--ice); text-decoration:none;">${escapeHtml(project.title)}</a>`;
     $("#back-link").href = `/eln/project/${encodeURIComponent(projectSlug)}`;
 
-    const t = new Date();
+    const requestedDate = new URLSearchParams(location.search).get('date');
+    const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate || '') ? requestedDate : todayISO();
+    selectedDate = initialDate === todayISO() ? null : initialDate;
+    const t = new Date(initialDate + 'T12:00:00');
     calendarYear = t.getFullYear();
     calendarMonth = t.getMonth() + 1;
 
     await Promise.all([
       renderCalendar(),
-      loadDay(todayISO(), /*isToday*/ true),
+      loadDay(initialDate, true),
       loadNamingConventions(),
     ]);
 
@@ -899,7 +1076,8 @@ async function renderCalendar() {
   calendarDays.forEach(d => byDate.set(d.date, d));
   const firstDow = new Date(y, m - 1, 1).getDay(); // 0=Sun
   const daysInMonth = new Date(y, m, 0).getDate();
-  const today = todayISO();
+  const actualToday = actualDateISO();
+  const sessionDay  = todayISO();
 
   const grid = $("#cal-grid");
   grid.innerHTML = "";
@@ -912,26 +1090,26 @@ async function renderCalendar() {
   for (let day = 1; day <= daysInMonth; day++) {
     const iso = `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
     const cell = document.createElement("div");
-    cell.className = "cal-cell" + (iso === today ? " today" : "") + (iso === selectedDate ? " selected" : "");
+    cell.className = "cal-cell" + (iso === actualToday ? " today" : "") + (iso === selectedDate ? " selected" : "");
     cell.dataset.date = iso;
     cell.innerHTML = `<div>${day}</div>`;
     const info = byDate.get(iso);
     if (info) {
       const dots = document.createElement("div"); dots.className = "dots";
       const statuses = info.statuses || [];
-      const cls = (statuses.includes("approved") || statuses.includes("submitted")) ? "approved" : "";
+      const cls = statuses.includes("submitted") ? "submitted" : statuses.includes("approved") ? "approved" : "";
       const d1 = document.createElement("div"); d1.className = "dot " + cls; dots.appendChild(d1);
       cell.appendChild(dots);
     }
     cell.addEventListener("click", () => {
-      if (iso === today) {
+      if (iso === sessionDay || iso === actualToday) {
         selectedDate = null;
-        loadDay(today, true);
+        loadDay(iso, true);
       } else {
         selectedDate = iso;
         openDayViewer(iso);
       }
-      renderCalendar();   // refresh selection highlight
+      renderCalendar();
     });
     grid.appendChild(cell);
   }
@@ -952,7 +1130,7 @@ $("#cal-today").addEventListener("click", () => {
   calendarYear = t.getFullYear(); calendarMonth = t.getMonth() + 1;
   selectedDate = null;
   viewerUserId = currentUser?.id || null;
-  loadDay(todayISO(), true);
+  loadDay(actualDateISO(), true);
   renderCalendar();
 });
 
@@ -1295,6 +1473,112 @@ async function runExport() {
 $("#exp-do-export").addEventListener("click", runExport);
 
 // ───────────────────────────────────────────
+// Match & rename existing .abf files
+// ───────────────────────────────────────────
+$("#btn-match-files").addEventListener("click", () => {
+  $("#match-progress").style.display = "none";
+  $("#match-results").style.display = "none";
+  $("#match-error").style.display = "none";
+  $("#match-do-scan").disabled = false;
+  $("#match-do-scan").textContent = "🔍 Scan and Match";
+  $("#modal-match-files").style.display = "flex";
+});
+
+async function matchAndRenameFiles() {
+  const btn = $("#match-do-scan");
+  const progress = $("#match-progress");
+  const results = $("#match-results");
+  const summary = $("#match-summary");
+  const list = $("#match-list");
+  const errEl = $("#match-error");
+
+  btn.disabled = true;
+  progress.style.display = "";
+  results.style.display = "none";
+  errEl.style.display = "none";
+
+  try {
+    const todayNote = allTodayNotes.find(n => n.user_id === currentUser.id);
+    if (!todayNote) {
+      throw new Error("No note found for today. Please create one first.");
+    }
+
+    const entries = (todayNote.payload && typeof todayNote.payload === 'object')
+      ? (todayNote.payload.entries || [])
+      : [];
+
+    if (entries.length === 0) {
+      throw new Error("Today's note has no entries. Please add at least one entry first.");
+    }
+
+    // Get the folder name from the first entry
+    const folderName = computeFolderName(normalizeEntry(entries[0]));
+    if (!folderName || folderName === "(fill in fields)") {
+      throw new Error("Cannot compute folder name. Please fill in the mouse ID or cohort field.");
+    }
+
+    // Call the API
+    const resp = await api("POST", "/api/eln/match-and-rename-files", {
+      project_slug: projectSlug,
+      note_date: todayISO(),
+      folder_name: folderName,
+    });
+
+    progress.style.display = "none";
+    results.style.display = "";
+
+    // Show results
+    const matched = resp.matched || 0;
+    const renamed = resp.renamed || [];
+    const unmatched = resp.unmatched_files || [];
+    const unmatchedEntries = resp.unmatched_entries || 0;
+
+    let summaryText = `✓ ${matched} file${matched !== 1 ? 's' : ''} renamed`;
+    if (unmatchedEntries > 0) {
+      summaryText += ` · ${unmatchedEntries} entr${unmatchedEntries !== 1 ? 'ies' : 'y'} unmatched`;
+    }
+    if (unmatched.length > 0) {
+      summaryText += ` · ${unmatched.length} file${unmatched.length !== 1 ? 's' : ''} not renamed`;
+    }
+    summary.textContent = summaryText;
+
+    list.innerHTML = "";
+    if (renamed.length > 0) {
+      const li = document.createElement("li");
+      li.textContent = "Renamed files:";
+      list.appendChild(li);
+      renamed.forEach(r => {
+        const li = document.createElement("li");
+        li.innerHTML = `<strong>${escapeHtml(r.old_name)}</strong> → ${escapeHtml(r.new_name)}`;
+        list.appendChild(li);
+      });
+    }
+    if (unmatched.length > 0) {
+      if (renamed.length > 0) {
+        const sep = document.createElement("li");
+        sep.textContent = "Not renamed:";
+        list.appendChild(sep);
+      }
+      unmatched.forEach(f => {
+        const li = document.createElement("li");
+        li.textContent = f;
+        list.appendChild(li);
+      });
+    }
+  } catch (e) {
+    progress.style.display = "none";
+    results.style.display = "none";
+    errEl.textContent = "Error: " + e.message;
+    errEl.style.display = "";
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "🔍 Scan and Match";
+  }
+}
+
+$("#match-do-scan").addEventListener("click", matchAndRenameFiles);
+
+// ───────────────────────────────────────────
 // Today's note (main view)
 // ───────────────────────────────────────────
 async function loadDay(iso, isToday) {
@@ -1305,9 +1589,10 @@ async function loadDay(iso, isToday) {
       `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes?experiment_type=${EXP_TYPE}&date=${iso}`);
     allTodayNotes = data.notes || [];
     if (!viewerUserId) viewerUserId = currentUser.id;
-    const selectedNote = allTodayNotes.find(n => n.user_id === viewerUserId)
+    const selectedNote = allTodayNotes.find(n => n.id === selectedNoteId) || allTodayNotes.find(n => n.user_id === viewerUserId)
                       || allTodayNotes.find(n => n.user_id === currentUser.id);
     todayNote = selectedNote || null;
+    selectedNoteId = todayNote?.id || null;
     viewerUserId = todayNote ? todayNote.user_id : currentUser.id;
     renderDay(iso, todayNote, allTodayNotes);
   } catch (e) {
@@ -1323,7 +1608,7 @@ function renderDay(iso, ownNote, allNotes) {
     : "";
 
   let userPicker = "";
-  if (isAdmin && (allNotes || []).length > 1) {
+  if ((allNotes || []).length > 1) {
     userPicker = `
       <div style="display:flex;align-items:center;gap:6px;margin-left:8px;">
         <span style="font-size:11px;color:var(--grey);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Viewing</span>
@@ -1331,7 +1616,7 @@ function renderDay(iso, ownNote, allNotes) {
           ${allNotes.map(n => {
             const nm = n.author?.display_name || n.author?.username || n.user_id;
             const me = n.user_id === currentUser.id ? " (me)" : "";
-            return `<option value="${n.user_id}" ${n.user_id === viewerUserId ? "selected" : ""}>${escapeHtml(nm)}${me}</option>`;
+            return `<option value="${n.id}" ${n.id === ownNote?.id ? "selected" : ""}>${escapeHtml(nm)}${me} · ${escapeHtml(LabOS.noteStatus(n))} · ${escapeHtml(n.id.slice(-6))}</option>`;
           }).join("")}
         </select>
       </div>`;
@@ -1340,7 +1625,7 @@ function renderDay(iso, ownNote, allNotes) {
   const head = `
     <div class="day-head">
       <h2>${fmtLong(iso)}</h2>
-      ${ownNote ? `<span class="status-pill ${ownNote.status === "draft" ? "draft" : "approved"}">${ownNote.status === "draft" ? "Draft" : "Finalized"}</span>` : ""}
+      ${ownNote ? `<span class="status-pill ${escapeHtml(ownNote.status)}">${escapeHtml(LabOS.noteStatus(ownNote))}</span>` : ""}
       ${userPicker}
       <div class="spacer"></div>
       <div class="day-actions" id="day-actions"></div>
@@ -1361,31 +1646,55 @@ function renderDay(iso, ownNote, allNotes) {
       ? `<p class="empty">${viewingOther ? escapeHtml(otherAuthor) + " has" : "You have"} no animals recorded for ${iso}.</p>`
       : `<p class="empty">No animals recorded for ${iso}. Click <strong>+ Add animal</strong> to start.</p>`;
   } else {
-    body = `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, readOnly)).join("")}</div>`;
+    const canDispo = isAdmin || (ownNote && ownNote.user_id === currentUser.id);
+    body = `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, readOnly, canDispo, ownNote?.id)).join("")}</div>`;
   }
 
   // Per-day add row + submit button
   const addRow = `
     <div class="add-row">
       ${ readOnly ? "" : `<button class="btn-add" id="btn-add">+ Add animal</button>` }
-      ${ ownNote && entries.length && !readOnly ? `<button class="btn-finalize" id="btn-finalize" style="margin-left: 8px;">🔒 Finalize</button>` : "" }
+      ${ ownNote && entries.length && !readOnly ? `<button class="btn-draft-save" id="btn-draft-save" style="margin-left:8px;">💾 Save Draft</button><button class="btn-finalize" id="btn-finalize" style="margin-left: 8px;">🔒 Finalize</button><button class="btn-finalize" id="btn-submit-review">Submit for review</button>` : "" }
     </div>`;
 
-  $("#main").innerHTML = head + adminBanner + body + addRow;
+  const expLog = renderExpLog(ownNote, readOnly);
+  $("#main").innerHTML = head + adminBanner + expLog + body + addRow;
+  if (ownNote?.payload?.schedule_context) {
+    const context = ownNote.payload.schedule_context;
+    const info = document.createElement('p');
+    info.innerHTML = `<a href="/scheduler.html?event=${encodeURIComponent(context.event_id)}">📅 ${escapeHtml(context.title)}</a>${context.notes ? ' · ' + escapeHtml(context.notes) : ''}`;
+    $("#main").prepend(info);
+  }
+  $('#btn-submit-review')?.addEventListener('click', async () => {
+    try { await saveNotePayload(); await api('POST', `/api/eln/notes/${ownNote.id}/submit`); await loadDay(iso, true); await renderCalendar(); }
+    catch (e) { alert(e.message); }
+  });
 
-  // Admin: Unlock button for finalized notes
-  if (ownNote && ownNote.status !== "draft" && currentUser.effective_role === "admin") {
+  // Finalized note: Unlock (admin) + Analyze button
+  if (ownNote && ownNote.status !== "draft") {
     const actions = $("#day-actions");
-    actions.innerHTML = `<button class="btn-return" id="btn-unlock">Unlock</button>`;
-    $("#btn-unlock").addEventListener("click", () => returnNote(ownNote.id));
+    let btns = "";
+    if (currentUser.effective_role === "admin") {
+      btns += `<button class="btn-return" id="btn-unlock">Unlock</button>`;
+    }
+    btns += `<button class="btn-analyze" id="btn-analyze" style="background:#4338ca;color:#fff;border:none;border-radius:8px;padding:6px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;">⚗️ Analyze</button>`;
+    actions.innerHTML = btns;
+    if (ownNote.status === 'submitted' && isAdmin) {
+      const btn = document.createElement('button'); btn.textContent = 'Approve reviewed note';
+      btn.onclick = async () => { try { await api('POST', `/api/eln/notes/${ownNote.id}/approve`); await loadDay(iso,true); await renderCalendar(); } catch(e) { alert(e.message); } };
+      actions.append(btn);
+    }
+    $("#btn-unlock")?.addEventListener("click", () => returnNote(ownNote.id));
+    $("#btn-analyze")?.addEventListener("click", () => openAnalyzeModal(ownNote));
   }
 
   // Admin: user picker
   const picker = $("#day-viewer-pick");
   if (picker) {
     picker.addEventListener("change", () => {
-      viewerUserId = picker.value;
-      const sel = allTodayNotes.find(n => n.user_id === viewerUserId);
+      selectedNoteId = picker.value;
+      const sel = allTodayNotes.find(n => n.id === selectedNoteId);
+      viewerUserId = sel?.user_id || currentUser.id;
       todayNote = sel || null;
       renderDay(iso, todayNote, allTodayNotes);
     });
@@ -1396,6 +1705,16 @@ function renderDay(iso, ownNote, allNotes) {
   if (addBtn) addBtn.addEventListener("click", () => openEntryForm(null));
   const finBtn = $("#btn-finalize");
   if (finBtn) finBtn.addEventListener("click", () => finalizeNote(ownNote.id));
+  const draftBtn = $("#btn-draft-save");
+  if (draftBtn) draftBtn.addEventListener("click", async () => {
+    try {
+      await saveNotePayload();
+      const orig = draftBtn.textContent;
+      draftBtn.textContent = "✓ Saved";
+      draftBtn.style.color = "var(--green)";
+      setTimeout(() => { draftBtn.textContent = orig; draftBtn.style.color = ""; }, 1800);
+    } catch (e) { alert("Save failed: " + e.message); }
+  });
 
   // Wire entry edit/delete
   $$(".entry [data-act='edit']").forEach(b => b.addEventListener("click", (e) => {
@@ -1405,6 +1724,11 @@ function renderDay(iso, ownNote, allNotes) {
   $$(".entry [data-act='del']").forEach(b => b.addEventListener("click", (e) => {
     const idx = parseInt(e.target.dataset.idx);
     deleteEntry(idx);
+  }));
+  $$("#main .entry [data-dispo]").forEach(b => b.addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    setDisposition(btn.dataset.note, parseInt(btn.dataset.idx), btn.dataset.dispo,
+      () => loadDay(iso, true));
   }));
 }
 
@@ -1424,22 +1748,28 @@ function computeFolderName(entry) {
   if (entry.exp_condition) parts.push(entry.exp_condition);
   if (entry.exp_type)      parts.push(entry.exp_type);
   if (entry.cohort)        parts.push(entry.cohort);
-  if (entry.mouse_id)      parts.push(`sub-${entry.mouse_id}`);
+  // Experiment date (YYMMDD) takes the slot the old "sub-" tag used to occupy,
+  // sitting right before the mouse id.
+  const dateP = _yymmdd(todayNote?.note_date || selectedDate || todayISO());
+  if (dateP)               parts.push(dateP);
+  if (entry.mouse_id)      parts.push(entry.mouse_id);
+  // Require at least one identifying field (not just the always-present date).
+  const hasIdent = entry.exp_condition || entry.exp_type || entry.cohort || entry.mouse_id;
+  if (!hasIdent) return "(fill in fields)";
   const days = entry.mouse?.days_in_condition;
   if (days != null)        parts.push(`${days}d`);
-  if (!parts.length) return "(fill in fields)";
   const initials = (currentUser?.initials || "").trim();
   if (initials) parts.push(initials);   // experimenter initials always at the end
   return parts.join("_");
 }
 
 // ── Naming conventions ───────────────────────────────────────────────────────
-let namingConventions = { exp_condition: [], exp_type: [], cell_type: [], protocol: [], agent: [] };
+let namingConventions = { exp_condition: [], exp_type: [], header_name: [], cell_type: [], protocol: [], agent: [] };
 // protocols keyed by cell_type value (populated on-demand)
 let protocolsByCell = {};
 
 async function loadNamingConventions() {
-  await Promise.all(["exp_condition", "exp_type", "cell_type", "protocol", "agent"].map(async cat => {
+  await Promise.all(["exp_condition", "exp_type", "header_name", "cell_type", "protocol", "agent"].map(async cat => {
     try {
       const d = await api("GET", `/api/eln/naming-conventions?category=${cat}`);
       namingConventions[cat] = d.items || [];
@@ -1497,22 +1827,27 @@ function buildProtocolSelectOptions(protocols, currentValue) {
   return html;
 }
 
-function populateEntrySelects(expCond, expType, cellType) {
+function populateEntrySelects(expCond, expType, cellType, headerName) {
   const selCond = $("#ef-exp-cond-sel");
   const selType = $("#ef-exp-type-sel");
+  const selHeader = $("#ef-header-name-sel");
   const selCell = $("#ef-cell-type-sel");
   const inpCond = $("#ef-exp-cond");
   const inpType = $("#ef-exp-type");
+  const inpHeader = $("#ef-header-name");
   const inpCell = $("#ef-cell-type");
   if (selCond) selCond.innerHTML = buildSelectOptions("exp_condition", expCond);
   if (selType) selType.innerHTML = buildSelectOptions("exp_type", expType);
+  if (selHeader) selHeader.innerHTML = buildSelectOptions("header_name", headerName || "");
   if (selCell) selCell.innerHTML = buildSelectOptions("cell_type", cellType || "");
   // show/hide custom inputs
   const condCustom = expCond && !namingConventions.exp_condition.find(i => i.value === expCond);
   const typeCustom = expType && !namingConventions.exp_type.find(i => i.value === expType);
+  const headerCustom = headerName && !namingConventions.header_name.find(i => i.value === headerName);
   const cellCustom = cellType && !namingConventions.cell_type.find(i => i.value === cellType);
   if (inpCond) { inpCond.style.display = condCustom ? "" : "none"; inpCond.value = condCustom ? expCond : ""; }
   if (inpType) { inpType.style.display = typeCustom ? "" : "none"; inpType.value = typeCustom ? expType : ""; }
+  if (inpHeader) { inpHeader.style.display = headerCustom ? "" : "none"; inpHeader.value = headerCustom ? headerName : ""; }
   if (inpCell) { inpCell.style.display = cellCustom ? "" : "none"; inpCell.value = cellCustom ? cellType : ""; }
 }
 
@@ -1523,12 +1858,25 @@ function getSelectOrCustom(selId, inputId) {
 }
 
 // ── Filename ─────────────────────────────────────────────────────────────────
+// YYMMDD prefix from an ISO date (e.g. "2026-09-15" → "260915"); "" if unparseable.
+function _yymmdd(iso) {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+  return m ? (m[1].slice(2) + m[2] + m[3]) : "";
+}
 function computeFilename(entry, rec) {
-  const initials   = currentUser?.initials || "";
+  // Get experimenter initials from display_name (fallback to initials field)
+  let initials = currentUser?.initials || "";
+  if (!initials && currentUser?.display_name) {
+    const parts = currentUser.display_name.split(/\s+/);
+    initials = parts.map(p => p[0]).join("").toUpperCase().slice(0, 3);
+  }
+  // Experiment date (YYMMDD) leads the filename. The recordings table lives on the
+  // currently-loaded note, so its note_date is the experiment date.
+  const dateP      = _yymmdd(todayNote?.note_date || selectedDate || todayISO());
   const cohortCell = (entry.cohort || "") + (rec.cell || "");
   const runStr     = String(rec.run_index ?? 0).padStart(4, "0");
   const excSfx     = rec.excluded ? "_exclude" : "";
-  const parts = [initials, entry.exp_condition || "", entry.exp_type || "", cohortCell, rec.protocol || ""]
+  const parts = [dateP, initials, entry.exp_condition || "", entry.header_name || "", cohortCell, rec.protocol || ""]
     .filter(p => p !== "");
   if (!parts.length) return "(fill in fields)";
   return parts.join("_") + `_${runStr}${excSfx}.abf`;
@@ -1541,18 +1889,37 @@ function renderRecordingsTable(e, entryIdx, locked) {
     const fn     = computeFilename(e, r);
     const runStr = String(r.run_index ?? 0).padStart(4, "0");
     const excCls = r.excluded ? "rec-row-excluded" : "";
+    const fnCopyBtn = `<button class="btn-mini rec-fn-copy" data-eidx="${entryIdx}" data-ridx="${ri}" data-fn="${escapeHtml(fn)}" title="Copy filename" id="abf-copy-btn-${entryIdx}-${ri}" style="padding:2px 7px;font-size:11px;">📋 Copy</button>`;
+    const fnDoneBtn = FSA_OK && !locked ? `<button class="btn-mini rec-fn-done" data-eidx="${entryIdx}" data-ridx="${ri}" title="Rename most recent .abf to this filename" style="padding:2px 7px;font-size:11px;">✅ Done</button>` : "";
+    const fnStatusEl = `<div id="abf-done-status-${entryIdx}-${ri}" style="font-size:11px;margin-top:2px;"></div>`;
+    const cols = locked ? 5 : 6;
+    const recLog = renderLogLines(r.log, { locked, kind: "rec", eidx: entryIdx, ridx: ri });
+    const showLog = !locked || (Array.isArray(r.log) && r.log.length);
+    const logRow = showLog ? `<tr class="rec-log-row"><td colspan="${cols}">
+        <div class="rec-log">
+          <div class="log-lines" id="rec-log-lines-${entryIdx}-${ri}">${recLog}</div>
+          ${locked ? "" : `<div class="rec-log-add-row">
+            <input type="text" class="rec-log-input" data-eidx="${entryIdx}" data-ridx="${ri}" placeholder="+ log this protocol…  (Enter)" autocomplete="off" />
+            <button class="btn-mini rec-log-add" data-eidx="${entryIdx}" data-ridx="${ri}">add</button>
+          </div>`}
+        </div>
+      </td></tr>` : "";
     return `<tr class="${excCls}">
       <td style="font-family:'SF Mono',Consolas,monospace;font-size:13px;font-weight:700;white-space:nowrap;">${escapeHtml(r.cell)}</td>
       <td style="white-space:nowrap;">${escapeHtml(r.protocol)}</td>
       <td style="font-family:'SF Mono',Consolas,monospace;font-size:11px;color:var(--grey);white-space:nowrap;">_${runStr}</td>
-      <td class="rec-fn">${escapeHtml(fn)}</td>
+      <td class="rec-fn">
+        <div>${escapeHtml(fn)}</div>
+        <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:3px;">${fnCopyBtn}${fnDoneBtn}</div>
+        ${fnStatusEl}
+      </td>
       <td style="color:var(--grey);font-size:12px;">${escapeHtml(r.notes || "")}</td>
       ${locked ? "" : `<td style="text-align:right;white-space:nowrap;">
         <button class="btn-mini rec-excl-btn ${r.excluded ? "is-excluded" : ""}" data-eidx="${entryIdx}" data-ridx="${ri}" title="${r.excluded ? "Unmark exclude" : "Mark as excluded"}">excl</button>
         <button class="btn-mini rec-repeat" data-eidx="${entryIdx}" data-ridx="${ri}" title="Add another run (+1)">+1</button>
         <button class="btn-mini danger rec-del" data-eidx="${entryIdx}" data-ridx="${ri}" style="padding:2px 8px;font-size:12px;">×</button>
       </td>`}
-    </tr>`;
+    </tr>${logRow}`;
   }).join("");
   return `<table class="rec-table">
     <thead><tr>
@@ -1587,6 +1954,9 @@ function distinctCells(e) {
 
 function renderCellParams(e, idx, locked) {
   const cells = distinctCells(e);
+  // Show the params row as soon as a cell is set (before any protocol is added).
+  const active = (typeof formCellState !== "undefined") ? (formCellState[idx] || "") : "";
+  if (active && !cells.includes(active)) cells.push(active);
   if (!cells.length) return "";
   const cp = e.cell_params || {};
   const head = `<th style="text-align:left;">Cell</th>` + CELL_PARAM_FIELDS.map(f =>
@@ -1651,7 +2021,47 @@ function renderFolderSection(entry, idx, locked) {
     </div>`;
 }
 
-function renderEntry(rawEntry, idx, locked) {
+const DISPO_META = {
+  include: { label: "Include", bg: "rgba(52,199,89,0.16)",  fg: "#1b7f3b" },
+  exclude: { label: "Exclude", bg: "rgba(255,59,48,0.13)",  fg: "#b3261e" },
+  retest:  { label: "Re-test", bg: "rgba(242,179,61,0.20)", fg: "#8a5b00" },
+  drop:    { label: "Drop",    bg: "rgba(99,99,102,0.16)",  fg: "#3a3a3c" },
+};
+const DISPO_ORDER = ["include", "exclude", "retest", "drop"];
+
+function renderDispoBar(e, idx, canDispo, noteId) {
+  const cur = e.disposition || "";
+  const at  = e.disposition_at || "";
+  if (!canDispo) {
+    if (!cur) return "";
+    const m = DISPO_META[cur] || { label: cur, bg: "var(--grey-lighter)", fg: "var(--navy)" };
+    return `<div class="entry-dispo"><span class="dispo-label">Disposition</span>
+      <span class="dispo-pill" style="background:${m.bg};color:${m.fg};">${m.label}</span>
+      ${at ? `<span class="dispo-at">· ${escapeHtml(at)}</span>` : ""}</div>`;
+  }
+  const btns = DISPO_ORDER.map(k => {
+    const m = DISPO_META[k];
+    const active = cur === k;
+    const style = active ? `background:${m.bg};color:${m.fg};border-color:${m.fg};` : "";
+    return `<button type="button" class="dispo-btn${active ? " active" : ""}" data-dispo="${k}" data-idx="${idx}" data-note="${noteId}" style="${style}">${m.label}</button>`;
+  }).join("");
+  const clearBtn = cur ? `<button type="button" class="dispo-btn dispo-clear" data-dispo="" data-idx="${idx}" data-note="${noteId}" title="Clear disposition">✕</button>` : "";
+  return `<div class="entry-dispo">
+    <span class="dispo-label">Disposition</span>
+    ${btns}${clearBtn}
+    ${cur && at ? `<span class="dispo-at">· ${escapeHtml(at)}</span>` : ""}
+  </div>`;
+}
+
+async function setDisposition(noteId, idx, value, reload) {
+  if (!noteId) return;
+  try {
+    await api("POST", `/api/eln/notes/${noteId}/entry-disposition`, { entry_index: idx, disposition: value });
+    if (reload) await reload();
+  } catch (e) { alert("Failed to set disposition: " + e.message); }
+}
+
+function renderEntry(rawEntry, idx, locked, canDispo, noteId) {
   const e = normalizeEntry(rawEntry);
   const mouse = e.mouse || {};
   const ageWk = mouse.age_weeks != null ? `${mouse.age_weeks}w` : "";
@@ -1726,6 +2136,7 @@ function renderEntry(rawEntry, idx, locked) {
           <button class="btn-mini danger" data-act="del" data-idx="${idx}">Delete</button>
         </div>`}
       </div>
+      ${renderDispoBar(e, idx, canDispo, noteId)}
       ${meta ? `<div class="entry-meta">${escapeHtml(meta)}</div>` : ""}
       <div id="rec-list-${idx}">${renderRecordingsTable(e, idx, locked)}</div>
       <div id="cell-params-${idx}">${renderCellParams(e, idx, locked)}</div>
@@ -1748,7 +2159,7 @@ async function openEntryForm(entry, idx) {
   $("#ef-cohort-mouse").value = norm?.mouse?.cohort || "";
   $("#ef-agent").value        = norm?.agent || "";
   $("#ef-cohort").value       = norm?.cohort || "";
-  populateEntrySelects(norm?.exp_condition || "", norm?.exp_type || "", norm?.cell_type || "");
+  populateEntrySelects(norm?.exp_condition || "", norm?.exp_type || "", norm?.cell_type || "", norm?.header_name || "");
   editingMouseCache = norm?.mouse || null;
   if (editingMouseCache) renderMouseInfo(editingMouseCache);
   else $("#ef-mouse-info").style.display = "none";
@@ -1764,13 +2175,39 @@ async function openEntryForm(entry, idx) {
   setTimeout(() => $("#ef-mid").focus(), 30);
 }
 
+// Weeks between an ISO DOB and today (floored); null if unparseable.
+function _ageWeeksFromDob(dob) {
+  const d = new Date(String(dob || "") + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / (7 * 86400000));
+}
+// Build a mouse object from the manual-entry input fields (off-DB record).
+function readManualMouse() {
+  const g = id => (document.getElementById(id)?.value || "").trim();
+  const m = { from_db: false };
+  const strain = g("ef-man-strain"), sex = g("ef-man-sex"),
+        cond = g("ef-man-cond"), dob = g("ef-man-dob"), days = g("ef-man-days");
+  if (strain) m.strain = strain;
+  if (sex)    m.sex = sex;
+  if (cond)   m.condition = cond;
+  if (dob)  { m.dob = dob; const aw = _ageWeeksFromDob(dob); if (aw != null) m.age_weeks = aw; }
+  if (days !== "" && !isNaN(parseInt(days))) m.days_in_condition = parseInt(days);
+  return m;
+}
+
 function renderMouseInfo(m) {
   const box = $("#ef-mouse-info");
   if (m.from_db === false) {
     box.className = "mouse-info manual";
     box.innerHTML = `
-      <div><strong>Manual entry</strong> — this mouse is not in the animal DB.</div>
-      <div class="src-note">Use the prefix fields below to record what you know.</div>`;
+      <div class="man-head"><strong>Manual entry</strong> — not in the animal DB. Fill in what you know:</div>
+      <label class="man-f"><span class="l">Strain</span><input id="ef-man-strain" class="man-inp" value="${escapeHtml(m.strain || "")}" placeholder="e.g. WT" autocomplete="off" /></label>
+      <label class="man-f"><span class="l">Sex</span><input id="ef-man-sex" class="man-inp" value="${escapeHtml(m.sex || "")}" placeholder="M / F" autocomplete="off" /></label>
+      <label class="man-f"><span class="l">Condition</span><input id="ef-man-cond" class="man-inp" value="${escapeHtml(m.condition || "")}" placeholder="e.g. NR" autocomplete="off" /></label>
+      <label class="man-f"><span class="l">DOB</span><input id="ef-man-dob" class="man-inp" type="date" value="${escapeHtml(m.dob || "")}" /></label>
+      <label class="man-f"><span class="l">Days in cond</span><input id="ef-man-days" class="man-inp" type="number" min="0" value="${m.days_in_condition != null ? m.days_in_condition : ""}" placeholder="e.g. 12" /></label>`;
+    box.querySelectorAll(".man-inp").forEach(inp =>
+      inp.addEventListener("input", () => { editingMouseCache = readManualMouse(); }));
   } else {
     box.className = "mouse-info";
     box.innerHTML = `
@@ -1786,23 +2223,39 @@ function renderMouseInfo(m) {
   $("#ef-cohort-mouse").value = m.cohort || "";
 }
 
+// Only DB-backed mice that have an experiment assigned may be added to the exp
+// log. Manual (off-DB) entries are always allowed.
+function entryEligibility(m, expType) {
+  if (!m || m.from_db === false) return { ok: true };
+  if (!((m.experiment || "").toString().trim())) {
+    return { ok: false, reason: "No experiment assigned in the animal DB — can't add to the exp log." };
+  }
+  return { ok: true };
+}
+
 async function lookupMouse() {
   const id = $("#ef-mid").value.trim();
+  const hint = $("#ef-mid-hint");
+  hint.style.color = "";
   if (!id) { editingMouseCache = null; $("#ef-mouse-info").style.display = "none"; return; }
-  $("#ef-mid-hint").textContent = "Looking up…";
+  hint.textContent = "Looking up…";
   try {
     const data = await api("GET", `/api/eln/mice/${encodeURIComponent(id)}`);
     editingMouseCache = data.mouse;
     editingMouseCache.from_db = true;
     renderMouseInfo(editingMouseCache);
-    $("#ef-mid-hint").textContent = "✓ Found in animal DB.";
+    const elig = entryEligibility(editingMouseCache, "slice");
+    hint.textContent = elig.ok ? "✓ Found in animal DB." : "✗ " + elig.reason;
+    hint.style.color = elig.ok ? "" : "var(--red)";
   } catch (e) {
     if (e.status === 404) {
-      editingMouseCache = { from_db: false };
+      // Keep anything already typed manually (e.g. when editing an off-DB entry).
+      const prev = (editingMouseCache && editingMouseCache.from_db === false) ? editingMouseCache : {};
+      editingMouseCache = { ...prev, from_db: false };
       renderMouseInfo(editingMouseCache);
-      $("#ef-mid-hint").textContent = "Not in animal DB — manual entry mode.";
+      hint.textContent = "Not in animal DB — manual entry mode.";
     } else {
-      $("#ef-mid-hint").textContent = "Lookup error: " + e.message;
+      hint.textContent = "Lookup error: " + e.message;
     }
   }
 }
@@ -1821,10 +2274,14 @@ function readEntryFromForm() {
     agent:         $("#ef-agent").value.trim(),
     exp_condition: getSelectOrCustom("#ef-exp-cond-sel", "#ef-exp-cond"),
     exp_type:      getSelectOrCustom("#ef-exp-type-sel", "#ef-exp-type"),
+    header_name:   getSelectOrCustom("#ef-header-name-sel", "#ef-header-name"),
     cell_type:     getSelectOrCustom("#ef-cell-type-sel", "#ef-cell-type"),
     cohort:        $("#ef-cohort").value.trim(),
     behavior_exp:  { done: $("#ef-behavior-done").checked, notes: $("#ef-behavior-notes").value.trim() },
     recordings:    existing?.recordings || [],
+    disposition:    existing?.disposition || "",
+    disposition_at: existing?.disposition_at || "",
+    disposition_by: existing?.disposition_by || "",
   };
 }
 
@@ -1832,6 +2289,12 @@ $("#ef-save").addEventListener("click", async () => {
   const entry = readEntryFromForm();
   if (!entry.mouse_id) {
     $("#ef-msg").className = "modal-msg error"; $("#ef-msg").textContent = "Mouse ID is required.";
+    return;
+  }
+  await lookupMouse();
+  const elig = entryEligibility(editingMouseCache, "slice");
+  if (!elig.ok) {
+    $("#ef-msg").className = "modal-msg error"; $("#ef-msg").textContent = elig.reason;
     return;
   }
   $("#ef-save").disabled = true;
@@ -1843,12 +2306,12 @@ $("#ef-save").addEventListener("click", async () => {
       entries = entries.slice();
       entries[editingIdx] = entry;
     }
-    const payload = { entries };
+    const payload = { ...(todayNote?.payload || {}), entries };
     if (!todayNote) {
       const r = await api("POST", "/api/eln/notes", {
         project_slug: projectSlug,
         experiment_type: EXP_TYPE,
-        note_date: todayISO(),
+        note_date: selectedDate || todayISO(),
         payload,
       });
       todayNote = r.note;
@@ -1857,7 +2320,7 @@ $("#ef-save").addEventListener("click", async () => {
       todayNote = r.note;
     }
     $("#modal-entry").style.display = "none";
-    await loadDay(todayISO(), true);
+    await loadDay(todayNote.note_date, true);
     await renderCalendar();
     // Auto-create data folder (fire-and-forget — don't block on failure)
     createDataFolder(
@@ -1877,9 +2340,9 @@ async function deleteEntry(idx) {
   let entries = todayNote.payload.entries.slice();
   entries.splice(idx, 1);
   try {
-    const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { entries } });
+    const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { ...todayNote.payload, entries } });
     todayNote = r.note;
-    await loadDay(todayISO(), true);
+    await loadDay(todayNote.note_date, true);
     await renderCalendar();
   } catch (e) { alert("Delete failed: " + e.message); }
 }
@@ -1888,7 +2351,9 @@ async function deleteEntry(idx) {
 // Inline recordings management (auto-save)
 // ───────────────────────────────────────────
 async function saveNotePayload() {
-  const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { entries: todayNote.payload.entries } });
+  // Preserve every top-level payload key (e.g. exp_log) — only entries is refreshed here.
+  const payload = { ...(todayNote.payload || {}), entries: todayNote.payload.entries };
+  const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload });
   todayNote = r.note;
 }
 
@@ -1922,6 +2387,117 @@ async function deleteRecordingFromEntry(entryIdx, recIdx) {
   try {
     await saveNotePayload();
   } catch (err) { alert(`Delete failed: ${err.message}`); }
+}
+
+// ───────────────────────────────────────────
+// Freeform timestamped logs (experiment-level + per-protocol)
+// Stored in the note payload: payload.exp_log[] and recordings[].log[].
+// Each line = { ts: ISO8601, text }. Editable while draft; locked on finalize.
+// ───────────────────────────────────────────
+function nowStampISO() { return new Date().toISOString(); }
+function fmtLogTime(ts) {
+  const d = new Date(ts);
+  if (isNaN(d.getTime())) return "";
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+function renderLogLines(log, opts) {
+  const arr = Array.isArray(log) ? log : [];
+  const locked = !!opts.locked, kind = opts.kind;
+  return arr.map((l, i) => {
+    let del = "";
+    if (!locked) {
+      del = (kind === "exp")
+        ? `<button class="log-del exp-log-del" data-i="${i}" title="Delete line">×</button>`
+        : `<button class="log-del rec-log-del" data-eidx="${opts.eidx}" data-ridx="${opts.ridx}" data-i="${i}" title="Delete line">×</button>`;
+    }
+    const full = escapeHtml(new Date(l.ts).toLocaleString());
+    return `<div class="log-line"><span class="log-time" title="${full}">${fmtLogTime(l.ts)}</span><span class="log-text">${escapeHtml(l.text || "")}</span>${del}</div>`;
+  }).join("");
+}
+function renderExpLog(note, readOnly) {
+  const log = (note && note.payload && note.payload.exp_log) || [];
+  if (readOnly && !log.length) return "";
+  const linesHtml = renderLogLines(log, { locked: readOnly, kind: "exp" });
+  const addRow = readOnly ? "" : `
+    <div class="log-add-row">
+      <input type="text" class="exp-log-input" id="exp-log-input" placeholder="Add a timestamped note for the whole experiment…  (Enter)" autocomplete="off" />
+      <button class="btn-mini exp-log-add">+ Add</button>
+    </div>`;
+  return `
+    <div class="exp-log-panel">
+      <div class="log-panel-head">📋 Experiment log <span class="log-panel-sub">— whole-session, timestamped</span></div>
+      <div class="log-lines" id="exp-log-lines">${linesHtml}</div>
+      ${addRow}
+    </div>`;
+}
+async function addExpLogLine() {
+  const inp = document.getElementById("exp-log-input");
+  if (!inp) return;
+  const text = inp.value.trim();
+  if (!text) return;
+  if (!todayNote) {
+    if (selectedDate) { alert("Add an animal first to start this day's note."); return; }
+    inp.disabled = true;
+    try {
+      const payload = { entries: [], exp_log: [{ ts: nowStampISO(), text }] };
+      const r = await api("POST", "/api/eln/notes", {
+        project_slug: projectSlug, experiment_type: EXP_TYPE, note_date: todayISO(), payload,
+      });
+      todayNote = r.note;
+      await loadDay(todayISO(), true);
+      await renderCalendar();
+    } catch (e) { alert("Save failed: " + e.message); inp.disabled = false; }
+    return;
+  }
+  const log = Array.isArray(todayNote.payload.exp_log) ? todayNote.payload.exp_log : [];
+  log.push({ ts: nowStampISO(), text });
+  todayNote.payload.exp_log = log;
+  inp.value = "";
+  const el = document.getElementById("exp-log-lines");
+  if (el) { el.innerHTML = renderLogLines(log, { locked: false, kind: "exp" }); el.scrollTop = el.scrollHeight; }
+  inp.focus();
+  try { await saveNotePayload(); } catch (e) { alert("Save failed: " + e.message); }
+}
+async function removeExpLogLine(i) {
+  const log = todayNote && todayNote.payload && todayNote.payload.exp_log;
+  if (!Array.isArray(log) || !log[i]) return;
+  if (!confirm("Delete this log line?")) return;
+  log.splice(i, 1);
+  const el = document.getElementById("exp-log-lines");
+  if (el) el.innerHTML = renderLogLines(log, { locked: false, kind: "exp" });
+  try { await saveNotePayload(); } catch (e) { alert("Save failed: " + e.message); }
+}
+async function addRecLogLine(eidx, ridx) {
+  const inp = document.querySelector(`.rec-log-input[data-eidx="${eidx}"][data-ridx="${ridx}"]`);
+  if (!inp) return;
+  const text = inp.value.trim();
+  if (!text) return;
+  const entries = todayNote && todayNote.payload && todayNote.payload.entries;
+  if (!entries) return;
+  const e = normalizeEntry(entries[eidx]);
+  const rec = e.recordings && e.recordings[ridx];
+  if (!rec) return;
+  rec.log = Array.isArray(rec.log) ? rec.log : [];
+  rec.log.push({ ts: nowStampISO(), text });
+  entries[eidx] = e;
+  inp.value = "";
+  const linesEl = document.getElementById(`rec-log-lines-${eidx}-${ridx}`);
+  if (linesEl) linesEl.innerHTML = renderLogLines(rec.log, { locked: false, kind: "rec", eidx, ridx });
+  inp.focus();
+  try { await saveNotePayload(); } catch (err) { alert("Save failed: " + err.message); }
+}
+async function removeRecLogLine(eidx, ridx, i) {
+  const entries = todayNote && todayNote.payload && todayNote.payload.entries;
+  if (!entries) return;
+  const e = normalizeEntry(entries[eidx]);
+  const rec = e.recordings && e.recordings[ridx];
+  if (!rec || !Array.isArray(rec.log) || !rec.log[i]) return;
+  if (!confirm("Delete this log line?")) return;
+  rec.log.splice(i, 1);
+  entries[eidx] = e;
+  const linesEl = document.getElementById(`rec-log-lines-${eidx}-${ridx}`);
+  if (linesEl) linesEl.innerHTML = renderLogLines(rec.log, { locked: false, kind: "rec", eidx, ridx });
+  try { await saveNotePayload(); } catch (err) { alert("Save failed: " + err.message); }
 }
 
 // eidx → current cell # string; null means cell-input mode
@@ -2019,6 +2595,7 @@ async function createDataFolder(eidx, entry, btn) {
     const metaText = buildSliceMetadataText(entry, dateISO, author);
     const body = {
       entry,
+      folder_name: computeFolderName(entry),   // keep server + local (FSA) folder names identical
       metadata_text: metaText,
       metadata_filename: "metadata.txt",
     };
@@ -2165,6 +2742,11 @@ function setCellInForm(eidx) {
   if (protoWrap) protoWrap.innerHTML = `<label class="rf-label">Protocol</label>` + buildEntryProtocolSelect(cellType, "", eidx);
   const sfx = wrap.querySelector(".raf-suffix-wrap");
   if (sfx) { sfx.style.display = "none"; sfx.innerHTML = ""; }
+  // Surface the per-cell recording-parameters row immediately for this cell.
+  const cpEl = document.getElementById(`cell-params-${eidx}`);
+  if (cpEl && todayNote?.payload?.entries?.[eidx]) {
+    cpEl.innerHTML = renderCellParams(normalizeEntry(todayNote.payload.entries[eidx]), eidx, false);
+  }
   wrap.querySelector(".raf-protocol-sel")?.focus();
   recInlineFilenamePreview(eidx);
 }
@@ -2213,27 +2795,227 @@ function addProtocolToForm(eidx) {
 }
 
 async function finalizeNote(noteId) {
-  if (!confirm("Finalize this note? It will be locked, then its data folder(s) auto-copied to your push destinations.")) return;
-  // Capture the data folders to push BEFORE the lock + reload changes the view.
-  const folders = (FSA_OK && localRootHandle && localDestHandles.length)
-    ? [...new Set((entries || [])
+  if (!confirm("Finalize this note? It will be locked, a PDF of the note saved into each data folder, then the folder(s) auto-copied to your push destinations.")) return;
+  // Capture the data folder names BEFORE the lock + reload changes the view. The PDF
+  // goes into every local data folder; push additionally needs destinations set.
+  const folderNames = (FSA_OK && localRootHandle)
+    ? [...new Set((todayNote?.payload?.entries || [])
         .map(e => computeFolderName(normalizeEntry(e)))
         .filter(f => f && f !== "(fill in fields)"))]
     : [];
   try {
     const r = await api("POST", `/api/eln/notes/${noteId}/approve`);
     todayNote = r.note;
-    await loadDay(todayISO(), true);
+    await writeNotePdfToFolders(noteId, folderNames);
+    await maybeArchiveSacrificed(r.note);
+    await loadDay(todayNote.note_date, true);
     await renderCalendar();
-    if (folders.length) await autoPushFolders(noteId, folders);
+    if (folderNames.length && localDestHandles.length) await autoPushFolders(noteId, folderNames);
   } catch (e) { alert("Finalize failed: " + e.message); }
 }
+
+// Fetch the finalized note as a PDF and drop a copy into each local data folder, so
+// the lab-note record lives beside the .abf files (and is copied to every push
+// destination, since it lands before autoPushFolders runs). Best-effort — a failure
+// here never un-finalizes the note.
+async function writeNotePdfToFolders(noteId, folderNames) {
+  if (!FSA_OK || !localRootHandle || !folderNames.length) return;
+  if (!(await fsaPerm(localRootHandle))) return;
+  let buf;
+  try {
+    const resp = await fetch(`/api/eln/notes/${noteId}/pdf`, { credentials: "include" });
+    if (!resp.ok) { console.warn("note PDF fetch failed:", resp.status); return; }
+    buf = await (await resp.blob()).arrayBuffer();
+  } catch (e) { console.warn("note PDF fetch error:", e); return; }
+  const pdfName = `${todayNote?.note_date || todayISO()}_labnote.pdf`;
+  for (const folder of folderNames) {
+    try {
+      const dir = await localRootHandle.getDirectoryHandle(folder, { create: true });
+      const fh  = await dir.getFileHandle(pdfName, { create: true });
+      const w   = await fh.createWritable(); await w.write(buf); await w.close();
+    } catch (e) { console.warn(`PDF write into ${folder} failed:`, e); }
+  }
+}
+
+// After finalizing a slice note, ask whether to move its mice into the
+// sacrificed archive (slice recording is terminal). Server enforces colony-edit
+// permission; missing / already-archived mice are skipped, not errored.
+async function maybeArchiveSacrificed(note) {
+  const source = await api('GET','/api/animals/sync-status');
+  if (source.sheet_id && source.can_sync) {
+    LabOS.notice('Slice note finalized. Update sacrificed animals in the source Sheet, then synchronize.', source.sheet_url);
+    return;
+  }
+  const mice = [...new Set((note?.payload?.entries || [])
+    .map(e => (e.mouse_id || "").trim()).filter(Boolean))];
+  if (!mice.length) return;
+  const ok = confirm(
+    `Move these mice to the sacrificed archive?\n\n${mice.join(", ")}\n\n` +
+    `Slice recording is terminal — they'll be moved out of the active colony into ` +
+    `the archive DB (marked sacrificed, ${note.note_date}). Their history stays in ` +
+    `the Experiment Log.`);
+  if (!ok) return;
+  try {
+    const res = await api("POST", `/api/eln/notes/${note.id}/archive-mice`);
+    const n = (res.archived || []).length;
+    let msg = `Archived ${n} mouse${n === 1 ? "" : "s"} to the sacrificed archive.`;
+    if ((res.skipped || []).length) msg += `\nSkipped (already archived / not in colony): ${res.skipped.join(", ")}`;
+    alert(msg);
+  } catch (e) {
+    alert("Archive failed: " + String(e.message || ""));
+  }
+}
+// ── Ephys Analysis Pipeline ────────────────────────────────────────────────
+
+function openAnalyzeModal(note) {
+  // Pre-fill exp_condition from first entry
+  const entries = note?.payload?.entries || [];
+  const firstExpCond = entries[0]?.exp_condition || "";
+  $("#az-exp-cond").value = firstExpCond;
+  $("#az-progress").style.display = "none";
+  $("#az-status").style.display = "none";
+  $("#az-start-btn").disabled = false;
+  $("#az-start-btn").textContent = "Upload & Analyze";
+  $("#az-file-count").textContent = "";
+
+  // Restore saved email
+  const savedEmail = localStorage.getItem("az_email") || "";
+  if (savedEmail) $("#az-email").value = savedEmail;
+
+  // Store note reference for later
+  $("#modal-analyze")._note = note;
+  $("#modal-analyze").style.display = "flex";
+}
+
+$("#az-files")?.addEventListener("change", () => {
+  const n = $("#az-files").files.length;
+  $("#az-file-count").textContent = n ? `${n} file${n > 1 ? "s" : ""} selected` : "";
+});
+
+$("#az-start-btn")?.addEventListener("click", async () => {
+  const note    = $("#modal-analyze")._note;
+  const files   = Array.from($("#az-files").files);
+  const expCond = $("#az-exp-cond").value.trim();
+  const mode    = $("#az-protocol-mode").value;
+  const email   = $("#az-email").value.trim();
+  const epscMin = parseFloat($("#az-epsc-min").value) || 20;
+  const epscMax = parseFloat($("#az-epsc-max").value) || 1000;
+  const extraOut = $("#az-extra-out").value.trim();
+
+  if (!files.length) { alert("Select at least one .abf file."); return; }
+  if (email) localStorage.setItem("az_email", email);
+
+  // Generate a job id
+  const jobId = "job_" + Math.random().toString(36).slice(2, 10);
+
+  const setStatus = (msg, color = "#1c2333") => {
+    const el = $("#az-status");
+    el.style.display = "";
+    el.style.background = color === "green" ? "rgba(22,163,74,.10)"
+      : color === "red" ? "rgba(220,38,38,.10)" : "rgba(30,39,97,.07)";
+    el.style.color = color === "green" ? "#15803d" : color === "red" ? "#dc2626" : "#1c2333";
+    el.innerHTML = msg;
+  };
+
+  $("#az-start-btn").disabled = true;
+  $("#az-start-btn").textContent = "Uploading…";
+  $("#az-progress").style.display = "";
+
+  try {
+    // Upload files one by one
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      const pct = Math.round((i / files.length) * 80);
+      $("#az-progress-bar").style.width = pct + "%";
+      $("#az-progress-label").textContent = `Uploading ${i + 1}/${files.length}: ${f.name}`;
+
+      const buf = await f.arrayBuffer();
+      const r = await fetch(`/api/eln/analysis/upload/${jobId}`, {
+        method: "POST",
+        headers: { "x-filename": f.name, "Content-Type": "application/octet-stream" },
+        body: buf,
+      });
+      if (!r.ok) throw new Error(`Upload failed: ${await r.text()}`);
+    }
+
+    $("#az-progress-bar").style.width = "85%";
+    $("#az-progress-label").textContent = "Starting analysis…";
+
+    // Start the job
+    const slug = note?.project_slug || projectSlug || "";
+    const startRes = await fetch(
+      `/api/eln/analysis/start?upload_job_id=${encodeURIComponent(jobId)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          note_id:       note?.id || null,
+          project_slug:  slug,
+          analysis_type: "ltd",
+          exp_condition: expCond,
+          note_date:     note?.note_date || "",
+          prefix:        expCond || "LTD",
+          protocol_mode: mode,
+          epsc_min:      epscMin,
+          epsc_max:      epscMax,
+          email:         email,
+          extra_out_dir: extraOut,
+        }),
+      }
+    );
+    if (!startRes.ok) throw new Error(`Job start failed: ${await startRes.text()}`);
+
+    $("#az-progress-bar").style.width = "100%";
+    $("#az-progress-label").textContent = "Analysis queued — running on server…";
+    setStatus("⏳ Analysis running… This may take a few minutes.", "#1c2333");
+    $("#az-start-btn").textContent = "Running…";
+
+    // Poll for status
+    let pollCount = 0;
+    const poll = setInterval(async () => {
+      pollCount++;
+      try {
+        const j = await (await fetch(`/api/eln/analysis/jobs/${jobId}`)).json();
+        if (j.status === "done") {
+          clearInterval(poll);
+          const r = j.result || {};
+          const dl = r.excel ? `<a href="/api/eln/analysis/results/${jobId}/${encodeURIComponent(r.excel.split('/').pop())}" target="_blank" style="color:#4338ca;font-weight:700;">Download Excel</a>` : "";
+          setStatus(
+            `✅ Analysis complete!<br>
+            Condition: <b>${r.exp_condition || expCond}</b> &nbsp;|&nbsp;
+            Mode: <b>${r.protocol_mode || "—"}</b><br>
+            Cells: <b>${r.n_cells}</b> &nbsp; Qualified: <b style="color:#15803d">${r.n_qualified}</b> &nbsp; Excluded: <b style="color:#dc2626">${r.n_excluded}</b><br>
+            ${r.email ? `Report emailed to <b>${email}</b><br>` : ""}
+            ${dl}`,
+            "green"
+          );
+          $("#az-start-btn").textContent = "Done";
+        } else if (j.status === "failed") {
+          clearInterval(poll);
+          setStatus(`❌ Analysis failed:<br><code style="font-size:11px">${j.error || "unknown error"}</code>`, "red");
+          $("#az-start-btn").disabled = false;
+          $("#az-start-btn").textContent = "Retry";
+        } else if (pollCount > 120) {
+          clearInterval(poll);
+          setStatus("⚠️ Still running — check back later or refresh.", "#8a5b00");
+        }
+      } catch (_) { /* keep polling */ }
+    }, 5000);
+
+  } catch (err) {
+    setStatus(`❌ ${err.message}`, "red");
+    $("#az-start-btn").disabled = false;
+    $("#az-start-btn").textContent = "Upload & Analyze";
+    $("#az-progress-bar").style.width = "0%";
+  }
+});
+
 async function returnNote(noteId) {
   if (!confirm("Unlock this note for editing?")) return;
   try {
     const r = await api("POST", `/api/eln/notes/${noteId}/return`);
     todayNote = r.note;
-    await loadDay(todayISO(), true);
+    await loadDay(todayNote.note_date, true);
     await renderCalendar();
   } catch (e) { alert("Unlock failed: " + e.message); }
 }
@@ -2300,13 +3082,14 @@ async function openDayViewer(iso) {
     const blocks = notes.map(n => {
       const author = n.author?.display_name || n.author?.username || "—";
       const entries = (n.payload?.entries || []);
+      const canDispo = (currentUser.effective_role === "admin") || n.user_id === currentUser.id;
       const list = entries.length
-        ? `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, true)).join("")}</div>`
+        ? `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, true, canDispo, n.id)).join("")}</div>`
         : `<p class="empty">No entries.</p>`;
       return `
         <div style="margin-bottom: 18px;">
           <div class="day-popup-meta">
-            <span class="status-pill ${n.status === "draft" ? "draft" : "approved"}">${n.status === "draft" ? "Draft" : "Finalized"}</span>
+            <span class="status-pill ${escapeHtml(n.status)}">${escapeHtml(LabOS.noteStatus(n))}</span>
             <span>by ${escapeHtml(author)}</span>
             <span>· updated ${(n.updated_at || "").slice(0,16).replace("T"," ")}</span>
           </div>
@@ -2314,6 +3097,11 @@ async function openDayViewer(iso) {
         </div>`;
     }).join("");
     $("#viewer-entries").innerHTML = blocks;
+    $$("#viewer-entries [data-dispo]").forEach(b => b.addEventListener("click", (e) => {
+      const btn = e.currentTarget;
+      setDisposition(btn.dataset.note, parseInt(btn.dataset.idx), btn.dataset.dispo,
+        async () => { await openDayViewer(iso); await renderCalendar(); });
+    }));
   } catch (e) {
     $("#viewer-entries").innerHTML = `<p class="empty">${escapeHtml(e.message)}</p>`;
   }
@@ -2323,6 +3111,14 @@ async function openDayViewer(iso) {
 // Inline recording event delegation
 // Attached to #main element (persists across innerHTML replacements)
 // ───────────────────────────────────────────
+// Enter-to-add for the freeform log inputs (experiment-level + per-protocol).
+document.getElementById("main").addEventListener("keydown", (ev) => {
+  if (ev.key !== "Enter" || ev.shiftKey) return;
+  const t = ev.target;
+  if (!t || !t.classList) return;
+  if (t.classList.contains("exp-log-input")) { ev.preventDefault(); addExpLogLine(); }
+  else if (t.classList.contains("rec-log-input")) { ev.preventDefault(); addRecLogLine(parseInt(t.dataset.eidx), parseInt(t.dataset.ridx)); }
+});
 document.getElementById("main").addEventListener("click", (ev) => {
   const tgt = ev.target;
 
@@ -2353,6 +3149,10 @@ document.getElementById("main").addEventListener("click", (ev) => {
     document.getElementById(`rec-cell-mode-${eidx}`).style.display  = "";
     const wrap = document.getElementById(`rec-add-wrap-${eidx}`);
     if (wrap) { wrap.querySelector(".raf-cell").value = ""; wrap.querySelector(".raf-cell")?.focus(); }
+    const cpEl = document.getElementById(`cell-params-${eidx}`);
+    if (cpEl && todayNote?.payload?.entries?.[eidx]) {
+      cpEl.innerHTML = renderCellParams(normalizeEntry(todayNote.payload.entries[eidx]), eidx, false);
+    }
     return;
   }
 
@@ -2435,6 +3235,12 @@ document.getElementById("main").addEventListener("click", (ev) => {
     deleteRecordingFromEntry(parseInt(tgt.dataset.eidx), parseInt(tgt.dataset.ridx));
     return;
   }
+
+  // ── Freeform log actions ──
+  if (tgt.classList.contains("exp-log-add")) { addExpLogLine(); return; }
+  if (tgt.classList.contains("exp-log-del")) { removeExpLogLine(parseInt(tgt.dataset.i)); return; }
+  if (tgt.classList.contains("rec-log-add")) { addRecLogLine(parseInt(tgt.dataset.eidx), parseInt(tgt.dataset.ridx)); return; }
+  if (tgt.classList.contains("rec-log-del")) { removeRecLogLine(parseInt(tgt.dataset.eidx), parseInt(tgt.dataset.ridx), parseInt(tgt.dataset.i)); return; }
 
   // ── Folder actions ──
   if (tgt.classList.contains("folder-copy")) {
@@ -2640,7 +3446,14 @@ async function lpPickRoot() {
     localRootHandle = h;
     await fsaPut("data_root", h);
     document.querySelectorAll(".lp-root-name").forEach(el => el.textContent = h.name);
-  } catch (e) { if (e.name !== "AbortError") alert("Failed to choose folder: " + e.message); }
+  } catch (e) {
+    if (e.name === "AbortError") return;
+    if (e.name === "SecurityError") {
+      alert("Cannot open that folder — Chrome blocks system directories (drive roots, /Library, etc.).\n\nPlease choose a regular data folder inside your home directory, e.g.\n  ~/Documents/LabData\n  ~/Desktop/Data");
+    } else {
+      alert("Failed to choose folder: " + e.message);
+    }
+  }
 }
 async function lpCreateFolder(eidx, folderName) {
   const st = document.getElementById("lp-status-" + eidx);
@@ -2768,11 +3581,116 @@ async function autoPushFolders(noteId, folders) {
   catch (e) { console.warn("push-record failed:", e.message); }
 }
 
+function copyAbfFilename(eidx, ridx, fn) {
+  navigator.clipboard.writeText(fn)
+    .then(() => {
+      const btn = document.getElementById(`abf-copy-btn-${eidx}-${ridx}`);
+      if (!btn) return;
+      const orig = btn.textContent;
+      btn.textContent = "✓ Copied!";
+      btn.style.color = "var(--green)";
+      setTimeout(() => { btn.textContent = orig; btn.style.color = ""; }, 1500);
+    })
+    .catch(() => prompt("Copy filename:", fn));
+}
+
+async function doneAbfRecording(eidx, ridx) {
+  const entries = todayNote?.payload?.entries || [];
+  const e = normalizeEntry(entries[eidx]);
+  if (!e) return;
+  const recs = e.recordings || [];
+  const rec = recs[ridx];
+  if (!rec) return;
+  const suggestedName = computeFilename(e, rec);
+  const folderName = computeFolderName(e);
+  const statusEl = document.getElementById(`abf-done-status-${eidx}-${ridx}`);
+
+  function setStatus(msg, color) {
+    if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color || ""; }
+  }
+
+  try {
+    // First try: use server API to rename on data_root (production)
+    try {
+      const resp = await api("POST", "/api/eln/rename-file", {
+        folder_name: folderName,
+        old_name: rec.abf_original || "*.abf",  // fallback: wildcard won't work server-side, but we'll get 404
+        new_name: suggestedName,
+      });
+      setStatus(`Renamed to ${suggestedName}`, "var(--green)");
+      await saveNotePayload();
+      return;
+    } catch (serverErr) {
+      // If server rename fails (404, permission, no data_root), try local FSA
+      if (!FSA_OK) {
+        setStatus(`File rename failed: ${serverErr.message || serverErr.status}`, "var(--red)");
+        return;
+      }
+      setStatus("Trying local File System...", "var(--grey)");
+    }
+
+    // Fallback: local File System Access API
+    if (!localRootHandle) {
+      await lpPickRoot();
+      if (!localRootHandle) return;
+    }
+    if (!(await fsaPerm(localRootHandle))) { alert("Permission required."); return; }
+
+    // Try to scan the session-specific subfolder first; fall back to root if not found.
+    let scanHandle = localRootHandle;
+    if (folderName && folderName !== "(fill in fields)") {
+      try {
+        scanHandle = await localRootHandle.getDirectoryHandle(folderName, { create: false });
+      } catch (_) {
+        // subfolder doesn't exist yet — scan root instead
+      }
+    }
+
+    let mostRecent = null;
+    let mostRecentTime = 0;
+    for await (const [name, handle] of scanHandle.entries()) {
+      if (handle.kind !== "file") continue;
+      if (!name.toLowerCase().endsWith(".abf")) continue;
+      const file = await handle.getFile();
+      if (file.lastModified > mostRecentTime) {
+        mostRecentTime = file.lastModified;
+        mostRecent = { name, handle, file };
+      }
+    }
+
+    if (!mostRecent) {
+      setStatus("No .abf file found in the selected folder.", "var(--red)");
+      return;
+    }
+
+    if (mostRecent.name === suggestedName) {
+      setStatus(`Already named: ${suggestedName}`, "var(--green)");
+      return;
+    }
+
+    const newHandle = await scanHandle.getFileHandle(suggestedName, { create: true });
+    const w = await newHandle.createWritable();
+    await w.write(await mostRecent.file.arrayBuffer());
+    await w.close();
+    setStatus(`Created ${suggestedName} (from ${mostRecent.name}). Delete the original if needed.`, "var(--green)");
+  } catch (err) {
+    setStatus("Error: " + err.message, "var(--red)");
+  }
+}
+
 document.getElementById("main").addEventListener("click", (ev) => {
   const t = ev.target;
   if (t.classList.contains("lp-pick-root")) { lpPickRoot(); return; }
   if (t.classList.contains("lp-create"))    { lpCreateFolder(parseInt(t.dataset.eidx), t.dataset.folder); return; }
   if (t.classList.contains("lp-push"))       { openPushModal(parseInt(t.dataset.eidx), t.dataset.folder); return; }
+  if (t.classList.contains("rec-fn-copy")) {
+    copyAbfFilename(parseInt(t.dataset.eidx), parseInt(t.dataset.ridx), t.dataset.fn || "");
+    return;
+  }
+  if (t.classList.contains("rec-fn-done")) {
+    doneAbfRecording(parseInt(t.dataset.eidx), parseInt(t.dataset.ridx));
+    return;
+  }
 });
 document.getElementById("push-add-dest")?.addEventListener("click", pushAddDest);
 document.getElementById("push-go")?.addEventListener("click", doPush);
@@ -2786,6 +3704,13 @@ document.getElementById("push-dest-list")?.addEventListener("click", async (ev) 
 loadLocalHandles();
 
 boot();
+
+window.addEventListener("beforeunload", (e) => {
+  if (document.getElementById("modal-entry") && document.getElementById("modal-entry").style.display !== "none") {
+    e.preventDefault();
+    e.returnValue = "";
+  }
+});
 </script>
 <script src="/labos-nav.js" defer></script>
 <script>/* Lab OS guided tour — dependency-free, auto-skips missing targets */

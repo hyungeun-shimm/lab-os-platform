@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script src="/labos-ui.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Lab OS — Dashboard</title>
 <style>
@@ -319,6 +320,13 @@
   }
   .modal-msg.error { background: #fef2f2; color: #b91c1c; }
 </style>
+<style>
+  .work-grid {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;margin-bottom:16px;}
+  .work-grid .section {margin-bottom:0;max-height:360px;overflow:auto;}
+  .page-head,.page-head .sync-area {flex-wrap:wrap;}
+  .section {overflow:auto;}
+  @media(max-width:700px){main{padding:12px}.work-grid{grid-template-columns:1fr}.page-head{padding:14px}.page-head .sync-area{margin-left:0;}}
+</style>
 </head>
 <body>
 
@@ -337,23 +345,23 @@
 <main>
   <div class="page-head">
     <div>
-      <h1>📊 Dashboard</h1>
-      <div class="desc">Activity across projects — refreshed on demand.</div>
+      <h1>📊 Today &amp; activity</h1>
+      <div class="desc">Your schedule, unfinished work, and notes awaiting review.</div>
     </div>
     <div class="sync-area">
       <a href="/eln/colony" style="background:var(--white);color:var(--navy);border:1px solid var(--grey-light);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;text-decoration:none;">🐭 Animal DB</a>
       <a href="/eln/breeders" style="background:var(--white);color:var(--navy);border:1px solid var(--grey-light);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;text-decoration:none;">🧬 Breeders</a>
       <a href="/eln/members" id="mem-link" style="display:none;background:var(--white);color:var(--navy);border:1px solid var(--grey-light);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;text-decoration:none;">👥 Members</a>
-      <a href="/eln/sync" id="sync-link" style="display:none;background:var(--white);color:var(--navy);border:1px solid var(--grey-light);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;text-decoration:none;">🔄 Sync</a>
+      <button id="sync-link" style="background:var(--white);color:var(--navy);border:1px solid var(--grey-light);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;">Animal sync history</button>
       <a href="/eln/permissions" id="perm-link" style="display:none;background:var(--white);color:var(--navy);border:1px solid var(--grey-light);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;text-decoration:none;">🔐 Permissions</a>
       <a href="/eln/audit" id="audit-link" style="display:none;background:var(--white);color:var(--navy);border:1px solid var(--grey-light);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;text-decoration:none;">🛡 Audit log</a>
       <div class="sync-info">
-        <div>Last sync: <strong id="sync-time">—</strong></div>
+        <div>Updated: <strong id="sync-time">—</strong></div>
         <div id="sync-stale" style="display:none;color:#8a5b00;">⚠ Older than 1 day</div>
       </div>
       <button class="btn-sync" id="btn-sync">
         <span class="spin"></span>
-        <span class="lbl">🔄 Sync now</span>
+        <span class="lbl">↻ Refresh</span>
       </button>
     </div>
   </div>
@@ -370,7 +378,7 @@ const $$ = (s) => Array.from(document.querySelectorAll(s));
 
 let currentUser = null;
 let lastData = null;
-const LS_KEY = "labos.dashboard.last";
+let workData = null;
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -414,22 +422,7 @@ async function boot() {
     currentUser = me.user;
     renderHeader();
 
-    // Try cached first
-    const cached = localStorage.getItem(LS_KEY);
-    if (cached) {
-      try {
-        const parsed = JSON.parse(cached);
-        if (parsed && parsed.generated_at) {
-          lastData = parsed;
-          render(parsed);
-        }
-      } catch (_) {}
-    }
-    if (!lastData) {
-      await sync();
-    } else {
-      updateStaleWarning();
-    }
+    await sync();
   } catch (e) {
     if (e.status === 401) { window.location.href = "/eln/login"; return; }
     $("#content").innerHTML = `<div class="section"><div class="err">Failed: ${escapeHtml(e.message)}</div></div>`;
@@ -455,20 +448,23 @@ function renderHeader() {
 async function sync() {
   const btn = $("#btn-sync");
   btn.disabled = true; btn.classList.add("loading");
-  btn.querySelector(".lbl").textContent = "Syncing…";
+  btn.querySelector(".lbl").textContent = "Refreshing…";
   try {
-    const data = await api("GET", "/api/eln/dashboard");
+    const [data, work] = await Promise.all([api("GET", "/api/eln/dashboard"), api("GET", "/api/eln/workbench")]);
     lastData = data;
-    localStorage.setItem(LS_KEY, JSON.stringify(data));
+    workData = work;
     render(data);
   } catch (e) {
     $("#content").innerHTML = `<div class="section"><div class="err">Sync failed: ${escapeHtml(e.message)}</div></div>`;
   } finally {
     btn.disabled = false; btn.classList.remove("loading");
-    btn.querySelector(".lbl").textContent = "🔄 Sync now";
+    btn.querySelector(".lbl").textContent = "↻ Refresh";
   }
 }
 $("#btn-sync").addEventListener("click", sync);
+$("#sync-link").addEventListener("click", () => LabOS.syncHistory());
+document.addEventListener('visibilitychange', () => { if (!document.hidden && currentUser) sync(); });
+window.addEventListener('labos:animals-synced', () => { if (currentUser) sync(); });
 
 function updateStaleWarning() {
   if (!lastData?.generated_at) return;
@@ -479,11 +475,6 @@ function updateStaleWarning() {
 function render(d) {
   $("#sync-time").textContent = fmtTime(d.generated_at);
   updateStaleWarning();
-
-  if (!d.users.length && !d.projects.length) {
-    $("#content").innerHTML = `<div class="section"><p class="empty">No notes recorded yet across any visible project.</p></div>`;
-    return;
-  }
 
   const isAdmin = d.is_admin;
   const usersSection = `
@@ -497,10 +488,27 @@ function render(d) {
       ${renderProjectsTable(d.projects)}
     </div>`;
 
-  $("#content").innerHTML = usersSection + projSection;
+  $("#content").innerHTML = renderWork(workData) + usersSection + projSection;
   wireExpandable(d);
 }
 
+
+function renderWork(w) {
+  if (!w) return '';
+  const events = items => items.length ? items.map(e => {
+    const time = new Date(e.start).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+    return `<p><a href="${escapeHtml(e.url)}" style="font-weight:600">${escapeHtml(time)} · ${escapeHtml(e.title)}</a><br><span class="small-mute">${escapeHtml([e.cohort,(e.mice || []).join(', '),e.rig,e.status].filter(Boolean).join(' · '))}</span></p>`;
+  }).join('') : '<p class="empty">None.</p>';
+  const notes = items => items.length ? items.map(n => `<p><a href="${escapeHtml(n.url)}">${escapeHtml(n.note_date)} · ${escapeHtml(n.project_slug)} · ${escapeHtml(n.author)}</a><br><span class="small-mute">${escapeHtml(LabOS.noteStatus(n))}</span></p>`).join('') : '<p class="empty">None.</p>';
+  const report = w.sync_report || {};
+  const issues = (report.counts?.rejected || 0) + (report.conflicts?.length || 0);
+  return `<div class="work-grid">
+    <div class="section"><h2>Today's schedule (${w.counts.today})</h2>${events(w.today)}</div>
+    <div class="section"><h2>Overdue · last 30 days (${w.counts.overdue})</h2>${events(w.overdue)}</div>
+    <div class="section"><h2>${w.is_admin ? 'Review queue' : 'Submitted for review'} (${w.counts.submitted})</h2>${notes(w.submitted)}</div>
+    <div class="section"><h2>Draft notes (${w.counts.drafts})</h2>${notes(w.drafts)}</div>
+  </div><div class="section"><a href="/eln/colony">🐭 My assigned animals: ${w.my_animals}</a> · Animal source updated: ${escapeHtml(fmtRel(w.last_synced))}${issues ? `<p style="color:#92400e">⚠ ${issues} animal synchronization issue(s). <button onclick="LabOS.syncHistory()">View details</button></p>` : ''}</div>`;
+}
 
 function renderUsersTable(users) {
   if (!users.length) return `<p class="empty">No activity to show.</p>`;
@@ -531,7 +539,7 @@ function renderUsersTable(users) {
           </div>
         </td>
         <td><span class="num dim">${projCount}</span></td>
-        <td>${u.finalized ? `<span class="pill final">${u.finalized}</span>` : `<span class="num dim">0</span>`} ${u.draft ? `<span class="pill draft" style="margin-left:4px;">${u.draft} draft</span>` : ""}</td>
+        <td><span class="pill final">${u.finalized} finalized</span> ${u.submitted ? `<span class="pill draft">${u.submitted} awaiting review</span>` : ''} ${u.draft ? `<span class="pill draft">${u.draft} draft</span>` : ''}</td>
         <td><span class="small-mute" title="${escapeHtml(u.last_active || '')}">${fmtRel(u.last_active)}</span></td>
         <td style="text-align:right;color:var(--grey);font-size:14px;"><span class="caret">▸</span></td>
       </tr>
@@ -583,7 +591,7 @@ function renderProjectsTable(projects) {
         <span class="num dim">🐭 ${p.behavior}</span>
       </td>
       <td>${p.unique_users}</td>
-      <td>${p.finalized ? `<span class="pill final">${p.finalized}</span>` : `<span class="num dim">0</span>`} ${p.draft ? `<span class="pill draft" style="margin-left:4px;">${p.draft} draft</span>` : ""}</td>
+      <td><span class="pill final">${p.finalized} finalized</span> ${p.submitted ? `<span class="pill draft">${p.submitted} awaiting review</span>` : ''} ${p.draft ? `<span class="pill draft">${p.draft} draft</span>` : ''}</td>
       <td><span class="small-mute" title="${escapeHtml(p.last_active || '')}">${fmtRel(p.last_active)}</span></td>
     </tr>`).join("");
   return `

@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script src="/labos-ui.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
 <meta name="theme-color" content="#007aff" />
 <link rel="manifest" href="/manifest.webmanifest" />
@@ -125,7 +126,7 @@
   <div class="sheet-inner">
     <div class="grab"></div>
     <h3>&#10024; AI schedule</h3>
-    <textarea id="aiText" rows="3" placeholder="e.g. cohort dA OKR next week on weekdays, 2 mice/day, mixed with dA-con control"></textarea>
+    <textarea id="aiText" rows="3" placeholder="e.g. cohort dA OKR next week, 2 mice/day; or delete OKR schedules from 2026-06-23 to 2026-06-28"></textarea>
     <div class="acts"><button class="btn-primary" id="aiGen">Generate preview</button></div>
     <div class="msg" id="aiMsg"></div>
     <div id="aiPrev"></div>
@@ -151,7 +152,14 @@
       <option value="manuscript">Manuscript</option>
       <option value="deadlines">Deadlines</option>
     </select>
+    <label>Experiment type</label><input id="fSub" type="text" placeholder="e.g. OKR, Slice ePhys" />
+    <label>Project</label><select id="fProject"></select>
+    <label>Cohort</label><input id="fCohort" type="text" />
+    <label>Assignee</label><select id="fAssignee"></select>
+    <label>Status</label><select id="fStatus"><option value="planned">Planned</option><option value="in_progress">In progress</option><option value="done">Done</option><option value="delayed">Delayed</option><option value="skipped">Skipped</option></select>
     <label>Date</label><input id="fDate" type="date" />
+    <label>End date</label><input id="fDateEnd" type="date" />
+    <label style="display:flex;align-items:center;gap:8px"><input id="fAllDay" type="checkbox" style="width:auto" /> All day</label>
     <div style="display:flex; gap:10px;">
       <div style="flex:1"><label>Start</label><input id="fStart" type="time" /></div>
       <div style="flex:1"><label>End</label><input id="fEnd" type="time" /></div>
@@ -162,10 +170,12 @@
       <div style="flex:1"><label>Rig</label><select id="fRig"></select><input id="fRigC" type="text" placeholder="Custom" style="display:none;margin-top:6px;" /></div>
     </div>
     <label>Notes</label><textarea id="fNotes" rows="2"></textarea>
+    <p id="seriesHint" style="display:none;color:var(--mut)">Repeating event: changes apply to the whole series.</p>
     <div class="msg" id="evMsg"></div>
     <div class="acts">
       <button class="btn-del" id="evDelete" style="display:none;">Delete</button>
       <button class="btn-grey" data-close="evSheet">Cancel</button>
+      <button class="btn-grey" id="evNotes" type="button">Notes</button>
       <button class="btn-primary" id="evSave">Save</button>
     </div>
   </div>
@@ -193,7 +203,7 @@
 const API='';
 const CAT={ manuscript:'#5AC8FA',surgery:'#FF3B30',behavior:'#FF9500',experiments:'#34C759',histology:'#AF52DE',deadlines:'#FFCC00' };
 const HS=6, HE=22;                       // visible hours 6am–10pm
-const state={ events:[], view:'agenda', cursor:new Date(), me:null, mineOnly:false, customCols:{}, editing:null, resources:{locations:[],rigs:[]} };
+const state={ events:[], view:'agenda', cursor:new Date(), me:null, mineOnly:false, customCols:{}, editing:null, projects:[], team:[], resources:{locations:[],rigs:[]}, aiMode:'add', aiProposed:[], aiDeleteIds:[] };
 const RESC='__custom__';
 function fillResSel(selId,custId,items,current){ const s=document.getElementById(selId),c=document.getElementById(custId);
   s.innerHTML=['<option value="">—</option>'].concat((items||[]).map(it=>'<option>'+esc(it.value)+'</option>')).concat(['<option value="'+RESC+'">Custom…</option>']).join('');
@@ -218,13 +228,14 @@ const startOfWeek=d=>{ const x=new Date(d); const dow=(x.getDay()+6)%7; x.setDat
 const fmtTime=d=>d.toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'});
 
 function visible(){
-  return state.events.filter(ev=>{
+  const events=state.events.filter(ev=>{
     if(state.mineOnly && state.me){
-      const mine=(ev.owner_id&&ev.owner_id===state.me.id)||(ev.assignee&&ev.assignee===state.me.id);
+      const mine=(ev.owner_id&&ev.owner_id===state.me.id)||(ev.assignee&&ev.assignee===state.me.id)||state.team.some(m=>m.id===ev.assignee&&m.eln_user_id===state.me.id);
       if(!mine) return false;
     }
     return true;
   });
+  return LabOS.expandEvents(events,addDays(state.cursor,-7),addDays(state.cursor,35));
 }
 
 // ---------- render ----------
@@ -241,7 +252,7 @@ function render(){
 }
 
 function renderAgenda(m){
-  const start=new Date(); start.setHours(0,0,0,0);
+  const start=new Date(state.cursor); start.setHours(0,0,0,0);
   const end=addDays(start,30);
   const evs=visible().filter(e=>e.end>=start&&e.start<end).sort((a,b)=>a.start-b.start);
   if(!evs.length){ m.innerHTML='<div class="empty">No events in the next 30 days.<br>Tap + to add one.</div>'; return; }
@@ -351,7 +362,8 @@ function hideSheet(id){ document.getElementById(id).classList.remove('show'); }
 
 // AI
 function openAi(){ document.getElementById('aiText').value=''; document.getElementById('aiPrev').innerHTML='';
-  document.getElementById('aiCommit').disabled=true; aiMsg(''); state.aiProposed=null; showSheet('aiSheet'); }
+  const commit=document.getElementById('aiCommit'); commit.disabled=true; commit.textContent='Add to calendar';
+  aiMsg(''); state.aiMode='add'; state.aiProposed=null; state.aiDeleteIds=[]; showSheet('aiSheet'); }
 function aiMsg(t,err){ const e=document.getElementById('aiMsg'); e.textContent=t||''; e.style.color=err?'#ff3b30':'var(--mut)'; e.style.display=t?'block':'none'; }
 async function aiGenerate(){
   const text=document.getElementById('aiText').value.trim();
@@ -359,20 +371,35 @@ async function aiGenerate(){
   const btn=document.getElementById('aiGen'); btn.disabled=true; aiMsg('Thinking…');
   try{
     const r=await api('/api/schedule/ai',{method:'POST',body:JSON.stringify({text})});
+    state.aiMode=r.action==='delete'?'delete':'add';
     state.aiProposed=r.events||[];
+    state.aiDeleteIds=(r.delete_events||[]).map(e=>e.id).filter(Boolean);
     const p=r.params||{}, s=r.summary||{};
-    const rows=(r.events||[]).map(e=>'<div class="ai-row">'+esc(e.start.replace('T',' '))+' · '+esc(e.title)+'</div>').join('');
-    document.getElementById('aiPrev').innerHTML=
-      '<div style="font-size:13px;color:var(--mut);margin:8px 0">Understood: <b>'+esc(p.cohort||'?')+'</b> · '+esc(p.subcategory||p.category||'')+' · '+esc(p.date_from||'')+'→'+esc(p.date_to||'')+' · '+(p.per_day||'?')+'/day</div>'+
-      '<div style="font-size:14px;margin-bottom:4px"><b>'+(s.scheduled||0)+'</b> events'+(s.conflicts?' · <span style="color:#ff3b30">'+s.conflicts+' conflict(s)</span>':'')+'</div>'+rows;
-    document.getElementById('aiCommit').disabled=!state.aiProposed.length; aiMsg('');
+    const warn=(r.warnings||[]).map(w=>'<div style="color:#c77a00">⚠ '+esc(w)+'</div>').join('');
+    if(state.aiMode==='delete'){
+      const rows=(r.delete_events||[]).map(e=>'<div class="ai-row">'+esc(String(e.start||'').replace('T',' '))+' · '+esc(e.title||'')+'</div>').join('');
+      document.getElementById('aiPrev').innerHTML=
+        '<div style="font-size:13px;color:var(--mut);margin:8px 0">Understood: delete <b>'+esc(p.query||p.title_contains||p.subcategory||p.category||'events')+'</b> · '+esc(p.date_from||'')+'→'+esc(p.date_to||'')+'</div>'+
+        '<div style="font-size:14px;margin-bottom:4px"><b>'+(s.matched||0)+'</b> existing events will be deleted</div>'+warn+(rows||'<div class="empty">No matching existing events</div>');
+    }else{
+      const rows=(r.events||[]).map(e=>'<div class="ai-row">'+esc(e.start.replace('T',' '))+' · '+esc(e.title)+'</div>').join('');
+      document.getElementById('aiPrev').innerHTML=
+        '<div style="font-size:13px;color:var(--mut);margin:8px 0">Understood: <b>'+esc(p.cohort||'?')+'</b> · '+esc(p.subcategory||p.category||'')+' · '+esc(p.date_from||'')+'→'+esc(p.date_to||'')+' · '+(p.per_day||'?')+'/day</div>'+
+        '<div style="font-size:14px;margin-bottom:4px"><b>'+(s.scheduled||0)+'</b> events'+(s.conflicts?' · <span style="color:#ff3b30">'+s.conflicts+' conflict(s)</span>':'')+'</div>'+warn+rows;
+    }
+    const commit=document.getElementById('aiCommit');
+    commit.textContent=state.aiMode==='delete'?'Delete from calendar':'Add to calendar';
+    commit.disabled=state.aiMode==='delete'?!state.aiDeleteIds.length:!state.aiProposed.length; aiMsg('');
   }catch(e){ aiMsg(String(e.message||e),true); }
   finally{ btn.disabled=false; }
 }
 async function aiCommit(){
-  if(!state.aiProposed||!state.aiProposed.length) return;
-  const btn=document.getElementById('aiCommit'); btn.disabled=true; aiMsg('Adding…');
-  try{ await api('/api/schedule/commit',{method:'POST',body:JSON.stringify({events:state.aiProposed})});
+  if(state.aiMode==='delete'){
+    if(!state.aiDeleteIds||!state.aiDeleteIds.length) return;
+  }else if(!state.aiProposed||!state.aiProposed.length) return;
+  const btn=document.getElementById('aiCommit'); btn.disabled=true; aiMsg(state.aiMode==='delete'?'Deleting…':'Adding…');
+  try{ if(state.aiMode==='delete') await api('/api/schedule/delete',{method:'POST',body:JSON.stringify({event_ids:state.aiDeleteIds})});
+    else await api('/api/schedule/commit',{method:'POST',body:JSON.stringify({events:state.aiProposed})});
     hideSheet('aiSheet'); await load(); render();
   }catch(e){ aiMsg(String(e.message||e),true); btn.disabled=false; }
 }
@@ -391,6 +418,21 @@ function openEv(id){
   document.getElementById('fStart').value=pad(base.getHours())+':'+pad(base.getMinutes());
   document.getElementById('fEnd').value=pad(end.getHours())+':'+pad(end.getMinutes());
   document.getElementById('fMice').value=ev?(ev.mice||[]).join(', '):'';
+  document.getElementById('fSub').value=ev?.subcategory||'';
+  document.getElementById('fCohort').value=ev?.cohort||'';
+  const fill=(id,items,value)=>{
+    const select=document.getElementById(id);
+    select.innerHTML='<option value="">Unassigned</option>'+items.map(x=>'<option value="'+esc(x.value)+'">'+esc(x.label)+'</option>').join('');
+    if(value&&!items.some(x=>x.value===value)) select.add(new Option(value,value));
+    select.value=value||'';
+  };
+  fill('fProject',state.projects.map(p=>({value:p.slug,label:p.short_name||p.name})),ev?.project_slug);
+  fill('fAssignee',state.team.map(p=>({value:p.id,label:p.name})),ev?.assignee);
+  document.getElementById('fStatus').value=ev?.status||'planned';
+  document.getElementById('fDateEnd').value=end.getFullYear()+'-'+pad(end.getMonth()+1)+'-'+pad(end.getDate());
+  document.getElementById('fAllDay').checked=!!ev?.all_day;
+  document.getElementById('seriesHint').style.display=ev?.recur?'':'none';
+  document.getElementById('evNotes').style.display=ev?'':'none';
   fillResSel('fLoc','fLocC',state.resources.locations,ev?ev.location||'':'');
   fillResSel('fRig','fRigC',state.resources.rigs,ev?ev.rig||'':'');
   document.getElementById('fNotes').value=ev?ev.notes||'':'';
@@ -400,12 +442,20 @@ function evMsg(t,err){ const e=document.getElementById('evMsg'); e.textContent=t
 async function evSave(){
   const date=document.getElementById('fDate').value, st=document.getElementById('fStart').value, en=document.getElementById('fEnd').value;
   const title=document.getElementById('fTitle').value.trim();
-  if(!date||!st||!en){ evMsg('Date and times are required.',true); return; }
+  const allDay=document.getElementById('fAllDay').checked;
+  const endDate=document.getElementById('fDateEnd').value||date;
+  if(!date||(!allDay&&(!st||!en))){ evMsg('Date and times are required.',true); return; }
+  const start=new Date(date+'T'+(allDay?'00:00':st)+':00');
+  const end=new Date(endDate+'T'+(allDay?'23:59':en)+':00');
+  if(end<=start){ evMsg('End time must be after start time.',true); return; }
   const cat=document.getElementById('fCat').value;
   const mice=document.getElementById('fMice').value.split(',').map(s=>s.trim()).filter(Boolean);
-  const payload={ title:title||(cat+' '+(mice[0]||'')).trim(), category:cat,
-    start:date+'T'+st+':00', end:date+'T'+en+':00', all_day:false,
-    mice, notes:document.getElementById('fNotes').value, status:'planned',
+  const original=state.events.find(e=>e.id===state.editing)||{};
+  const payload={ ...original, title:title||(cat+' '+(mice[0]||'')).trim(), category:cat,
+    start:start.toISOString(), end:end.toISOString(), all_day:allDay,
+    subcategory:document.getElementById('fSub').value.trim(), project_slug:document.getElementById('fProject').value,
+    cohort:document.getElementById('fCohort').value.trim(), assignee:document.getElementById('fAssignee').value,
+    mice, notes:document.getElementById('fNotes').value, status:document.getElementById('fStatus').value,
     location:readRes('fLoc','fLocC'), rig:readRes('fRig','fRigC') };
   const btn=document.getElementById('evSave'); btn.disabled=true; evMsg('Saving…');
   try{
@@ -442,6 +492,10 @@ function wire(){
   document.getElementById('aiGen').onclick=aiGenerate;
   document.getElementById('aiCommit').onclick=aiCommit;
   document.getElementById('evSave').onclick=evSave;
+  document.getElementById('evNotes').onclick=()=>{
+    const ev=state.events.find(e=>e.id===state.editing);
+    if(ev) LabOS.openEventNotes(ev,document.getElementById('fDate').value);
+  };
   document.getElementById('evDelete').onclick=evDelete;
   document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>hideSheet(b.dataset.close));
   document.querySelectorAll('.sheet').forEach(s=>s.addEventListener('click',e=>{ if(e.target===s) hideSheet(s.id); }));
@@ -462,6 +516,8 @@ async function signOut(){ try{ await fetch('/api/eln/auth/logout',{method:'POST'
 async function load(){
   const [ev,cust]=await Promise.all([api('/api/events'),api('/api/customs').catch(()=>({categories:[]}))]);
   state.events=(ev.events||[]).map(evFromWire);
+  const [projects,team]=await Promise.all([api('/api/projects'),api('/api/team')]);
+  state.projects=projects.projects||[]; state.team=team.members||[];
   (cust.categories||[]).forEach(c=>{ if(c.color&&!String(c.color).startsWith('var(')) state.customCols[c.key]=c.color; });
   try{ state.resources=await api('/api/schedule/resources'); }catch(_){ }
 }
@@ -477,6 +533,8 @@ async function boot(){
   try{ await load(); }
   catch(e){ document.getElementById('main').innerHTML='<div class="empty">Can’t reach the server.<br>'+esc(e.message)+'</div>'; return; }
   wire(); render();
+  const requestedEvent=new URLSearchParams(location.search).get('event');
+  if(requestedEvent&&state.events.some(e=>e.id===requestedEvent)) openEv(requestedEvent);
 }
 boot();
 </script>

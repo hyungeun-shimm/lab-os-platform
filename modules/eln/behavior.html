@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script src="/labos-ui.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Lab OS — Behavior</title>
 <style>
@@ -152,6 +153,7 @@
   .cal-cell .dots { display: flex; gap: 2px; margin-top: 1px; }
   .cal-cell .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--ice-deep); }
   .cal-cell .dot.approved { background: var(--green); }
+  .cal-cell .dot.submitted { background: var(--accent); }
   .cal-cell.selected .dot { background: var(--white); }
   .cal-legend {
     margin-top: 14px;
@@ -192,6 +194,7 @@
     letter-spacing: 0.08em; text-transform: uppercase;
   }
   .status-pill.draft     { background: var(--grey-lighter); color: var(--grey); }
+  .status-pill.submitted { background: #fef3c7; color: #92400e; }
   .status-pill.approved  { background: var(--green-soft); color: var(--green); }
   .day-head .spacer { flex: 1; }
   .day-head .day-actions { display: flex; gap: 8px; }
@@ -218,6 +221,28 @@
     font-size: 11px; font-weight: 600;
   }
   .chip.man { background: rgba(143, 179, 230, 0.20); color: var(--navy); }
+
+  /* ── disposition bar ── */
+  .entry-dispo {
+    display: flex; align-items: center; flex-wrap: wrap; gap: 6px;
+    margin: 6px 0 10px; padding: 7px 10px;
+    background: var(--grey-lighter); border-radius: 9px;
+  }
+  .entry-dispo .dispo-label {
+    font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--grey); margin-right: 2px;
+  }
+  .dispo-btn {
+    border: 1px solid var(--grey-light); background: var(--white);
+    color: var(--grey); border-radius: 999px; padding: 3px 11px;
+    font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.12s;
+  }
+  .dispo-btn:hover { border-color: var(--ice-deep); color: var(--navy); }
+  .dispo-btn.active { font-weight: 700; }
+  .dispo-btn.dispo-clear { padding: 3px 8px; color: var(--grey); }
+  .dispo-pill { border-radius: 999px; padding: 3px 11px; font-size: 12px; font-weight: 700; }
+  .dispo-at { font-size: 11.5px; color: var(--grey); font-weight: 600; }
 
   /* ── sessions table ── */
   .sess-table { width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 4px; }
@@ -289,6 +314,11 @@
     cursor: pointer; letter-spacing: 0.04em;
   }
   .btn-finalize:hover { background: var(--navy-deep); }
+  .btn-draft-save {
+    padding: 6px 14px; border-radius: 6px; border: 1.5px solid var(--navy); background: var(--white);
+    color: var(--navy); font-size: 13px; font-weight: 600; cursor: pointer; letter-spacing: .02em;
+  }
+  .btn-draft-save:hover { background: var(--ice); }
   .btn-return {
     background: var(--white); color: var(--navy);
     border: 1px solid var(--grey-light); border-radius: 10px;
@@ -352,7 +382,15 @@
   }
   .mouse-info .l { color: var(--grey); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
   .mouse-info .v { color: var(--navy-deep); font-weight: 600; }
-  .mouse-info.manual { background: rgba(242, 179, 61, 0.10); grid-template-columns: 1fr; }
+  .mouse-info.manual { background: rgba(242, 179, 61, 0.10); }
+  .mouse-info .man-head { grid-column: 1 / -1; color: var(--navy-deep); }
+  .mouse-info .man-f { display: flex; flex-direction: column; gap: 3px; }
+  .mouse-info .man-f .l { color: var(--grey); font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; }
+  .mouse-info .man-inp {
+    border: 1px solid #d1d5db; border-radius: 7px; padding: 5px 8px;
+    font: inherit; font-size: 12.5px; box-sizing: border-box; width: 100%;
+  }
+  .mouse-info .man-inp:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 2px rgba(30,39,97,0.12); }
   .mouse-info .src-note {
     grid-column: 1 / -1; color: var(--grey); font-size: 11px; font-style: italic; margin-top: 4px;
   }
@@ -463,6 +501,15 @@
     font-size: 11.5px; color: var(--green); font-weight: 600;
   }
 
+  /* VOR status filter */
+  .vor-filter-btn { background: var(--white); color: var(--navy); border: 1px solid var(--grey-light); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+  .vor-filter-active { background: var(--navy); color: var(--white); border-color: var(--navy); }
+  .vor-status-row { display: flex; align-items: flex-start; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--grey-lighter); font-size: 13px; }
+  .vor-status-row:last-child { border-bottom: 0; }
+  .vor-calib-badge { padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  .vor-calib-badge.ok { background: var(--green-soft); color: var(--green); }
+  .vor-calib-badge.no { background: var(--red-soft); color: var(--red); }
+
   /* NC modal */
   .nc-tab-active { background: var(--navy); color: #fff; border-color: var(--navy); }
   .nc-item {
@@ -503,11 +550,13 @@
     <div class="cal-grid" id="cal-grid"></div>
     <div class="cal-legend">
       <span class="lg"><span class="swatch" style="background:var(--ice-deep);"></span>Draft</span>
+      <span class="lg"><span class="swatch" style="background:var(--accent);"></span>Submitted</span>
       <span class="lg"><span class="swatch" style="background:var(--green);"></span>Finalized</span>
     </div>
     <div class="cal-foot">
       <button id="btn-export" type="button">📄 Export Lab notes</button>
       <button id="btn-manage-lists" type="button" style="display:none;">⚙ Manage lists</button>
+      <button id="btn-vor-status" type="button">🔍 VOR/OKR calibration status</button>
     </div>
   </aside>
 
@@ -534,7 +583,7 @@
         <div class="field">
           <label for="ef-cohort-mouse">Cohort (auto)</label>
           <input id="ef-cohort-mouse" type="text" readonly placeholder="—" />
-          <div class="hint">From animal DB. Editable below.</div>
+          <div class="hint">From animal DB. Used unless overridden below.</div>
         </div>
       </div>
 
@@ -548,8 +597,8 @@
             style="display:none;margin-top:6px;width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:8px;padding:8px 11px;font:inherit;font-size:14px;" />
         </div>
         <div class="field">
-          <label for="ef-cohort">Cohort number</label>
-          <input id="ef-cohort" type="text" placeholder="e.g. 03" />
+          <label for="ef-cohort">Cohort override <span id="ef-cohort-auto-hint" style="font-weight:400;font-size:11px;color:var(--grey);"></span></label>
+          <input id="ef-cohort" type="text" placeholder="e.g. 03 (leave blank to use auto)" />
         </div>
       </div>
 
@@ -561,6 +610,18 @@
 
       <!-- Visual stimulus params (VOR / OKR only) -->
       <div id="ef-visstim-wrap" style="display:none;margin-top:6px;"></div>
+
+      <!-- Acclimatization mode (shown only when VOR/OKR task selected) -->
+      <div id="ef-acclim-wrap" style="display:none;padding:10px 0 0;">
+        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;font-weight:600;color:var(--navy);margin-bottom:8px;">
+          <input type="checkbox" id="ef-acclim" style="width:15px;height:15px;accent-color:var(--navy);" />
+          Acclimatization run (no data file — notes only)
+        </label>
+        <div id="ef-acclim-notes-row" style="display:none;">
+          <textarea id="ef-acclim-notes" rows="2" placeholder="Acclimatization notes…"
+            style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font:inherit;font-size:13px;resize:vertical;box-sizing:border-box;"></textarea>
+        </div>
+      </div>
 
       <!-- Recording modality -->
       <div style="margin:14px 0 6px;border-top:1px solid var(--grey-light);padding-top:12px;">
@@ -726,11 +787,43 @@
         </div>
       </div>
 
+      <!-- Recording notes -->
+      <div style="margin-top:12px;">
+        <label style="display:block;font-size:10.5px;color:var(--grey);font-weight:700;letter-spacing:0.05em;text-transform:uppercase;margin-bottom:4px;">Recording notes</label>
+        <textarea id="ef-entry-notes" rows="2" placeholder="General notes for this animal's session today…"
+          style="width:100%;border:1px solid #d1d5db;border-radius:8px;padding:7px 10px;font:inherit;font-size:13px;resize:vertical;box-sizing:border-box;"></textarea>
+      </div>
+
       <div class="modal-msg" id="ef-msg"></div>
     </div>
     <div class="modal-foot">
       <button class="cancel" data-close="modal-entry" type="button">Cancel</button>
       <button class="save" id="ef-save" type="button">Save animal info</button>
+    </div>
+  </div>
+</div>
+
+<!-- VOR/OKR calibration status modal -->
+<div class="modal-overlay" id="modal-vor-status" style="display:none;">
+  <div class="modal" style="max-width:700px;">
+    <div class="modal-head">
+      <h3 style="margin:0;font-size:15px;">🔍 VOR/OKR Calibration Status</h3>
+      <button class="modal-close" data-close="modal-vor-status" type="button">×</button>
+    </div>
+    <div class="modal-body" style="padding:14px 18px 18px;">
+      <div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap;align-items:center;">
+        <button class="btn-mini vor-filter-btn vor-filter-active" data-filter="uncalibrated">⚠ No calibration</button>
+        <button class="btn-mini vor-filter-btn" data-filter="calibrated">✓ Calibrated</button>
+        <button class="btn-mini vor-filter-btn" data-filter="all">All</button>
+        <span style="flex:1;"></span>
+        <button class="btn-mini" id="vor-status-refresh">↻ Refresh</button>
+      </div>
+      <div id="vor-status-list" style="min-height:120px;max-height:420px;overflow-y:auto;">
+        <p style="color:var(--grey);font-size:13px;">Loading…</p>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-vor-status" type="button">Close</button>
     </div>
   </div>
 </div>
@@ -794,6 +887,31 @@
   </div>
 </div>
 
+<!-- Push data modal -->
+<div class="modal-overlay" id="modal-push" style="display:none;">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>📤 Push data folders</h3>
+      <button class="modal-close" data-close="modal-push" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--grey-dark);margin:0 0 14px;">
+        Copies all animal data folders for this session to the destination. Originals are kept.
+      </p>
+      <div id="push-folder-list" style="background:var(--grey-lighter);border-radius:8px;padding:10px 12px;font-size:12.5px;margin-bottom:14px;line-height:1.8;"></div>
+      <label style="font-size:12.5px;font-weight:600;display:block;margin-bottom:6px;">Destination path</label>
+      <input id="push-dest" type="text" placeholder="/Volumes/ExtDrive/RawData/2026-06-23"
+             style="width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--grey-light);border-radius:8px;font-size:13px;" />
+      <div id="push-error" style="color:var(--red);font-size:12.5px;margin-top:8px;display:none;"></div>
+      <div id="push-result" style="margin-top:10px;font-size:12.5px;display:none;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-push" type="button">Cancel</button>
+      <button class="save" id="push-do-btn" type="button">📤 Copy folders</button>
+    </div>
+  </div>
+</div>
+
 <!-- Past day viewer popup -->
 <div class="modal-overlay" id="modal-viewer" style="display:none;">
   <div class="modal wide">
@@ -823,19 +941,29 @@ const EXP_TYPE = "behavior";
 let currentUser = null;
 let project = null;
 let todayNote = null;
+let _dataRootHandle = null;   // FileSystemDirectoryHandle for local folder creation
+let _serverDataRoot = "";   // server-configured full path (for copy-path accuracy)
 let allTodayNotes = [];          // admin: every user's note for the currently loaded day
 let viewerUserId = null;         // admin: which user's note is being viewed
 let calendarYear, calendarMonth;
 let selectedDate = null;
+let selectedNoteId = new URLSearchParams(location.search).get('note');
 let calendarDays = [];
 
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
-function todayISO() {
+function actualDateISO() {
   const d = new Date();
-  const y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, "0"), day = String(d.getDate()).padStart(2, "0");
-  return `${y}-${m}-${day}`;
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+function todayISO() {
+  // Default date for page load: treat 00:00–05:59 as still the previous day
+  // so experiments running past midnight stay on the same session date.
+  // For navigation (Today button, calendar highlight) use actualDateISO().
+  const d = new Date();
+  if (d.getHours() < 6) d.setDate(d.getDate() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
 }
 function fmtLong(iso) {
   if (!iso) return "";
@@ -872,13 +1000,21 @@ async function boot() {
     $("#crumb-proj").innerHTML = `<a href="/eln/project/${encodeURIComponent(projectSlug)}" style="color:var(--ice); text-decoration:none;">${escapeHtml(project.title)}</a>`;
     $("#back-link").href = `/eln/project/${encodeURIComponent(projectSlug)}`;
 
-    const t = new Date();
+    const requestedDate = new URLSearchParams(location.search).get('date');
+    const initialDate = /^\d{4}-\d{2}-\d{2}$/.test(requestedDate || '') ? requestedDate : todayISO();
+    selectedDate = initialDate === todayISO() ? null : initialDate;
+    const t = new Date(initialDate + 'T12:00:00');
     calendarYear = t.getFullYear();
     calendarMonth = t.getMonth() + 1;
 
+    try {
+      const cfg = await api("GET", "/api/eln/config?key=data_root");
+      _serverDataRoot = cfg.value || "";
+    } catch (_) {}
+
     await Promise.all([
       renderCalendar(),
-      loadDay(todayISO(), true),
+      loadDay(initialDate, true),
       loadNamingConventions(),
     ]);
 
@@ -919,7 +1055,8 @@ async function renderCalendar() {
   calendarDays.forEach(d => byDate.set(d.date, d));
   const firstDow = new Date(y, m - 1, 1).getDay();
   const daysInMonth = new Date(y, m, 0).getDate();
-  const today = todayISO();
+  const actualToday = actualDateISO();
+  const sessionDay  = todayISO();  // may be previous day during 00:00–05:59
 
   const grid = $("#cal-grid");
   grid.innerHTML = "";
@@ -932,21 +1069,22 @@ async function renderCalendar() {
   for (let day = 1; day <= daysInMonth; day++) {
     const iso = `${y}-${String(m).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
     const cell = document.createElement("div");
-    cell.className = "cal-cell" + (iso === today ? " today" : "") + (iso === selectedDate ? " selected" : "");
+    cell.className = "cal-cell" + (iso === actualToday ? " today" : "") + (iso === selectedDate ? " selected" : "");
     cell.dataset.date = iso;
     cell.innerHTML = `<div>${day}</div>`;
     const info = byDate.get(iso);
     if (info) {
       const dots = document.createElement("div"); dots.className = "dots";
       const statuses = info.statuses || [];
-      const cls = (statuses.includes("approved") || statuses.includes("submitted")) ? "approved" : "";
+      const cls = statuses.includes("submitted") ? "submitted" : statuses.includes("approved") ? "approved" : "";
       const d1 = document.createElement("div"); d1.className = "dot " + cls; dots.appendChild(d1);
       cell.appendChild(dots);
     }
     cell.addEventListener("click", () => {
-      if (iso === today) {
+      // Clicking the session day (or actual today) goes to main view; others open viewer
+      if (iso === sessionDay || iso === actualToday) {
         selectedDate = null;
-        loadDay(today, true);
+        loadDay(iso, true);
       } else {
         selectedDate = iso;
         openDayViewer(iso);
@@ -972,7 +1110,7 @@ $("#cal-today").addEventListener("click", () => {
   calendarYear = t.getFullYear(); calendarMonth = t.getMonth() + 1;
   selectedDate = null;
   viewerUserId = currentUser?.id || null;
-  loadDay(todayISO(), true);
+  loadDay(actualDateISO(), true);
   renderCalendar();
 });
 
@@ -1019,6 +1157,10 @@ function wireSelectCustom(selId, inputId) {
   });
 }
 wireSelectCustom("#ef-exp-cond-sel", "#ef-exp-cond");
+
+document.getElementById("ef-acclim")?.addEventListener("change", function() {
+  document.getElementById("ef-acclim-notes-row").style.display = this.checked ? "" : "none";
+});
 
 // ── NC management modal ──
 let ncCurrentCategory = "exp_condition";
@@ -1103,15 +1245,21 @@ function populateEntryExpCondSelect(currentValue) {
 // ───────────────────────────────────────────
 function normalizeEntry(e) {
   return {
-    mouse_id:       e.mouse_id || "",
-    mouse:          e.mouse || {},
-    exp_condition:  e.exp_condition || "",
-    cohort:         e.cohort || "",
-    sessions:       Array.isArray(e.sessions) ? e.sessions : [],
-    behavior_tasks: Array.isArray(e.behavior_tasks) ? e.behavior_tasks : [],
-    recording:      e.recording || {},
-    folders:        (e.folders && typeof e.folders === "object") ? e.folders : {},
-    stim_params:    (e.stim_params && typeof e.stim_params === "object") ? e.stim_params : {},
+    mouse_id:               e.mouse_id || "",
+    mouse:                  e.mouse || {},
+    exp_condition:          e.exp_condition || "",
+    cohort:                 e.cohort || "",
+    sessions:               Array.isArray(e.sessions) ? e.sessions : [],
+    behavior_tasks:         Array.isArray(e.behavior_tasks) ? e.behavior_tasks : [],
+    recording:              e.recording || {},
+    folders:                (e.folders && typeof e.folders === "object") ? e.folders : {},
+    stim_params:            (e.stim_params && typeof e.stim_params === "object") ? e.stim_params : {},
+    entry_notes:            e.entry_notes || "",
+    acclimatization:        !!e.acclimatization,
+    acclimatization_notes:  e.acclimatization_notes || "",
+    disposition:            e.disposition || "",
+    disposition_at:         e.disposition_at || "",
+    disposition_by:         e.disposition_by || "",
   };
 }
 
@@ -1149,7 +1297,6 @@ function buildBehaviorFolderName(entry, task, userTaskLabel, dateISO) {
   if (entry.exp_condition) parts.push(`cond-${_sanitizePart(entry.exp_condition)}`);
   if (userTaskLabel)       parts.push(`task-${_sanitizePart(userTaskLabel)}`);
   if (dateISO)             parts.push(`date-${dateISO.replaceAll("-", "")}`);
-  parts.push("rawdata");
   return parts.join("_");
 }
 
@@ -1219,22 +1366,58 @@ function renderSessionAddForm(entryIdx) {
 function renderFolderBlock(e, idx, locked, dateISO) {
   const tasks = e.behavior_tasks || [];
   if (!tasks.length) return "";
+  const fsaOK = "showDirectoryPicker" in window;
   const rows = tasks.map((task, ti) => {
     const saved = (e.folders || {})[task] || {};
     const tlabel = saved.task_label || "";
     const folderName = saved.folder_name || buildBehaviorFolderName(e, task, tlabel, dateISO);
     const created = !!saved.created_at;
-    return `
+    const isVis = _isVisualStimTask(task);
+    const folderRow = `
       <div class="folder-row" data-eidx="${idx}" data-task="${escapeHtml(task)}">
         <span class="task-pill">${escapeHtml(task)}</span>
         ${locked ? `<span style="font-size:12.5px;color:var(--navy);">task-${escapeHtml(tlabel || "—")}</span>` : `
           <input type="text" class="tlabel" placeholder="task label (e.g. baseline)" value="${escapeHtml(tlabel)}" />
-          <button class="btn-mini fld-create" data-eidx="${idx}" data-task="${escapeHtml(task)}">
-            ${created ? "Re-create" : "📁 Create folder"}
-          </button>`}
-        ${created ? `<span class="folder-created">✓ created</span>` : ""}
+          ${fsaOK ? `<button class="btn-mini fld-create" data-eidx="${idx}" data-task="${escapeHtml(task)}">${created ? "Re-create" : "📁 Create folder"}</button>` : `<span style="font-size:11px;color:var(--grey);">Folder creation works in Chrome/Edge only.</span>`}`}
+        ${created || saved.folder_name ? `<button class="btn-mini fld-copy-path" data-eidx="${idx}" data-task="${escapeHtml(task)}" title="Copy full path to clipboard">📋 Copy path</button>` : ""}
+        ${isVis && !locked && fsaOK && created ? `<button class="btn-mini fld-vor-done" data-eidx="${idx}" data-task="${escapeHtml(task)}" style="background:var(--navy);color:white;font-weight:700;">Done</button>` : ""}
+        ${created ? `<span class="folder-created">✓ created in ${escapeHtml(saved.location || "—")}</span>` : ""}
+        ${saved.smr_filename ? `<span style="font-size:11.5px;color:var(--green);font-weight:600;">✓ ${escapeHtml(saved.smr_filename)}</span>` : ""}
         <div class="folder-name-preview" id="fldprev-${idx}-${ti}">${escapeHtml(folderName)}</div>
+        <div class="fld-done-status" id="fldstat-${idx}-${ti}" style="flex-basis:100%;font-size:11.5px;color:var(--grey);margin-top:2px;"></div>
       </div>`;
+    const extraBlock = isVis ? `
+      <div class="vor-extra-block" data-eidx="${idx}" data-task="${escapeHtml(task)}" style="padding:8px 10px 10px 12px;background:#f8f9fe;border:1px solid var(--grey-light);border-top:0;border-radius:0 0 8px 8px;margin-bottom:4px;">
+        <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start;margin-bottom:8px;">
+          <div>
+            <div class="folder-block-title" style="margin-bottom:4px;">Good signal</div>
+            <div style="display:flex;gap:4px;">
+              <button type="button" class="rec-toggle-btn vor-signal-btn ${saved.good_signal==="ch1"?"active":""}" data-val="ch1" data-eidx="${idx}" data-task="${escapeHtml(task)}" ${locked?"disabled":""}>Ch 1</button>
+              <button type="button" class="rec-toggle-btn vor-signal-btn ${saved.good_signal==="ch2"?"active":""}" data-val="ch2" data-eidx="${idx}" data-task="${escapeHtml(task)}" ${locked?"disabled":""}>Ch 2</button>
+              <button type="button" class="rec-toggle-btn vor-signal-btn ${saved.good_signal==="both"?"active":""}" data-val="both" data-eidx="${idx}" data-task="${escapeHtml(task)}" ${locked?"disabled":""}>Both</button>
+            </div>
+          </div>
+          <div>
+            <div class="folder-block-title" style="margin-bottom:4px;">Calibration channel</div>
+            <div style="display:flex;gap:4px;">
+              <button type="button" class="rec-toggle-btn vor-calib-ch-btn ${saved.calib_channel==="ch1"?"active":""}" data-val="ch1" data-eidx="${idx}" data-task="${escapeHtml(task)}" ${locked?"disabled":""}>Ch 1</button>
+              <button type="button" class="rec-toggle-btn vor-calib-ch-btn ${saved.calib_channel==="ch2"?"active":""}" data-val="ch2" data-eidx="${idx}" data-task="${escapeHtml(task)}" ${locked?"disabled":""}>Ch 2</button>
+              <button type="button" class="rec-toggle-btn vor-calib-ch-btn ${saved.calib_channel==="both"?"active":""}" data-val="both" data-eidx="${idx}" data-task="${escapeHtml(task)}" ${locked?"disabled":""}>Both</button>
+            </div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:20px;">
+            <input type="checkbox" class="vor-calib-done-cb" data-eidx="${idx}" data-task="${escapeHtml(task)}" id="vor-calib-${idx}-${_sanitizePart(task)}" ${saved.calibration_done?"checked":""} ${locked?"disabled":""} style="width:15px;height:15px;accent-color:var(--navy);" />
+            <label for="vor-calib-${idx}-${_sanitizePart(task)}" style="font-size:12.5px;font-weight:600;cursor:pointer;">Calibration done</label>
+          </div>
+        </div>
+        <div>
+          <div class="folder-block-title" style="margin-bottom:4px;">Experiment notes</div>
+          <textarea class="vor-exp-notes" data-eidx="${idx}" data-task="${escapeHtml(task)}" rows="2" placeholder="Any observations, issues, or notes for this recording…" ${locked?"disabled":""} style="width:100%;border:1px solid #d1d5db;border-radius:7px;padding:6px 9px;font:inherit;font-size:13px;resize:vertical;box-sizing:border-box;">${escapeHtml(saved.experiment_notes||"")}</textarea>
+        </div>
+        ${saved.smr_filename ? `<div style="margin-top:6px;font-size:11.5px;color:var(--green);font-weight:600;">✓ Renamed to: ${escapeHtml(saved.smr_filename)}</div>` : ""}
+        <div class="vor-done-status" data-eidx="${idx}" data-task="${escapeHtml(task)}" style="font-size:11.5px;color:var(--grey);margin-top:4px;"></div>
+      </div>` : "";
+    return folderRow + extraBlock;
   }).join("");
   return `
     <div class="folder-block">
@@ -1243,7 +1426,47 @@ function renderFolderBlock(e, idx, locked, dateISO) {
     </div>`;
 }
 
-function renderEntry(rawEntry, idx, locked, dateISO) {
+const DISPO_META = {
+  include: { label: "Include", bg: "rgba(52,199,89,0.16)",  fg: "#1b7f3b" },
+  exclude: { label: "Exclude", bg: "rgba(255,59,48,0.13)",  fg: "#b3261e" },
+  retest:  { label: "Re-test", bg: "rgba(242,179,61,0.20)", fg: "#8a5b00" },
+  drop:    { label: "Drop",    bg: "rgba(99,99,102,0.16)",  fg: "#3a3a3c" },
+};
+const DISPO_ORDER = ["include", "exclude", "retest", "drop"];
+
+function renderDispoBar(e, idx, canDispo, noteId) {
+  const cur = e.disposition || "";
+  const at  = e.disposition_at || "";
+  if (!canDispo) {
+    if (!cur) return "";
+    const m = DISPO_META[cur] || { label: cur, bg: "var(--grey-lighter)", fg: "var(--navy)" };
+    return `<div class="entry-dispo"><span class="dispo-label">Disposition</span>
+      <span class="dispo-pill" style="background:${m.bg};color:${m.fg};">${m.label}</span>
+      ${at ? `<span class="dispo-at">· ${escapeHtml(at)}</span>` : ""}</div>`;
+  }
+  const btns = DISPO_ORDER.map(k => {
+    const m = DISPO_META[k];
+    const active = cur === k;
+    const style = active ? `background:${m.bg};color:${m.fg};border-color:${m.fg};` : "";
+    return `<button type="button" class="dispo-btn${active ? " active" : ""}" data-dispo="${k}" data-idx="${idx}" data-note="${noteId}" style="${style}">${m.label}</button>`;
+  }).join("");
+  const clearBtn = cur ? `<button type="button" class="dispo-btn dispo-clear" data-dispo="" data-idx="${idx}" data-note="${noteId}" title="Clear disposition">✕</button>` : "";
+  return `<div class="entry-dispo">
+    <span class="dispo-label">Disposition</span>
+    ${btns}${clearBtn}
+    ${cur && at ? `<span class="dispo-at">· ${escapeHtml(at)}</span>` : ""}
+  </div>`;
+}
+
+async function setDisposition(noteId, idx, value) {
+  if (!noteId) return;
+  try {
+    await api("POST", `/api/eln/notes/${noteId}/entry-disposition`, { entry_index: idx, disposition: value });
+    await loadDay(todayNote?.note_date || todayISO(), true);
+  } catch (e) { alert("Failed to set disposition: " + e.message); }
+}
+
+function renderEntry(rawEntry, idx, locked, dateISO, canDispo, noteId) {
   const e = normalizeEntry(rawEntry);
   const mouse = e.mouse || {};
   const ageWk = mouse.age_weeks != null ? `${mouse.age_weeks}w` : "";
@@ -1275,15 +1498,19 @@ function renderEntry(rawEntry, idx, locked, dateISO) {
           ${ageWk ? `<span class="chip">${ageWk}</span>` : ""}
           ${days ? `<span class="chip">${days} in cond</span>` : ""}
           ${isManual ? `<span class="chip man" title="Not in animal DB">manual</span>` : ""}
+          ${e.acclimatization ? `<span class="chip" style="background:rgba(99,102,241,0.13);color:#4338ca;">Acclimatization</span>` : ""}
           ${recChips}
           ${taskChips}
         </div>
         ${locked ? "" : `<div class="entry-header-right">
+          <button class="btn-mini" data-act="add-test" data-idx="${idx}" title="Log another test for this same animal today (different task or modality) — reuses its info">+ Add test</button>
           <button class="btn-mini" data-act="edit" data-idx="${idx}">Edit info</button>
           <button class="btn-mini danger" data-act="del" data-idx="${idx}">Delete</button>
         </div>`}
       </div>
+      ${renderDispoBar(e, idx, canDispo, noteId)}
       ${meta ? `<div class="entry-meta">${escapeHtml(meta)}</div>` : ""}
+      ${e.entry_notes ? `<div style="font-size:12.5px;color:var(--grey);margin:4px 0 6px;">${escapeHtml(e.entry_notes)}</div>` : ""}
       <div id="sess-list-${idx}">${renderSessionsTable(e, idx, locked)}</div>
       ${addForm}
       ${renderFolderBlock(e, idx, locked, dateISO)}
@@ -1300,9 +1527,10 @@ async function loadDay(iso, isToday) {
       `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes?experiment_type=${EXP_TYPE}&date=${iso}`);
     allTodayNotes = data.notes || [];
     if (!viewerUserId) viewerUserId = currentUser.id;
-    const selectedNote = allTodayNotes.find(n => n.user_id === viewerUserId)
+    const selectedNote = allTodayNotes.find(n => n.id === selectedNoteId) || allTodayNotes.find(n => n.user_id === viewerUserId)
                       || allTodayNotes.find(n => n.user_id === currentUser.id);
     todayNote = selectedNote || null;
+    selectedNoteId = todayNote?.id || null;
     if (todayNote) viewerUserId = todayNote.user_id;
     else           viewerUserId = currentUser.id;
     renderDay(iso, todayNote);
@@ -1319,7 +1547,7 @@ function renderDay(iso, ownNote) {
     : "";
 
   let userPicker = "";
-  if (isAdmin && allTodayNotes.length > 1) {
+  if (allTodayNotes.length > 1) {
     userPicker = `
       <div style="display:flex;align-items:center;gap:6px;margin-left:8px;">
         <span style="font-size:11px;color:var(--grey);font-weight:700;text-transform:uppercase;letter-spacing:0.05em;">Viewing</span>
@@ -1327,7 +1555,7 @@ function renderDay(iso, ownNote) {
           ${allTodayNotes.map(n => {
             const nm = n.author?.display_name || n.author?.username || n.user_id;
             const me = n.user_id === currentUser.id ? " (me)" : "";
-            return `<option value="${n.user_id}" ${n.user_id === viewerUserId ? "selected" : ""}>${escapeHtml(nm)}${me}</option>`;
+            return `<option value="${n.id}" ${n.id === ownNote?.id ? "selected" : ""}>${escapeHtml(nm)}${me} · ${escapeHtml(LabOS.noteStatus(n))} · ${escapeHtml(n.id.slice(-6))}</option>`;
           }).join("")}
         </select>
       </div>`;
@@ -1336,7 +1564,7 @@ function renderDay(iso, ownNote) {
   const head = `
     <div class="day-head">
       <h2>${fmtLong(iso)}</h2>
-      ${ownNote ? `<span class="status-pill ${ownNote.status === "draft" ? "draft" : "approved"}">${ownNote.status === "draft" ? "Draft" : "Finalized"}</span>` : ""}
+      ${ownNote ? `<span class="status-pill ${escapeHtml(ownNote.status)}">${escapeHtml(LabOS.noteStatus(ownNote))}</span>` : ""}
       ${userPicker}
       <div class="spacer"></div>
       <div class="day-actions" id="day-actions"></div>
@@ -1346,10 +1574,35 @@ function renderDay(iso, ownNote) {
   const isLocked = ownNote && ownNote.status !== "draft";
   const readOnly = isLocked || isAdmin || viewingOther;
 
+  const _rootName = _dataRootHandle ? (_dataRootHandle.name || "Selected") : "";
+  const dataRootBar = readOnly ? "" : `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;padding:8px 12px;background:var(--grey-lighter);border-radius:10px;font-size:12.5px;">
+      <span style="font-weight:700;color:var(--navy);white-space:nowrap;">📂 Data root</span>
+      <span id="data-root-name" style="flex:1;color:${_dataRootHandle ? "var(--green)" : "var(--grey)"};font-style:${_dataRootHandle ? "normal" : "italic"};">
+        ${_dataRootHandle ? escapeHtml(_rootName) + " ✓" : "Not selected"}
+      </span>
+      <button id="data-root-pick" class="btn-mini" type="button">📂 Choose folder</button>
+    </div>`;
+
   const adminBanner = isAdmin ? `
     <div style="background:rgba(242,179,61,0.13);border:1px solid rgba(242,179,61,0.4);border-radius:10px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#8a5b00;">
       <strong>Admin mode</strong>${viewingOther ? ` — viewing <strong>${escapeHtml(otherAuthor)}</strong>'s note` : ""} — read-only. To write/edit your own lab notes, switch to <strong>User mode</strong>.
     </div>` : "";
+
+  // VOR/OKR log
+  let vorLog = "";
+  const logEntries = ownNote?.payload?.vor_okr_log;
+  if (logEntries && logEntries.length) {
+    vorLog = `<div style="background:rgba(30,39,97,0.04);border:1px solid var(--grey-light);border-radius:10px;padding:12px 16px;margin-bottom:12px;">
+      <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.06em;color:var(--grey);margin-bottom:8px;">VOR/OKR log</div>
+      ${logEntries.map(l => `<div style="font-size:12.5px;padding:3px 0;border-bottom:1px solid var(--grey-lighter);">
+        <span style="font-weight:600;color:var(--navy);">${escapeHtml(l.date)}</span>
+        <span style="background:var(--grey-lighter);border-radius:999px;padding:1px 7px;font-size:11px;margin:0 6px;">${escapeHtml(l.type || "")}</span>
+        <span style="color:var(--navy);">${escapeHtml(l.mouse_id || "")}</span>
+        ${l.notes ? `<span style="color:var(--grey);margin-left:6px;">${escapeHtml(l.notes)}</span>` : ""}
+      </div>`).join("")}
+    </div>`;
+  }
 
   let body = "";
   if (!ownNote || !entries.length) {
@@ -1357,33 +1610,87 @@ function renderDay(iso, ownNote) {
       ? `<p class="empty">${viewingOther ? escapeHtml(otherAuthor) + " has" : "You have"} no animals recorded for ${iso}.</p>`
       : `<p class="empty">No animals recorded for ${iso}. Click <strong>+ Add animal</strong> to start.</p>`;
   } else {
-    body = `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, readOnly, iso)).join("")}</div>`;
+    const canDispo = isAdmin || (ownNote && ownNote.user_id === currentUser.id);
+    body = `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, readOnly, iso, canDispo, ownNote?.id)).join("")}</div>`;
   }
 
+  const hasFolders = entries.some(e => e.vor_okr_log?.some(v => v.folder_name));
   const addRow = `
     <div class="add-row">
       ${readOnly ? "" : `<button class="btn-add" id="btn-add">+ Add animal</button>`}
-      ${ownNote && entries.length && !readOnly ? `<button class="btn-finalize" id="btn-finalize" style="margin-left:8px;">🔒 Finalize</button>` : ""}
+      ${ownNote && entries.length && !readOnly ? `<button class="btn-draft-save" id="btn-draft-save" style="margin-left:8px;">💾 Save Draft</button><button class="btn-finalize" id="btn-finalize" style="margin-left:8px;">🔒 Finalize</button><button class="btn-finalize" id="btn-submit-review">Submit for review</button>` : ""}
+      ${ownNote && hasFolders ? `<button class="btn-return" id="btn-push-data" style="margin-left:8px;">📤 Push data</button>` : ""}
     </div>`;
 
-  $("#main").innerHTML = head + adminBanner + body + addRow;
+  $("#main").innerHTML = dataRootBar + head + adminBanner + vorLog + body + addRow;
+  if (ownNote?.payload?.schedule_context) {
+    const context = ownNote.payload.schedule_context;
+    const info = document.createElement('p');
+    info.innerHTML = `<a href="/scheduler.html?event=${encodeURIComponent(context.event_id)}">📅 ${escapeHtml(context.title)}</a>${context.notes ? ' · ' + escapeHtml(context.notes) : ''}`;
+    $("#main").prepend(info);
+  }
+  $('#btn-submit-review')?.addEventListener('click', async () => {
+    try { await saveNotePayload(); await api('POST', `/api/eln/notes/${ownNote.id}/submit`); await loadDay(iso, true); await renderCalendar(); }
+    catch (e) { alert(e.message); }
+  });
 
   if (ownNote && ownNote.status !== "draft" && currentUser.effective_role === "admin") {
     const actions = $("#day-actions");
     actions.innerHTML = `<button class="btn-return" id="btn-unlock">Unlock</button>`;
     $("#btn-unlock").addEventListener("click", () => returnNote(ownNote.id));
+    if (ownNote.status === 'submitted') {
+      const btn = document.createElement('button'); btn.textContent = 'Approve reviewed note';
+      btn.onclick = async () => { try { await api('POST', `/api/eln/notes/${ownNote.id}/approve`); await loadDay(iso,true); await renderCalendar(); } catch(e) { alert(e.message); } };
+      actions.append(btn);
+    }
+  }
+
+  const pickRootBtn = $("#data-root-pick");
+  if (pickRootBtn) {
+    pickRootBtn.addEventListener("click", async () => {
+      if (!window.showDirectoryPicker) {
+        alert("This browser does not support local folder access.\nPlease use Chrome.");
+        return;
+      }
+      pickRootBtn.textContent = "Opening…";
+      pickRootBtn.disabled = true;
+      try {
+        const handle = await window.showDirectoryPicker({ mode: "readwrite" });
+        _dataRootHandle = handle;
+        const dateISO = todayNote?.note_date || todayISO();
+        await loadDay(dateISO, true);
+      } catch (e) {
+        pickRootBtn.textContent = "📂 Choose folder";
+        pickRootBtn.disabled = false;
+        if (e.name === "AbortError") return;
+        alert("Error: " + e.message);
+      }
+    });
   }
 
   const addBtn = $("#btn-add");
   if (addBtn) addBtn.addEventListener("click", () => openEntryForm(null));
   const finBtn = $("#btn-finalize");
   if (finBtn) finBtn.addEventListener("click", () => finalizeNote(ownNote.id));
+  const draftBtn = $("#btn-draft-save");
+  if (draftBtn) draftBtn.addEventListener("click", async () => {
+    try {
+      await saveNotePayload();
+      const orig = draftBtn.textContent;
+      draftBtn.textContent = "✓ Saved";
+      draftBtn.style.color = "var(--green)";
+      setTimeout(() => { draftBtn.textContent = orig; draftBtn.style.color = ""; }, 1800);
+    } catch (e) { alert("Save failed: " + e.message); }
+  });
+  const pushBtn = $("#btn-push-data");
+  if (pushBtn) pushBtn.addEventListener("click", () => openPushModal(ownNote, entries));
 
   const picker = $("#day-viewer-pick");
   if (picker) {
     picker.addEventListener("change", () => {
-      viewerUserId = picker.value;
-      const sel = allTodayNotes.find(n => n.user_id === viewerUserId);
+      selectedNoteId = picker.value;
+      const sel = allTodayNotes.find(n => n.id === selectedNoteId);
+      viewerUserId = sel?.user_id || currentUser.id;
       todayNote = sel || null;
       renderDay(iso, todayNote);
     });
@@ -1393,9 +1700,17 @@ function renderDay(iso, ownNote) {
     const idx = parseInt(e.target.dataset.idx);
     openEntryForm(entries[idx], idx);
   }));
+  $$(".entry [data-act='add-test']").forEach(b => b.addEventListener("click", (e) => {
+    const idx = parseInt(e.target.dataset.idx);
+    openAddAnotherTest(idx);
+  }));
   $$(".entry [data-act='del']").forEach(b => b.addEventListener("click", (e) => {
     const idx = parseInt(e.target.dataset.idx);
     deleteEntry(idx);
+  }));
+  $$(".entry [data-dispo]").forEach(b => b.addEventListener("click", (e) => {
+    const btn = e.currentTarget;
+    setDisposition(btn.dataset.note, parseInt(btn.dataset.idx), btn.dataset.dispo);
   }));
 }
 
@@ -1446,7 +1761,7 @@ function renderVisualStimSections() {
     .map(b => b.dataset.taskVal)
     .filter(_isVisualStimTask);
 
-  if (!selected.length) { wrap.style.display = "none"; wrap.innerHTML = ""; return; }
+  if (!selected.length) { wrap.style.display = "none"; wrap.innerHTML = ""; updateAcclimWrap(); return; }
 
   wrap.style.display = "";
   wrap.innerHTML = `
@@ -1479,6 +1794,13 @@ function renderVisualStimSections() {
         </div>`;
     }).join("")}
   `;
+  updateAcclimWrap();
+}
+
+function updateAcclimWrap() {
+  const hasBehavior = Array.from(document.querySelectorAll("#ef-behavior-tasks-wrap .task-chip-btn.selected")).some(b => _isVisualStimTask(b.dataset.taskVal));
+  const wrap = $("#ef-acclim-wrap");
+  if (wrap) wrap.style.display = hasBehavior ? "" : "none";
 }
 
 function renderBehaviorTaskChips(selectedTasks) {
@@ -1517,6 +1839,46 @@ document.getElementById("modal-entry").addEventListener("click", ev => {
 let editingIdx = null;
 let editingMouseCache = null;
 
+function _syncCohortHint() {
+  const autoCohort = ($("#ef-cohort-mouse").value || "").trim();
+  const manualEl   = $("#ef-cohort");
+  const hintEl     = $("#ef-cohort-auto-hint");
+  if (autoCohort) {
+    manualEl.placeholder = "Override (optional)";
+    if (hintEl) hintEl.textContent = `auto: ${autoCohort}`;
+  } else {
+    manualEl.placeholder = "e.g. 03";
+    if (hintEl) hintEl.textContent = "";
+  }
+}
+
+// "+ Add test" — log another test for the same animal today without re-typing its
+// info. Opens the entry form as a NEW entry, prefilled with the animal's identity
+// (id, DB/manual mouse info, condition, cohort) but with task + modality + sessions
+// cleared, so the user only picks the new task/modality. The data folder name embeds
+// the task + modality, so it won't collide with the first test's folder.
+async function openAddAnotherTest(idx) {
+  const src = normalizeEntry(todayNote?.payload?.entries?.[idx] || {});
+  const prefill = {
+    mouse_id:              src.mouse_id,
+    mouse:                 src.mouse || {},
+    exp_condition:         src.exp_condition,
+    cohort:                src.cohort,
+    behavior_tasks:        [],
+    recording:             {},
+    stim_params:           {},
+    sessions:              [],
+    folders:               {},
+    entry_notes:           "",
+    acclimatization:       false,
+    acclimatization_notes: "",
+  };
+  await openEntryForm(prefill, null);   // idx=null → saved as a new entry (same mouse)
+  $("#entry-title").textContent = `Add another test — ${src.mouse_id || "animal"}`;
+  const hint = $("#ef-mid-hint");
+  if (hint) { hint.textContent = "New test for this animal — pick the task / modality below."; hint.style.color = ""; }
+}
+
 async function openEntryForm(entry, idx) {
   editingIdx = idx == null ? null : idx;
   $("#entry-title").textContent = editingIdx == null ? "Add animal" : "Edit animal info";
@@ -1524,6 +1886,7 @@ async function openEntryForm(entry, idx) {
   $("#ef-mid").value          = norm?.mouse_id || "";
   $("#ef-cohort-mouse").value = norm?.mouse?.cohort || "";
   $("#ef-cohort").value       = norm?.cohort || "";
+  _syncCohortHint();
   populateEntryExpCondSelect(norm?.exp_condition || "");
   editingMouseCache = norm?.mouse || null;
   if (editingMouseCache && Object.keys(editingMouseCache).length) renderMouseInfo(editingMouseCache);
@@ -1533,6 +1896,18 @@ async function openEntryForm(entry, idx) {
   renderBehaviorTaskChips(norm?.behavior_tasks || []);
   editingStimParams = { ...(norm?.stim_params || {}) };
   renderVisualStimSections();
+
+  // Acclimatization
+  const acclimCb = $("#ef-acclim");
+  const acclimNotes = $("#ef-acclim-notes");
+  const acclimNotesRow = $("#ef-acclim-notes-row");
+  if (acclimCb) acclimCb.checked = norm?.acclimatization || false;
+  if (acclimNotes) acclimNotes.value = norm?.acclimatization_notes || "";
+  if (acclimNotesRow) acclimNotesRow.style.display = norm?.acclimatization ? "" : "none";
+
+  // Entry notes
+  const entryNotes = $("#ef-entry-notes");
+  if (entryNotes) entryNotes.value = norm?.entry_notes || "";
 
   // Recording modality
   const rec  = norm?.recording || {};
@@ -1581,13 +1956,39 @@ async function openEntryForm(entry, idx) {
   setTimeout(() => $("#ef-mid").focus(), 30);
 }
 
+// Weeks between an ISO DOB and today (floored); null if unparseable.
+function _ageWeeksFromDob(dob) {
+  const d = new Date(String(dob || "") + "T00:00:00");
+  if (isNaN(d.getTime())) return null;
+  return Math.floor((Date.now() - d.getTime()) / (7 * 86400000));
+}
+// Build a mouse object from the manual-entry input fields (off-DB record).
+function readManualMouse() {
+  const g = id => (document.getElementById(id)?.value || "").trim();
+  const m = { from_db: false };
+  const strain = g("ef-man-strain"), sex = g("ef-man-sex"),
+        cond = g("ef-man-cond"), dob = g("ef-man-dob"), days = g("ef-man-days");
+  if (strain) m.strain = strain;
+  if (sex)    m.sex = sex;
+  if (cond)   m.condition = cond;
+  if (dob)  { m.dob = dob; const aw = _ageWeeksFromDob(dob); if (aw != null) m.age_weeks = aw; }
+  if (days !== "" && !isNaN(parseInt(days))) m.days_in_condition = parseInt(days);
+  return m;
+}
+
 function renderMouseInfo(m) {
   const box = $("#ef-mouse-info");
   if (m.from_db === false) {
     box.className = "mouse-info manual";
     box.innerHTML = `
-      <div><strong>Manual entry</strong> — this mouse is not in the animal DB.</div>
-      <div class="src-note">Use the fields below to record what you know.</div>`;
+      <div class="man-head"><strong>Manual entry</strong> — not in the animal DB. Fill in what you know:</div>
+      <label class="man-f"><span class="l">Strain</span><input id="ef-man-strain" class="man-inp" value="${escapeHtml(m.strain || "")}" placeholder="e.g. WT" autocomplete="off" /></label>
+      <label class="man-f"><span class="l">Sex</span><input id="ef-man-sex" class="man-inp" value="${escapeHtml(m.sex || "")}" placeholder="M / F" autocomplete="off" /></label>
+      <label class="man-f"><span class="l">Condition</span><input id="ef-man-cond" class="man-inp" value="${escapeHtml(m.condition || "")}" placeholder="e.g. NR" autocomplete="off" /></label>
+      <label class="man-f"><span class="l">DOB</span><input id="ef-man-dob" class="man-inp" type="date" value="${escapeHtml(m.dob || "")}" /></label>
+      <label class="man-f"><span class="l">Days in cond</span><input id="ef-man-days" class="man-inp" type="number" min="0" value="${m.days_in_condition != null ? m.days_in_condition : ""}" placeholder="e.g. 12" /></label>`;
+    box.querySelectorAll(".man-inp").forEach(inp =>
+      inp.addEventListener("input", () => { editingMouseCache = readManualMouse(); }));
   } else {
     box.className = "mouse-info";
     box.innerHTML = `
@@ -1601,25 +2002,46 @@ function renderMouseInfo(m) {
   }
   box.style.display = "";
   $("#ef-cohort-mouse").value = m.cohort || "";
+  _syncCohortHint();
+}
+
+// Only DB-backed mice that have an experiment assigned may be added to the exp
+// log; behavior additionally requires a completed surgery. Manual (off-DB)
+// entries are always allowed.
+function entryEligibility(m, expType) {
+  if (!m || m.from_db === false) return { ok: true };
+  if (!((m.experiment || "").toString().trim())) {
+    return { ok: false, reason: "No experiment assigned in the animal DB — can't add to the exp log." };
+  }
+  if (expType === "behavior" && !m.surgery_done) {
+    return { ok: false, reason: "Surgery not completed (no surgery date on/before today) — can't add to a behavior log." };
+  }
+  return { ok: true };
 }
 
 async function lookupMouse() {
   const id = $("#ef-mid").value.trim();
+  const hint = $("#ef-mid-hint");
+  hint.style.color = "";
   if (!id) { editingMouseCache = null; $("#ef-mouse-info").style.display = "none"; return; }
-  $("#ef-mid-hint").textContent = "Looking up…";
+  hint.textContent = "Looking up…";
   try {
     const data = await api("GET", `/api/eln/mice/${encodeURIComponent(id)}`);
     editingMouseCache = data.mouse || data.animal || data;
     editingMouseCache.from_db = true;
     renderMouseInfo(editingMouseCache);
-    $("#ef-mid-hint").textContent = "✓ Found in animal DB.";
+    const elig = entryEligibility(editingMouseCache, "behavior");
+    hint.textContent = elig.ok ? "✓ Found in animal DB." : "✗ " + elig.reason;
+    hint.style.color = elig.ok ? "" : "var(--red)";
   } catch (e) {
     if (e.status === 404) {
-      editingMouseCache = { from_db: false };
+      // Keep anything already typed manually (e.g. when editing an off-DB entry).
+      const prev = (editingMouseCache && editingMouseCache.from_db === false) ? editingMouseCache : {};
+      editingMouseCache = { ...prev, from_db: false };
       renderMouseInfo(editingMouseCache);
-      $("#ef-mid-hint").textContent = "Not in animal DB — manual entry mode.";
+      hint.textContent = "Not in animal DB — manual entry mode.";
     } else {
-      $("#ef-mid-hint").textContent = "Lookup error: " + e.message;
+      hint.textContent = "Lookup error: " + e.message;
     }
   }
 }
@@ -1632,6 +2054,12 @@ $("#ef-save").addEventListener("click", async () => {
   const mouseId = $("#ef-mid").value.trim();
   if (!mouseId) {
     $("#ef-msg").className = "modal-msg error"; $("#ef-msg").textContent = "Mouse ID is required.";
+    return;
+  }
+  await lookupMouse();
+  const elig = entryEligibility(editingMouseCache, "behavior");
+  if (!elig.ok) {
+    $("#ef-msg").className = "modal-msg error"; $("#ef-msg").textContent = elig.reason;
     return;
   }
   $("#ef-save").disabled = true;
@@ -1699,20 +2127,28 @@ $("#ef-save").addEventListener("click", async () => {
       } : { enabled: false },
     };
 
+    const isAcclim = $("#ef-acclim")?.checked || false;
+
     const prevEntry = editingIdx != null
       ? normalizeEntry(todayNote?.payload?.entries?.[editingIdx] || {})
       : null;
 
     const entry = {
-      mouse_id:       mouseId,
-      mouse:          editingMouseCache || { from_db: false },
-      exp_condition:  expCond,
-      cohort:         $("#ef-cohort").value.trim(),
-      behavior_tasks: selectedTasks,
+      mouse_id:              mouseId,
+      mouse:                 editingMouseCache || { from_db: false },
+      exp_condition:         expCond,
+      cohort:                $("#ef-cohort").value.trim() || $("#ef-cohort-mouse").value.trim(),
+      behavior_tasks:        selectedTasks,
       recording,
       stim_params,
-      sessions:       prevEntry?.sessions || [],
-      folders:        prevEntry?.folders  || {},
+      sessions:              prevEntry?.sessions || [],
+      folders:               prevEntry?.folders  || {},
+      entry_notes:           $("#ef-entry-notes")?.value.trim() || "",
+      acclimatization:       isAcclim,
+      acclimatization_notes: isAcclim ? ($("#ef-acclim-notes")?.value.trim() || "") : "",
+      disposition:           prevEntry?.disposition || "",
+      disposition_at:        prevEntry?.disposition_at || "",
+      disposition_by:        prevEntry?.disposition_by || "",
     };
 
     let entries = todayNote?.payload?.entries || [];
@@ -1722,12 +2158,12 @@ $("#ef-save").addEventListener("click", async () => {
       entries = entries.slice();
       entries[editingIdx] = entry;
     }
-    const payload = { entries };
+    let payload = { ...(todayNote?.payload || {}), entries };
     if (!todayNote) {
       const r = await api("POST", "/api/eln/notes", {
         project_slug: projectSlug,
         experiment_type: EXP_TYPE,
-        note_date: todayISO(),
+        note_date: selectedDate || todayISO(),
         payload,
       });
       todayNote = r.note;
@@ -1735,8 +2171,18 @@ $("#ef-save").addEventListener("click", async () => {
       const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload });
       todayNote = r.note;
     }
+
+    // Update vor_okr_log if acclimatization run
+    if (isAcclim && todayNote) {
+      const existingPayload = todayNote.payload || {};
+      const log = Array.isArray(existingPayload.vor_okr_log) ? [...existingPayload.vor_okr_log] : [];
+      log.push({ date: todayISO(), type: "acclimatization", mouse_id: mouseId, notes: entry.acclimatization_notes });
+      const r2 = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { ...existingPayload, vor_okr_log: log } });
+      todayNote = r2.note;
+    }
+
     $("#modal-entry").style.display = "none";
-    await loadDay(todayISO(), true);
+    await loadDay(todayNote.note_date, true);
     await renderCalendar();
   } catch (e) {
     $("#ef-msg").className = "modal-msg error"; $("#ef-msg").textContent = e.message;
@@ -1750,9 +2196,9 @@ async function deleteEntry(idx) {
   let entries = todayNote.payload.entries.slice();
   entries.splice(idx, 1);
   try {
-    const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { entries } });
+    const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { ...todayNote.payload, entries } });
     todayNote = r.note;
-    await loadDay(todayISO(), true);
+    await loadDay(todayNote.note_date, true);
     await renderCalendar();
   } catch (e) { alert("Delete failed: " + e.message); }
 }
@@ -1761,7 +2207,7 @@ async function deleteEntry(idx) {
 // Session management (inline, auto-save)
 // ───────────────────────────────────────────
 async function saveNotePayload() {
-  const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { entries: todayNote.payload.entries } });
+  const r = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: todayNote.payload });
   todayNote = r.note;
 }
 
@@ -1830,14 +2276,88 @@ function doAddSession(eidx) {
 }
 
 // ───────────────────────────────────────────
+// Push data folders
+// ───────────────────────────────────────────
+function openPushModal(note, entries) {
+  // Collect unique folder paths from entry.folders[task]
+  const folders = [];
+  const seen = new Set();
+  for (const e of entries) {
+    for (const [, fd] of Object.entries(e.folders || {})) {
+      if (fd.folder_name && !seen.has(fd.folder_name)) {
+        seen.add(fd.folder_name);
+        folders.push({ name: fd.folder_name, full_path: fd.full_path || null,
+                       calib: fd.calib_folder_path || null });
+      }
+    }
+  }
+
+  const listEl = $("#push-folder-list");
+  listEl.innerHTML = folders.map(f =>
+    `<div>📁 <strong>${escapeHtml(f.name)}</strong>${f.calib ? `<br><span style="color:var(--grey);padding-left:14px;">↳ ${escapeHtml(f.calib.split("/").pop())}</span>` : ""}</div>`
+  ).join("") || `<em style="color:var(--grey);">No folders registered in this session.</em>`;
+
+  $("#push-dest").value = "";
+  $("#push-error").style.display = "none";
+  $("#push-result").style.display = "none";
+  $("#modal-push").style.display = "flex";
+
+  const doBtn = $("#push-do-btn");
+  const handler = async () => {
+    const dest = $("#push-dest").value.trim();
+    const errEl = $("#push-error");
+    if (!dest) { errEl.textContent = "Enter a destination path."; errEl.style.display = ""; return; }
+    errEl.style.display = "none";
+    doBtn.disabled = true;
+    doBtn.textContent = "Copying…";
+    try {
+      const r = await api("POST", `/api/eln/notes/${note.id}/copy-folders`, { destination: dest });
+      const resEl = $("#push-result");
+      resEl.innerHTML = r.results.map(x =>
+        `<div style="color:${x.ok ? "var(--green)" : "var(--red)"};">${x.ok ? "✓" : "✗"} ${escapeHtml(x.folder)} → ${escapeHtml(x.dest)}${x.error ? `<br><span style="font-size:11px;">${escapeHtml(x.error)}</span>` : ""}</div>`
+      ).join("");
+      resEl.style.display = "";
+      doBtn.textContent = "✓ Done";
+    } catch (e) {
+      errEl.textContent = e.message;
+      errEl.style.display = "";
+      doBtn.disabled = false;
+      doBtn.textContent = "📤 Copy folders";
+    }
+  };
+  doBtn.onclick = null;
+  doBtn.addEventListener("click", handler, { once: true });
+}
+
 // Finalize / return
 // ───────────────────────────────────────────
 async function finalizeNote(noteId) {
   if (!confirm("Finalize this note? It will be locked and cannot be edited.")) return;
   try {
+    // Flush any unsaved VOR/OKR calibration state from the DOM before locking.
+    const entries = todayNote?.payload?.entries;
+    if (entries) {
+      let dirty = false;
+      document.querySelectorAll(".vor-extra-block").forEach(block => {
+        const eidx = parseInt(block.dataset.eidx);
+        const task = block.dataset.task;
+        if (isNaN(eidx) || !task || !entries[eidx]) return;
+        const goodSignal   = block.querySelector(".vor-signal-btn.active")?.dataset.val || "";
+        const calibChannel = block.querySelector(".vor-calib-ch-btn.active")?.dataset.val || "";
+        const calibDone    = block.querySelector(".vor-calib-done-cb")?.checked ?? false;
+        const expNotes     = block.querySelector(".vor-exp-notes")?.value.trim() || "";
+        const target = { ...normalizeEntry(entries[eidx]) };
+        target.folders = { ...(target.folders || {}) };
+        const prev = target.folders[task] || {};
+        target.folders[task] = { ...prev, good_signal: goodSignal, calib_channel: calibChannel, calibration_done: calibDone, experiment_notes: expNotes };
+        entries[eidx] = target;
+        dirty = true;
+      });
+      if (dirty) await saveNotePayload();
+    }
     const r = await api("POST", `/api/eln/notes/${noteId}/approve`);
     todayNote = r.note;
-    await loadDay(todayISO(), true);
+    await loadDay(todayNote.note_date, true);
     await renderCalendar();
   } catch (e) { alert("Finalize failed: " + e.message); }
 }
@@ -1847,7 +2367,7 @@ async function returnNote(noteId) {
   try {
     const r = await api("POST", `/api/eln/notes/${noteId}/return`);
     todayNote = r.note;
-    await loadDay(todayISO(), true);
+    await loadDay(todayNote.note_date, true);
     await renderCalendar();
   } catch (e) { alert("Unlock failed: " + e.message); }
 }
@@ -1973,13 +2493,14 @@ async function openDayViewer(iso) {
     const blocks = notes.map(n => {
       const author = n.author?.display_name || n.author?.username || "—";
       const entries = n.payload?.entries || [];
+      const canDispo = (currentUser.effective_role === "admin") || n.user_id === currentUser.id;
       const list = entries.length
-        ? `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, true, iso)).join("")}</div>`
+        ? `<div class="entries">${entries.map((e, idx) => renderEntry(e, idx, true, iso, canDispo, n.id)).join("")}</div>`
         : `<p class="empty">No entries.</p>`;
       return `
         <div style="margin-bottom:18px;">
           <div class="day-popup-meta">
-            <span class="status-pill ${n.status === "draft" ? "draft" : "approved"}">${n.status === "draft" ? "Draft" : "Finalized"}</span>
+            <span class="status-pill ${escapeHtml(n.status)}">${escapeHtml(LabOS.noteStatus(n))}</span>
             <span>by ${escapeHtml(author)}</span>
             <span>· updated ${(n.updated_at || "").slice(0,16).replace("T"," ")}</span>
           </div>
@@ -1987,6 +2508,15 @@ async function openDayViewer(iso) {
         </div>`;
     }).join("");
     $("#viewer-entries").innerHTML = blocks;
+    $$("#viewer-entries [data-dispo]").forEach(b => b.addEventListener("click", async (e) => {
+      const btn = e.currentTarget;
+      try {
+        await api("POST", `/api/eln/notes/${btn.dataset.note}/entry-disposition`,
+          { entry_index: parseInt(btn.dataset.idx), disposition: btn.dataset.dispo });
+        await openDayViewer(iso);
+        await renderCalendar();
+      } catch (err) { alert("Failed to set disposition: " + err.message); }
+    }));
   } catch (e) {
     $("#viewer-entries").innerHTML = `<p class="empty">${escapeHtml(e.message)}</p>`;
   }
@@ -2034,6 +2564,32 @@ document.getElementById("main").addEventListener("click", (ev) => {
     const eidx = parseInt(tgt.dataset.eidx);
     const task = tgt.dataset.task;
     createFolderForTask(eidx, task);
+    return;
+  }
+
+  // Copy folder path
+  if (tgt.classList.contains("fld-copy-path")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const task = tgt.dataset.task;
+    copyFolderPath(eidx, task);
+    return;
+  }
+
+  // VOR/OKR Done button
+  if (tgt.classList.contains("fld-vor-done")) {
+    const eidx = parseInt(tgt.dataset.eidx);
+    const task = tgt.dataset.task;
+    doneVORRecording(eidx, task);
+    return;
+  }
+
+  // VOR/OKR signal/calib channel toggles
+  if (tgt.classList.contains("vor-signal-btn") || tgt.classList.contains("vor-calib-ch-btn")) {
+    const grpClass = tgt.classList.contains("vor-signal-btn") ? "vor-signal-btn" : "vor-calib-ch-btn";
+    const eidx = tgt.dataset.eidx;
+    const task = tgt.dataset.task;
+    document.querySelectorAll(`.${grpClass}[data-eidx="${eidx}"][data-task="${CSS.escape(task)}"]`).forEach(b => b.classList.remove("active"));
+    tgt.classList.add("active");
     return;
   }
 });
@@ -2161,30 +2717,165 @@ async function createFolderForTask(entryIdx, task) {
   const e = normalizeEntry(todayNote.payload.entries[entryIdx]);
   const dateISO = todayNote.note_date || todayISO();
   const folderName = buildBehaviorFolderName(e, task, tlabel, dateISO);
-  const metaText = buildBehaviorMetadataText(e, task, tlabel, dateISO, currentUser?.display_name || currentUser?.username || "");
+  const isVis = _isVisualStimTask(task);
+  // Short, fixed-length calib subfolder name (the parent folder name is already
+  // long; appending it again pushed paths past the OS limit so files inside the
+  // calib folder sometimes couldn't be saved).
+  const calibName = `sub-${_sanitizePart(e.mouse_id || "")}_${dateISO.replaceAll("-", "")}_calib`;
+
+  if (!_dataRootHandle) {
+    alert("Please choose a Data root folder first (📂 Choose folder button).");
+    return;
+  }
+
+  // Create folders locally via File System Access API
+  let mainHandle, calibHandle;
   try {
-    const r = await api("POST", "/api/eln/data-folder", {
-      entry: e,
-      folder_name: folderName,
-      metadata_text: metaText,
-      metadata_filename: "metadata.txt",
-    });
-    // Persist into entry.folders
+    mainHandle = await _dataRootHandle.getDirectoryHandle(folderName, { create: true });
+  } catch (e) {
+    alert("Could not create folder: " + e.message); return;
+  }
+  if (isVis) {
+    try { calibHandle = await mainHandle.getDirectoryHandle(calibName, { create: true }); }
+    catch (_) { /* non-fatal */ }
+  }
+
+  // Write the recording metadata file into the folder
+  let metaWritten = false;
+  try {
+    const metaText = buildBehaviorMetadataText(e, task, tlabel, dateISO, currentUser?.display_name || "");
+    const metaHandle = await mainHandle.getFileHandle("metadata.txt", { create: true });
+    const w = await metaHandle.createWritable();
+    await w.write(metaText);
+    await w.close();
+    metaWritten = true;
+  } catch (err) {
+    console.warn("Could not write metadata file:", err);
+  }
+
+  // Save into note payload
+  const entries = todayNote.payload.entries;
+  const target = { ...normalizeEntry(entries[entryIdx]) };
+  target.folders = { ...(target.folders || {}) };
+  target.folders[task] = {
+    task_label:        tlabel,
+    folder_name:       folderName,
+    full_path:         `${_serverDataRoot || _dataRootHandle.name}/${folderName}`,
+    calib_folder_path: calibHandle ? `${_serverDataRoot || _dataRootHandle.name}/${folderName}/${calibName}` : null,
+    metadata_file:     metaWritten ? "metadata.txt" : null,
+    created_at:        new Date().toISOString(),
+  };
+  entries[entryIdx] = target;
+  await saveNotePayload();
+  await loadDay(dateISO, true);
+
+  let msg = `✓ Folder created: ${folderName}`;
+  if (calibHandle) msg += `\n✓ Calib folder created: ${calibName}`;
+  if (metaWritten)  msg += `\n✓ metadata.txt written`;
+  alert(msg);
+}
+
+function copyFolderPath(eidx, task) {
+  const e = normalizeEntry(todayNote?.payload?.entries?.[eidx] || {});
+  const saved = (e.folders || {})[task] || {};
+  const path = saved.full_path || saved.folder_name || buildBehaviorFolderName(e, task, saved.task_label || "", todayNote?.note_date || todayISO());
+  navigator.clipboard.writeText(path)
+    .then(() => {
+      const rows = document.querySelectorAll(`.folder-row[data-eidx="${eidx}"][data-task="${CSS.escape(task)}"]`);
+      rows.forEach(row => {
+        const btn = row.querySelector(".fld-copy-path");
+        if (!btn) return;
+        const orig = btn.textContent;
+        btn.textContent = "✓ Copied!";
+        btn.style.color = "var(--green)";
+        setTimeout(() => { btn.textContent = orig; btn.style.color = ""; }, 1500);
+      });
+    })
+    .catch(() => { prompt("Copy this path:", path); });
+}
+
+async function doneVORRecording(eidx, task) {
+  if (!todayNote) { alert("Save the entry first."); return; }
+  const e = normalizeEntry(todayNote.payload.entries[eidx]);
+  const saved = (e.folders || {})[task] || {};
+
+  const extraBlock = document.querySelector(`.vor-extra-block[data-eidx="${eidx}"][data-task="${CSS.escape(task)}"]`);
+  const goodSignal = extraBlock?.querySelector(".vor-signal-btn.active")?.dataset.val || saved.good_signal || "";
+  const calibChannel = extraBlock?.querySelector(".vor-calib-ch-btn.active")?.dataset.val || saved.calib_channel || "";
+  const calibDone = extraBlock?.querySelector(".vor-calib-done-cb")?.checked ?? !!saved.calibration_done;
+  const expNotes = extraBlock?.querySelector(".vor-exp-notes")?.value.trim() || saved.experiment_notes || "";
+
+  // Find status div — check both vor-done-status (inside vor-extra-block) and fld-done-status (in folder row)
+  const statusEl = extraBlock?.querySelector(".vor-done-status")
+    || document.querySelector(`.folder-row[data-eidx="${eidx}"][data-task="${CSS.escape(task)}"] .fld-done-status`);
+
+  const setStatus = (msg, color) => {
+    if (statusEl) { statusEl.textContent = msg; statusEl.style.color = color; }
+  };
+
+  setStatus("Working…", "var(--grey)");
+
+  try {
+    // Rename the most recent .smr or .smrx file in the data folder to match the folder name
+    let renamedFile = null;
+    if (saved.folder_name) {
+      const listRes = await api("GET", `/api/eln/data-folder?folder_name=${encodeURIComponent(saved.folder_name)}`);
+      const smrFiles = (listRes.files || [])
+        .filter(f => /\.(smr|smrx)$/i.test(f.name))
+        .sort((a, b) => (b.mtime > a.mtime ? 1 : -1));  // newest first
+      if (smrFiles.length > 0) {
+        const oldest = smrFiles[smrFiles.length - 1];  // use newest (first after sort)
+        const newest = smrFiles[0];
+        const ext = newest.name.match(/\.(smrx?)$/i)?.[1] || "smr";
+        const newName = saved.folder_name + "." + ext;
+        if (newest.name !== newName) {
+          await api("POST", "/api/eln/rename-file", {
+            folder_name: saved.folder_name,
+            old_name: newest.name,
+            new_name: newName,
+          });
+          renamedFile = newName;
+        } else {
+          renamedFile = newName;  // already named correctly
+        }
+      }
+    }
+
     const entries = todayNote.payload.entries;
-    const target = { ...normalizeEntry(entries[entryIdx]) };
+    const target = { ...normalizeEntry(entries[eidx]) };
     target.folders = { ...(target.folders || {}) };
     target.folders[task] = {
-      task_label:  tlabel,
-      folder_name: r.folder_name,
-      full_path:   r.full_path,
-      created_at:  new Date().toISOString(),
+      ...(target.folders[task] || {}),
+      good_signal: goodSignal,
+      calib_channel: calibChannel,
+      calibration_done: calibDone,
+      experiment_notes: expNotes,
+      done_at: new Date().toISOString(),
+      ...(renamedFile ? { smr_filename: renamedFile } : {}),
     };
-    entries[entryIdx] = target;
+    entries[eidx] = target;
     await saveNotePayload();
-    await loadDay(dateISO, true);
-    alert(`Folder ${r.created ? "created" : "already exists"}:\n${r.full_path}`);
+
+    // Append to vor_okr_log (deduplicate by date + mouse_id + task)
+    const existingPayload = todayNote.payload || {};
+    const log = Array.isArray(existingPayload.vor_okr_log) ? [...existingPayload.vor_okr_log] : [];
+    const mouseId = target.mouse_id || "";
+    const taskType = _taskAbbr(task).toUpperCase();
+    const noteDate = todayNote.note_date || todayISO();
+    const alreadyLogged = log.some(l => l.date === noteDate && l.mouse_id === mouseId && l.type === taskType);
+    if (!alreadyLogged) {
+      log.push({ date: noteDate, type: taskType, mouse_id: mouseId });
+      const r2 = await api("PATCH", `/api/eln/notes/${todayNote.id}`, { payload: { ...existingPayload, vor_okr_log: log } });
+      todayNote = r2.note;
+    }
+
+    const msg = renamedFile
+      ? `Done — renamed to ${renamedFile}`
+      : "Done — metadata saved (no .smr/.smrx found in folder)";
+    setStatus(msg, "var(--green)");
+    await renderCalendar();
   } catch (err) {
-    alert("Folder create failed: " + err.message);
+    setStatus("Error: " + err.message, "var(--red)");
   }
 }
 
@@ -2226,6 +2917,67 @@ document.getElementById("main").addEventListener("keydown", (ev) => {
     wrap.querySelector(".saf-score")?.focus();
     return;
   }
+});
+
+// ───────────────────────────────────────────
+// VOR/OKR Calibration Status
+// ───────────────────────────────────────────
+let vorStatusFilter = "uncalibrated";
+let vorStatusRecords = [];
+
+async function loadVORStatus() {
+  const listEl = document.getElementById("vor-status-list");
+  if (!listEl) return;
+  listEl.innerHTML = '<p style="color:var(--grey);font-size:13px;">Loading…</p>';
+  try {
+    const qs = project ? `?project_slug=${encodeURIComponent(projectSlug)}` : "";
+    const d = await api("GET", `/api/eln/vor-okr/status${qs}`);
+    vorStatusRecords = d.records || [];
+    renderVORStatus();
+  } catch (e) {
+    listEl.innerHTML = `<p style="color:var(--red);font-size:13px;">${escapeHtml(e.message)}</p>`;
+  }
+}
+
+function renderVORStatus() {
+  const listEl = document.getElementById("vor-status-list");
+  if (!listEl) return;
+  let rows = vorStatusRecords;
+  if (vorStatusFilter === "uncalibrated") rows = rows.filter(r => !r.calibration_done);
+  else if (vorStatusFilter === "calibrated")  rows = rows.filter(r =>  r.calibration_done);
+
+  if (!rows.length) {
+    listEl.innerHTML = `<p style="color:var(--grey);font-size:13px;font-style:italic;">${vorStatusFilter === "uncalibrated" ? "All VOR/OKR mice are calibrated! ✓" : "No records found."}</p>`;
+    return;
+  }
+  listEl.innerHTML = rows.map(r => `
+    <div class="vor-status-row">
+      <span class="vor-calib-badge ${r.calibration_done ? "ok" : "no"}">${r.calibration_done ? "✓ Calibrated" : "⚠ No calib"}</span>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:700;color:var(--navy);">${escapeHtml(r.mouse_id || "—")}</div>
+        <div style="color:var(--grey);font-size:11.5px;">
+          ${escapeHtml(r.date)} · ${escapeHtml(r.task)} · ${escapeHtml(r.project_slug)}
+          ${r.author ? ` · ${escapeHtml(r.author)}` : ""}
+        </div>
+        ${r.good_signal ? `<div style="font-size:11.5px;color:var(--grey);">Signal: <strong>${escapeHtml(r.good_signal)}</strong>${r.calib_channel ? ` · Calib ch: <strong>${escapeHtml(r.calib_channel)}</strong>` : ""}</div>` : ""}
+        ${r.experiment_notes ? `<div style="font-size:11.5px;color:var(--grey);margin-top:1px;">${escapeHtml(r.experiment_notes)}</div>` : ""}
+      </div>
+    </div>`).join("");
+}
+
+document.getElementById("btn-vor-status").addEventListener("click", async () => {
+  document.getElementById("modal-vor-status").style.display = "flex";
+  await loadVORStatus();
+});
+
+document.getElementById("vor-status-refresh")?.addEventListener("click", loadVORStatus);
+
+document.getElementById("modal-vor-status").addEventListener("click", e => {
+  const btn = e.target.closest(".vor-filter-btn");
+  if (!btn) return;
+  vorStatusFilter = btn.dataset.filter;
+  document.querySelectorAll(".vor-filter-btn").forEach(b => b.classList.toggle("vor-filter-active", b === btn));
+  renderVORStatus();
 });
 
 boot();

@@ -65,6 +65,7 @@ _MOUSE_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_./\-]*$")
 # Append (pattern, canonical) rows as new aliases are agreed.
 _STRAIN_ALIASES = (
     (re.compile(r"^gcamp6f\s*[x×]\s*l7-?cre$", re.IGNORECASE), "L7-Ai95D"),
+    (re.compile(r"^ai32\s*\(chr2\)\s*[x×]\s*gabra6-?cre$", re.IGNORECASE), "GC-Ai32"),
 )
 
 
@@ -102,6 +103,11 @@ def _canon_strain(v: Any) -> str:
         if pat.match(collapsed):
             return canon
     return s
+
+
+def canon_strain(v: Any) -> str:
+    """Public wrapper for write paths that need the shared strain aliases."""
+    return _canon_strain(v)
 
 
 def _norm_sacrificed(v: Any) -> str:
@@ -492,8 +498,6 @@ def run_sync(con, raw_rows: Iterable[dict], *, source: str,
     con.execute(
         "INSERT OR REPLACE INTO animal_config (key,value) VALUES ('last_synced',?)", (ts,)
     )
-    con.commit()
-
     warnings = [{"mouse_id": v["mouse_id"], "warnings": v["_warnings"]}
                 for v in valid if v.get("_warnings")]
     report = {
@@ -517,4 +521,9 @@ def run_sync(con, raw_rows: Iterable[dict], *, source: str,
         "conflicts": conflict_ids,
         "warnings": warnings,
     }
+    con.execute("INSERT INTO animal_sync_runs(sync_id, ts, source, report) VALUES(?,?,?,?)",
+                (sync_id, ts, source, json.dumps(report)))
+    con.execute("DELETE FROM animal_sync_runs WHERE sync_id NOT IN "
+                "(SELECT sync_id FROM animal_sync_runs ORDER BY ts DESC LIMIT 60)")
+    con.commit()
     return report

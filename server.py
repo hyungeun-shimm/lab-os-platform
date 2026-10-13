@@ -188,11 +188,15 @@ def migrate_db() -> None:
               barcode         TEXT,
               synced_at       TEXT,
               archived_at     TEXT NOT NULL,
-              archive_reason  TEXT
+              archive_reason  TEXT,
+              assigned_to     TEXT
             )
         """)
 
         # ---- Safe-sync audit + snapshots (ROADMAP §B v1) ----
+        archive_cols = {r[1] for r in con.execute("PRAGMA table_info(animal_archive)")}
+        if "assigned_to" not in archive_cols:
+            con.execute("ALTER TABLE animal_archive ADD COLUMN assigned_to TEXT")
         # animal_audit: append-only per-change log (field-level for edits).
         # animal_snapshots: full pre-sync JSON of `animals` for point-in-time rollback.
         con.execute("""
@@ -222,6 +226,10 @@ def migrate_db() -> None:
             )
         """)
         con.execute("CREATE INDEX IF NOT EXISTS idx_animal_snapshots_ts ON animal_snapshots(ts)")
+        con.execute("""CREATE TABLE IF NOT EXISTS animal_sync_runs (
+            sync_id TEXT PRIMARY KEY, ts TEXT NOT NULL, source TEXT NOT NULL,
+            report TEXT NOT NULL
+        )""")
 
 def init_db() -> None:
     with db_conn() as con:
@@ -332,6 +340,13 @@ def init_db() -> None:
           synced_at       TEXT NOT NULL
         );
         CREATE INDEX IF NOT EXISTS idx_animals_mouse_id ON animals(mouse_id);
+
+        CREATE TABLE IF NOT EXISTS colony_cond_labels (
+          condition TEXT NOT NULL,
+          slot      TEXT NOT NULL,  -- 'c1' | 'c2' | 'c3'
+          label     TEXT NOT NULL,
+          PRIMARY KEY (condition, slot)
+        );
 
         CREATE TABLE IF NOT EXISTS animal_config (
           key   TEXT PRIMARY KEY,
@@ -480,6 +495,8 @@ from modules.core import sync as sync_helpers  # noqa: E402
 from modules.autoschedule import service as autosched_service  # noqa: E402
 from modules.eln.api import router as eln_router  # noqa: E402
 app.include_router(eln_router)
+from modules.eln.tracking import router as tracking_router
+app.include_router(tracking_router)
 
 @app.get("/api/version")
 def api_version() -> dict[str, str]:
@@ -539,10 +556,23 @@ def list_events() -> dict[str, Any]:
     return {"events": [row_to_event(r) for r in rows]}
 
 def upsert_event(payload: dict[str, Any], event_id: Optional[str] = None) -> dict[str, Any]:
+    if event_id:
+        with db_conn() as con:
+            previous = con.execute("SELECT * FROM events WHERE id=?", (event_id,)).fetchone()
+        if previous:
+            payload = {**row_to_event(previous), **payload}
     required = ["title", "category", "start", "end"]
     for k in required:
         if k not in payload or payload[k] in (None, ""):
             raise HTTPException(400, f"Missing field: {k}")
+    from modules.eln.tracking import local_time
+    try:
+        if local_time(payload["end"]) <= local_time(payload["start"]):
+            raise ValueError()
+    except (ValueError, TypeError):
+        raise HTTPException(400, "End time must be after start time; use valid ISO dates.")
+    if payload.get("status", "planned") not in {"planned", "in_progress", "done", "delayed", "skipped"}:
+        raise HTTPException(400, "Invalid event status.")
     eid = event_id or payload.get("id") or _uid()
     now = now_iso()
     with db_conn() as con:
@@ -641,6 +671,36 @@ def schedule_commit(payload: _AICommitIn, req: Request) -> dict[str, Any]:
             ev["owner_id"] = owner
         saved.append(upsert_event(ev))
     return {"ok": True, "count": len(saved), "events": saved}
+
+class _AIDeleteCommitIn(BaseModel):
+    event_ids: list[str]
+
+@app.post("/api/schedule/delete")
+def schedule_delete_commit(payload: _AIDeleteCommitIn) -> dict[str, Any]:
+    ids = []
+    seen = set()
+    for raw in payload.event_ids:
+        event_id = str(raw or "").strip()
+        if event_id and event_id not in seen:
+            ids.append(event_id)
+            seen.add(event_id)
+    if not ids:
+        return {"ok": True, "count": 0, "deleted": [], "not_found": []}
+
+    placeholders = ",".join("?" for _ in ids)
+    with db_conn() as con:
+        rows = con.execute(
+            f"SELECT id, title, start_at FROM events WHERE id IN ({placeholders})",
+            ids,
+        ).fetchall()
+        found = {r["id"] for r in rows}
+        con.execute(f"DELETE FROM events WHERE id IN ({placeholders})", ids)
+    return {
+        "ok": True,
+        "count": len(found),
+        "deleted": [{"id": r["id"], "title": r["title"], "start": r["start_at"]} for r in rows],
+        "not_found": [event_id for event_id in ids if event_id not in found],
+    }
 
 # ---------- Event resources (locations / rigs) — admin-curated list + free custom ----------
 @app.get("/api/schedule/resources")
@@ -1310,6 +1370,47 @@ def _parse_sheet_date(v: Any) -> Optional[str]:
     return s[:10]
 
 
+def _norm_sheet_header_name(v: Any) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", str(v or "").strip().lower()).strip()
+
+
+_ANIMAL_SHEET_READ_ALIASES = {
+    "mouse_id":        ("Mice ID", "Mouse ID", "Subject"),
+    "project":         ("Project",),
+    "condition":       ("Condition", "Current condition"),
+    "experiment":      ("Exp", "Experiment"),
+    "cohort":          ("Cohort",),
+    "strain":          ("Strain",),
+    "dob":             ("DOB",),
+    "sex":             ("Sex",),
+    "dos":             ("DOS",),
+    "date_cond1":      ("Date in cond-1", "Date of transfer 1", "Date of\ntransfer 1"),
+    "date_cond2":      ("Date in cond-2", "Date of transfer 2", "Date of\ntransfer 2"),
+    "date_cond3":      ("Date in cond-3", "Date of transfer 3", "Date of\ntransfer 3"),
+    "days_cond1":      ("Days in cond-1", "Age at transfer 1", "Age at\ntransfer 1"),
+    "days_cond2":      ("Days in cond-2", "Age at transfer 2", "Age at\ntransfer 2"),
+    "days_cond3":      ("Days in cond-3", "Age at transfer 3", "Age at\ntransfer 3"),
+    "sacrificed":      ("Sacrified (Y/N)", "Sacrificed (Y/N)", "Sacrificed"),
+    "sacrificed_date": ("Sacrified date", "Sacrificed date"),
+    "notes":           ("Note", "Notes"),
+    "barcode":         ("Barcode", "Cage ID", "Cage / barcode"),
+}
+
+
+def _sheet_header_index(headers: list[str], names: tuple[str, ...]) -> Optional[int]:
+    normalized = {_norm_sheet_header_name(h): i for i, h in enumerate(headers)}
+    for name in names:
+        idx = normalized.get(_norm_sheet_header_name(name))
+        if idx is not None:
+            return idx
+    return None
+
+
+def _sheet_cell(rowvals: list, headers: list[str], field: str) -> Any:
+    idx = _sheet_header_index(headers, _ANIMAL_SHEET_READ_ALIASES[field])
+    return rowvals[idx] if idx is not None and idx < len(rowvals) else None
+
+
 
 
 def _configured_animal_excel_path() -> str:
@@ -1365,14 +1466,65 @@ def list_animals(include_removed: bool = False) -> dict[str, Any]:
         ).fetchall()
     return {"animals": [dict(r) for r in rows]}
 
+@app.get("/api/animals/cond-labels")
+def get_cond_labels() -> dict:
+    with db_conn() as con:
+        rows = con.execute("SELECT condition, slot, label FROM colony_cond_labels").fetchall()
+    result: dict = {}
+    for r in rows:
+        result.setdefault(r["condition"], {})[r["slot"]] = r["label"]
+    return {"labels": result}
+
+@app.put("/api/animals/cond-labels")
+async def upsert_cond_label(req: Request,
+                            _user: dict = Depends(auth_helpers.require_colony_editor)) -> dict:
+    body = await req.json()
+    condition = (body.get("condition") or "").strip()
+    slot = (body.get("slot") or "").strip()
+    label = (body.get("label") or "").strip()
+    if not condition or slot not in ("c1", "c2", "c3"):
+        raise HTTPException(400, "condition and slot (c1/c2/c3) required")
+    with db_conn() as con:
+        if label:
+            con.execute(
+                "INSERT OR REPLACE INTO colony_cond_labels(condition,slot,label) VALUES(?,?,?)",
+                (condition, slot, label)
+            )
+        else:
+            con.execute(
+                "DELETE FROM colony_cond_labels WHERE condition=? AND slot=?",
+                (condition, slot)
+            )
+        con.commit()
+    return {"ok": True}
+
 @app.get("/api/animals/sync-status")
 def animal_sync_status() -> dict[str, Any]:
     with db_conn() as con:
         cfg = {r["key"]: r["value"] for r in con.execute("SELECT key,value FROM animal_config").fetchall()}
         count = animals_dal.count(con)
+        latest = con.execute("SELECT report FROM animal_sync_runs ORDER BY ts DESC LIMIT 1").fetchone()
+    sheet_id = cfg.get("sheet_id", "")
     return {"excel_path": cfg.get("excel_path", ""),
-            "sheet_id": cfg.get("sheet_id", ""), "sheet_name": cfg.get("sheet_name", ""),
-            "last_synced": cfg.get("last_synced", ""), "count": count}
+            "sheet_id": sheet_id, "sheet_name": cfg.get("sheet_name", ""),
+            "sheet_url": f"https://docs.google.com/spreadsheets/d/{sheet_id}/edit" if sheet_id else "",
+            "last_synced": cfg.get("last_synced", ""), "count": count,
+            "can_sync": str(cfg.get("sheet_import_enabled", "1")).lower() not in {"0", "false", "no", "off"},
+            "last_report": json.loads(latest["report"]) if latest else None}
+
+@app.get("/api/animals/sync-history")
+def animal_sync_history(limit: int = 20) -> dict[str, Any]:
+    with db_conn() as con:
+        rows = con.execute("SELECT report FROM animal_sync_runs ORDER BY ts DESC LIMIT ?",
+                           (max(1, min(50, limit)),)).fetchall()
+        reports = []
+        for row in rows:
+            report = json.loads(row["report"])
+            report["changes"] = [dict(r) for r in con.execute(
+                "SELECT mouse_id, change_type, field, old_value, new_value FROM animal_audit "
+                "WHERE sync_id=? ORDER BY id LIMIT 200", (report["sync_id"],)).fetchall()]
+            reports.append(report)
+    return {"reports": reports}
 
 @app.post("/api/animals/config")
 async def set_animal_config(req: Request,
@@ -1386,10 +1538,10 @@ async def set_animal_config(req: Request,
     with db_conn() as con:
         if sheet_id:
             con.execute("INSERT OR REPLACE INTO animal_config (key,value) VALUES ('sheet_id',?)", (sheet_id,))
-            con.execute("INSERT OR REPLACE INTO animal_config (key,value) VALUES ('sheet_name',?)", (sheet_name or "Sheet1",))
+            con.execute("INSERT OR REPLACE INTO animal_config (key,value) VALUES ('sheet_name',?)", (sheet_name or _DEFAULT_ANIMAL_SHEET_TAB,))
         if path:
             con.execute("INSERT OR REPLACE INTO animal_config (key,value) VALUES ('excel_path',?)", (path,))
-    return {"ok": True, "sheet_id": sheet_id, "sheet_name": sheet_name or "Sheet1", "excel_path": path}
+    return {"ok": True, "sheet_id": sheet_id, "sheet_name": sheet_name or _DEFAULT_ANIMAL_SHEET_TAB, "excel_path": path}
 
 @app.post("/api/animals/sync")
 async def sync_animals(req: Request,
@@ -1398,6 +1550,14 @@ async def sync_animals(req: Request,
     except: payload = {}
     with db_conn() as con:
         cfg = {r["key"]: r["value"] for r in con.execute("SELECT key,value FROM animal_config").fetchall()}
+    # Sheet-as-master: Google Sheet import is enabled by default. Set
+    # animal_config 'sheet_import_enabled'='0' only for emergency freeze/manual DB
+    # work. The safe-sync path is validating, audited, and soft-removes vanished
+    # animals instead of hard-deleting them.
+    if str(cfg.get("sheet_import_enabled", "1")).lower() in {"0", "false", "no", "off"}:
+        raise HTTPException(409,
+            "Sheet import is disabled for this animal DB. Set animal_config "
+            "'sheet_import_enabled'='1' to re-enable Google Sheet sync.")
     path = (payload.get("excel_path") or cfg.get("excel_path") or "").strip()
     if not path:
         raise HTTPException(400, "No sheet_id or excel_path configured — call POST /api/animals/config first")
@@ -1440,6 +1600,8 @@ def _write_animals_to_db(animals: list[dict]) -> dict:
                 continue
             fields = {k: v for k, v in a.items()
                       if k in _ANIMAL_EDITABLE and v not in (None, "")}
+            if fields.get("strain"):
+                fields["strain"] = animal_sync.canon_strain(fields["strain"])
             try:
                 if animals_dal.exists(con, mid, case_insensitive=False):
                     animals_dal.update(con, mid, **fields)
@@ -1661,6 +1823,28 @@ def animals_excel_diff() -> dict[str, Any]:
 def animals_excel_push(_user: dict = Depends(auth_helpers.require_colony_editor)) -> dict[str, Any]:
     return _apply_excel_push()
 
+def _save_animals_source(rows: list[dict]) -> bool:
+    with db_conn() as con:
+        cfg = {r["key"]: r["value"] for r in con.execute("SELECT key,value FROM animal_config")}
+    if not cfg.get("sheet_id") or str(cfg.get("sheet_import_enabled", "1")).lower() in {"0", "false", "no", "off"}:
+        return False
+    writer = globals().get("_write_animals_to_sheet")
+    if not writer:
+        raise HTTPException(503, "This installation cannot write to the configured Sheet.")
+    result = writer(rows)
+    if result.get("errors") or len(result.get("written", [])) != len(rows):
+        raise HTTPException(502, "Source Sheet save was incomplete. Synchronize animals to reconcile before retrying.")
+    return True
+
+def _save_animal_source(mouse_id: str, fields: dict) -> bool:
+    return _save_animals_source([{"mouse_id": mouse_id, **fields}])
+
+def require_animal_removal_source() -> None:
+    with db_conn() as con:
+        cfg = {r["key"]:r["value"] for r in con.execute("SELECT key,value FROM animal_config")}
+    if cfg.get("sheet_id") and str(cfg.get("sheet_import_enabled", "1")).lower() not in {"0", "false", "no", "off"}:
+        raise HTTPException(409, "Archive or remove this animal in the source Sheet, then synchronize animals. A cache-only change would be undone by the next sync.")
+
 @app.post("/api/animals")
 async def create_animal(req: Request,
                         _user: dict = Depends(auth_helpers.require_colony_editor)) -> dict[str, Any]:
@@ -1672,12 +1856,14 @@ async def create_animal(req: Request,
     with db_conn() as con:
         if animals_dal.exists(con, mouse_id, case_insensitive=False):
             raise HTTPException(409, f"Mouse '{mouse_id}' already exists")
+        sheet_written = _save_animal_source(mouse_id, fields)
         animals_dal.insert(con, mouse_id, **fields)
         row = con.execute("SELECT * FROM animal_with_state WHERE mouse_id=?", (mouse_id,)).fetchone()
-    try:
-        _write_animal_to_excel(mouse_id, {"mouse_id": mouse_id, **fields})
-    except Exception as e:
-        print(f"Animal Excel write skipped for {mouse_id}: {e}")
+    if not sheet_written:
+        try:
+            _write_animal_to_excel(mouse_id, {"mouse_id": mouse_id, **fields})
+        except Exception as e:
+            print(f"Animal Excel write skipped for {mouse_id}: {e}")
     return dict(row)
 
 @app.put("/api/animals/{mouse_id}")
@@ -1690,12 +1876,14 @@ async def update_animal(mouse_id: str, req: Request,
     with db_conn() as con:
         if not animals_dal.exists(con, mouse_id, case_insensitive=False):
             raise HTTPException(404, f"Mouse '{mouse_id}' not found")
+        sheet_written = _save_animal_source(mouse_id, fields)
         animals_dal.update(con, mouse_id, **fields)
         row = con.execute("SELECT * FROM animal_with_state WHERE mouse_id=?", (mouse_id,)).fetchone()
-    try:
-        _write_animal_to_excel(mouse_id, fields)
-    except Exception as e:
-        print(f"Animal Excel write skipped for {mouse_id}: {e}")
+    if not sheet_written:
+        try:
+            _write_animal_to_excel(mouse_id, fields)
+        except Exception as e:
+            print(f"Animal Excel write skipped for {mouse_id}: {e}")
     return dict(row)
 
 @app.patch("/api/animals/bulk")
@@ -1718,28 +1906,31 @@ async def bulk_update_animals(req: Request,
 
     updated: list[str] = []
     with db_conn() as con:
+        targets = [mid for mid in mouse_ids if animals_dal.exists(con, mid, case_insensitive=False)]
+        sheet_written = _save_animals_source([{"mouse_id": mid, **fields} for mid in targets]) if targets else False
         for mid in mouse_ids:
             if animals_dal.update(con, mid, **fields):
                 updated.append(mid)
 
-    excel_updated = 0
-    for mid in updated:
-        try:
-            if _write_animal_to_excel(mid, fields):
-                excel_updated += 1
-        except Exception as e:
-            print(f"Animal Excel write skipped for {mid}: {e}")
+    sheet_updated = len(updated) if sheet_written else 0
+    if not sheet_updated:
+        for mid in updated:
+            try:
+                _write_animal_to_excel(mid, fields)
+            except Exception as e:
+                print(f"Animal Excel write skipped for {mid}: {e}")
 
     return {
         "ok": True,
         "requested": len(mouse_ids),
         "updated": len(updated),
-        "excel_updated": excel_updated,
+        "sheet_updated": sheet_updated,
     }
 
 @app.delete("/api/animals/{mouse_id}")
 def delete_animal(mouse_id: str,
                   _user: dict = Depends(auth_helpers.require_colony_editor)) -> dict[str, Any]:
+    require_animal_removal_source()
     with db_conn() as con:
         if not animals_dal.delete(con, mouse_id):
             raise HTTPException(404, f"Mouse '{mouse_id}' not found")
@@ -1797,6 +1988,7 @@ async def assign_animals(req: Request,
 async def archive_animal(mouse_id: str, req: Request,
                          _user: dict = Depends(auth_helpers.require_colony_editor)) -> dict[str, Any]:
     """Move animal from active table to archive. Called when sacrificed or sent to ePhys."""
+    require_animal_removal_source()
     payload = await req.json()
     reason = (payload.get("reason") or "sacrificed").strip()
     now = now_iso()
@@ -1810,17 +2002,60 @@ async def archive_animal(mouse_id: str, req: Request,
               (mouse_id, project, condition, experiment, cohort, strain,
                dob, sex, dos, date_cond1, date_cond2, date_cond3,
                sacrificed, sacrificed_date, notes, barcode, synced_at, assigned_to,
-               archived_at, archive_reason)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+              archived_at, archive_reason)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
         """, (
             a["mouse_id"], a.get("project"), a.get("condition"), a.get("experiment"),
             a.get("cohort"), a.get("strain"), a.get("dob"), a.get("sex"), a.get("dos"),
             a.get("date_cond1"), a.get("date_cond2"), a.get("date_cond3"),
             a.get("sacrificed"), a.get("sacrificed_date"),
-            a.get("notes"), a.get("barcode"), a.get("synced_at"), now, reason,
+            a.get("notes"), a.get("barcode"), a.get("synced_at"), a.get("assigned_to"), now, reason,
         ))
         animals_dal.delete(con, mouse_id)
     return {"ok": True, "mouse_id": mouse_id, "archived_at": now, "reason": reason}
+
+@app.post("/api/animals/archive-batch")
+async def archive_animals_batch(req: Request,
+                                _user: dict = Depends(auth_helpers.require_colony_editor)) -> dict[str, Any]:
+    """Move several animals into the archive at once (e.g. all mice on a finalized
+    slice-recording note). Marks them sacrificed with the given date. Mice not in
+    the active table (already archived / unknown) are skipped, not errored."""
+    require_animal_removal_source()
+    payload = await req.json()
+    mice = payload.get("mouse_ids") or []
+    reason = (payload.get("reason") or "sacrificed").strip()
+    sdate = (payload.get("sacrificed_date") or "").strip() or None
+    now = now_iso()
+    archived: list[str] = []
+    skipped: list[str] = []
+    with db_conn() as con:
+        for raw in mice:
+            mid = (raw or "").strip()
+            if not mid:
+                continue
+            row = animals_dal.get(con, mid, case_insensitive=True)
+            if not row:
+                skipped.append(mid)
+                continue
+            a = dict(row)
+            con.execute("""
+                INSERT INTO animal_archive
+                  (mouse_id, project, condition, experiment, cohort, strain,
+                   dob, sex, dos, date_cond1, date_cond2, date_cond3,
+                   sacrificed, sacrificed_date, notes, barcode, synced_at,
+                   archived_at, archive_reason)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                a["mouse_id"], a.get("project"), a.get("condition"), a.get("experiment"),
+                a.get("cohort"), a.get("strain"), a.get("dob"), a.get("sex"), a.get("dos"),
+                a.get("date_cond1"), a.get("date_cond2"), a.get("date_cond3"),
+                "Y", (sdate or a.get("sacrificed_date")),
+                a.get("notes"), a.get("barcode"), a.get("synced_at"),
+                now, reason,
+            ))
+            animals_dal.delete(con, a["mouse_id"])
+            archived.append(a["mouse_id"])
+    return {"ok": True, "archived": archived, "skipped": skipped, "archived_at": now}
 
 @app.get("/api/animals/archive")
 def list_archive(cohort: str = "") -> dict[str, Any]:
@@ -1869,6 +2104,11 @@ def serve_labos_nav() -> FileResponse:
         media_type="application/javascript",
         headers={"Cache-Control": "no-store"},
     )
+
+@app.get("/labos-ui.js")
+def serve_labos_ui() -> FileResponse:
+    return FileResponse(ROOT / "modules" / "core" / "labos_ui.js", media_type="application/javascript",
+                        headers={"Cache-Control": "no-store"})
 
 @app.get("/scheduler.html")
 def serve_scheduler() -> FileResponse:
@@ -1986,6 +2226,16 @@ def eln_sync_page() -> FileResponse:
     return FileResponse(ROOT / "modules" / "eln" / "sync.html",
                         headers={"Cache-Control": "no-store"})
 
+@app.get("/eln/log")
+def eln_log_page() -> FileResponse:
+    return FileResponse(ROOT / "modules" / "eln" / "log.html",
+                        headers={"Cache-Control": "no-store"})
+
+@app.get("/eln/analysis")
+def eln_analysis_page() -> FileResponse:
+    return FileResponse(ROOT / "modules" / "eln" / "analysis.html",
+                        headers={"Cache-Control": "no-store"})
+
 @app.get("/eln/breeders")
 def eln_breeders_page() -> FileResponse:
     return FileResponse(ROOT / "modules" / "eln" / "breeders.html",
@@ -2006,7 +2256,8 @@ def serve_colony_legacy() -> RedirectResponse:
 
 @app.get("/")
 def index() -> FileResponse:
-    return FileResponse(ROOT / "scheduler.html", headers={"Cache-Control": "no-store"})
+    return FileResponse(ROOT / "modules" / "scheduler" / "scheduler.html",
+                        headers={"Cache-Control": "no-store"})
 
 # ---------- Helpers ----------
 import re
@@ -2033,8 +2284,15 @@ def main() -> None:
             _cfg = {r["key"]: r["value"] for r in _con.execute("SELECT key,value FROM animal_config").fetchall()}
         _sheet_id = _cfg.get("sheet_id", "")
         _xl_path = _cfg.get("excel_path", "")
+        # Sheet-as-master: startup sync is ON by default so Google Sheet edits
+        # become the DB cache after a restart/deploy. Set animal_config
+        # 'auto_sync_on_startup'='0' only for emergency freeze/manual DB work.
+        _autosync = str(_cfg.get("auto_sync_on_startup", "1")).lower() not in {"0", "false", "no", "off"}
         _synced = False
-        if not _synced and _xl_path and Path(_xl_path).exists():
+        if not _autosync:
+            print("Animal auto-sync on startup: DISABLED (DB-as-master). "
+                  "Import from the Sheet manually via POST /api/animals/sync.")
+        if _autosync and not _synced and _xl_path and Path(_xl_path).exists():
             _rep = _sync_excel(_xl_path)
             _c = _rep["counts"]
             print(f"Auto-sync ({Path(_xl_path).name}): +{_c['added']} ~{_c['modified']} "
@@ -2067,6 +2325,14 @@ def main() -> None:
             print("Daily digest disabled (SMTP not configured)")
     except Exception as _e:
         print(f"Digest scheduler not started: {_e}")
+
+    # Ephys analysis background worker — disabled; re-enable when ready
+    # try:
+    #     from modules.eln import analysis_worker as _aw
+    #     _aw.start_worker()
+    #     print("Ephys analysis worker started.")
+    # except Exception as _e:
+    #     print(f"Analysis worker not started: {_e}")
 
     print(f"Lab Scheduler running at http://{args.host}:{args.port}/scheduler.html")
     uvicorn.run(app, host=args.host, port=args.port, log_level="info")

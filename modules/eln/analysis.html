@@ -1,0 +1,637 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Analysis — Lab OS</title>
+<style>
+  :root {
+    --navy:#1E2761; --navy-deep:#131A40;
+    --ice:#CADCFC; --ice-deep:#8FB3E6;
+    --accent:#F2B33D;
+    --grey:#5A6378; --grey-light:#ECEEF3; --grey-lighter:#F6F7FB;
+    --white:#FFFFFF;
+    --green:#16a34a; --red:#dc2626; --purple:#4338ca; --orange:#ea580c;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{font-family:-apple-system,"Helvetica Neue",sans-serif;background:var(--grey-lighter);color:#1c2333;min-height:100vh;}
+
+  /* Header */
+  header.app-top{background:var(--navy);color:var(--white);padding:12px 20px;display:flex;align-items:center;gap:16px;box-shadow:0 2px 6px rgba(0,0,0,.10);}
+  header.app-top .brand{font-family:Georgia,serif;font-size:18px;font-weight:700;}
+  header.app-top .brand-sub{color:var(--accent);font-size:11px;letter-spacing:.2em;text-transform:uppercase;margin-left:4px;}
+  header.app-top .spacer{flex:1;}
+  header.app-top .me{display:flex;align-items:center;gap:10px;font-size:14px;}
+  header.app-top .avatar{width:32px;height:32px;border-radius:50%;background:var(--accent);color:var(--navy-deep);display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;}
+  header.app-top .mode-pill{background:var(--accent);color:var(--navy-deep);padding:3px 10px;border-radius:999px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;}
+  header.app-top .mode-pill.member{background:var(--ice-deep);color:var(--navy-deep);}
+  header.app-top button.signout,header.app-top button.switch-mode{background:transparent;border:1px solid rgba(255,255,255,.30);color:var(--white);border-radius:8px;padding:6px 12px;font:inherit;font-size:12px;cursor:pointer;}
+  header.app-top button.signout:hover,header.app-top button.switch-mode:hover{background:rgba(255,255,255,.10);}
+  header.app-top .breadcrumb{color:var(--ice);font-size:14px;display:flex;align-items:center;gap:6px;}
+  header.app-top .breadcrumb a{color:var(--ice);text-decoration:none;opacity:.7;}
+  header.app-top .breadcrumb a:hover{opacity:1;}
+
+  /* Layout */
+  .page{max-width:1300px;margin:0 auto;padding:20px 24px;}
+
+  /* Analysis type tabs */
+  .type-tabs{display:flex;gap:4px;margin-bottom:18px;border-bottom:2px solid var(--grey-light);padding-bottom:0;}
+  .type-tab{background:none;border:none;border-bottom:3px solid transparent;color:var(--grey);padding:10px 20px;font:inherit;font-size:14px;font-weight:600;cursor:pointer;margin-bottom:-2px;}
+  .type-tab.active{color:var(--navy);border-bottom-color:var(--navy);}
+  .type-tab:hover:not(.active){color:#1c2333;}
+
+  /* Filter bar */
+  .filter-bar{background:var(--white);border-radius:12px;padding:13px 16px;display:flex;flex-wrap:wrap;gap:10px;align-items:flex-end;box-shadow:0 1px 4px rgba(0,0,0,.07);margin-bottom:14px;}
+  .filter-group{display:flex;flex-direction:column;gap:4px;}
+  .filter-group label{font-size:11px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;}
+  .filter-group select,.filter-group input{border:1px solid var(--grey-light);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px;background:var(--white);min-width:130px;}
+  .btn-filter{background:var(--navy);color:var(--white);border:none;border-radius:8px;padding:7px 16px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;align-self:flex-end;}
+  .btn-filter:hover{background:var(--navy-deep);}
+
+  /* Table */
+  .table-wrap{background:var(--white);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);overflow:hidden;}
+  table.at{width:100%;border-collapse:collapse;font-size:13px;}
+  table.at th{background:var(--grey-lighter);color:var(--grey);font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em;padding:9px 12px;text-align:left;border-bottom:1px solid var(--grey-light);white-space:nowrap;}
+  table.at td{padding:9px 12px;border-bottom:1px solid var(--grey-light);vertical-align:middle;}
+  table.at tr:last-child td{border-bottom:none;}
+  table.at tr:hover td{background:var(--grey-lighter);}
+  .chip{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:700;}
+  .chip-done{background:rgba(22,163,74,.12);color:var(--green);}
+  .chip-running{background:rgba(242,179,61,.18);color:#8a5b00;}
+  .chip-failed{background:rgba(220,38,38,.10);color:var(--red);}
+  .chip-pending{background:rgba(99,102,241,.10);color:var(--purple);}
+  .info-pill{display:inline-block;padding:2px 7px;border-radius:6px;font-size:11px;background:var(--grey-lighter);color:#1c2333;}
+  .info-pill.cond{background:rgba(30,39,97,.08);color:var(--navy);}
+  .info-pill.days{background:rgba(242,179,61,.18);color:#8a5b00;}
+  .btn-analyze{background:var(--purple);color:#fff;border:none;border-radius:7px;padding:5px 12px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;}
+  .btn-analyze:hover{background:#3730a3;}
+  .btn-retry{background:var(--red);color:#fff;border:none;border-radius:7px;padding:5px 12px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;}
+  .btn-retry:hover{opacity:.85;}
+  .dl-link{color:var(--purple);font-weight:700;font-size:12px;text-decoration:none;}
+  .dl-link:hover{text-decoration:underline;}
+  .results-summary{font-size:12px;color:var(--grey);}
+  .results-summary b.q{color:var(--green);}
+  .results-summary b.x{color:var(--red);}
+  .empty-state{text-align:center;color:var(--grey);padding:48px 20px;font-size:14px;}
+  .loading{text-align:center;padding:60px;color:var(--grey);font-size:15px;}
+
+  /* VOR/OKR panel */
+  .matlab-panel{background:var(--white);border-radius:12px;box-shadow:0 1px 4px rgba(0,0,0,.07);padding:24px 28px;max-width:600px;}
+  .matlab-panel h3{margin:0 0 6px;font-size:16px;color:var(--navy);}
+  .matlab-panel p{margin:0 0 16px;font-size:13px;color:var(--grey);}
+  .matlab-link-row{display:flex;align-items:center;gap:12px;padding:10px 14px;border:1px solid var(--grey-light);border-radius:9px;margin-bottom:8px;background:var(--grey-lighter);}
+  .matlab-link-row .icon{font-size:20px;}
+  .matlab-link-row .info{flex:1;}
+  .matlab-link-row .info .name{font-weight:700;font-size:13px;}
+  .matlab-link-row .info .desc{font-size:11.5px;color:var(--grey);margin-top:1px;}
+  .matlab-link-row a.open-btn{background:var(--navy);color:#fff;border:none;border-radius:7px;padding:5px 13px;font:inherit;font-size:12px;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap;}
+  .matlab-link-row a.open-btn:hover{background:var(--navy-deep);}
+  .matlab-add-row{display:flex;gap:8px;margin-top:12px;}
+  .matlab-add-row input{flex:1;border:1px solid var(--grey-light);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px;}
+  .matlab-add-row input.name-in{max-width:150px;}
+  .matlab-add-row button{background:var(--grey-light);border:none;border-radius:8px;padding:7px 14px;font:inherit;font-size:13px;cursor:pointer;font-weight:600;}
+  .matlab-add-row button:hover{background:var(--grey);}
+
+  /* Upload modal */
+  .modal-overlay{position:fixed;inset:0;background:rgba(15,23,42,.45);display:none;align-items:center;justify-content:center;z-index:1000;}
+  .modal{background:var(--white);border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,.18);width:100%;max-width:500px;max-height:90vh;overflow-y:auto;display:flex;flex-direction:column;}
+  .modal-head{padding:18px 20px 14px;border-bottom:1px solid var(--grey-light);display:flex;align-items:center;gap:10px;}
+  .modal-head h3{margin:0;font-size:16px;flex:1;}
+  .modal-close{background:none;border:none;font-size:20px;cursor:pointer;color:var(--grey);line-height:1;}
+  .modal-body{padding:18px 20px;display:flex;flex-direction:column;gap:13px;}
+  .modal-foot{padding:14px 20px;border-top:1px solid var(--grey-light);display:flex;justify-content:flex-end;gap:10px;}
+  .modal-foot .cancel{background:transparent;border:1px solid var(--grey-light);border-radius:8px;padding:7px 16px;font:inherit;font-size:13px;cursor:pointer;}
+  .modal-foot .save{background:var(--purple);color:#fff;border:none;border-radius:8px;padding:7px 18px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;}
+  .modal-foot .save:hover{background:#3730a3;}
+  .modal-foot .save:disabled{opacity:.5;cursor:not-allowed;}
+  .field-label{font-size:11px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px;}
+  .field-input{width:100%;border:1px solid var(--grey-light);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px;}
+  .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;}
+  .prog-bar-wrap{background:var(--grey-light);border-radius:999px;height:8px;overflow:hidden;}
+  .prog-bar{background:var(--purple);height:100%;width:0%;transition:width .3s;border-radius:999px;}
+  .az-status-box{border-radius:8px;padding:10px 13px;font-size:13px;}
+  .az-status-box.info{background:rgba(30,39,97,.06);color:#1c2333;}
+  .az-status-box.ok{background:rgba(22,163,74,.10);color:#15803d;}
+  .az-status-box.err{background:rgba(220,38,38,.10);color:var(--red);}
+</style>
+</head>
+<body>
+
+<header class="app-top">
+  <div><span class="brand">Lab OS</span><span class="brand-sub">ELN</span></div>
+  <div class="breadcrumb"><a href="/eln/">Home</a> › <strong>Analysis</strong></div>
+  <div class="spacer"></div>
+  <a href="/eln/log" style="color:var(--ice);font-size:13px;font-weight:600;text-decoration:none;border:1px solid rgba(255,255,255,.25);border-radius:8px;padding:5px 12px;white-space:nowrap;">📋 Log</a>
+  <div class="me" id="me-area"></div>
+</header>
+
+<div class="page">
+
+  <!-- Analysis type tabs -->
+  <div class="type-tabs">
+    <button class="type-tab active" data-type="ltd">Slice ePhys — LTD</button>
+    <button class="type-tab" data-type="excitability">Slice ePhys — Excitability</button>
+    <button class="type-tab" data-type="vor_okr">Behavior — VOR / OKR</button>
+  </div>
+
+  <div id="tab-content">
+    <div class="loading">Loading…</div>
+  </div>
+
+</div>
+
+<!-- Upload & Analyze modal -->
+<div class="modal-overlay" id="modal-analyze">
+  <div class="modal">
+    <div class="modal-head">
+      <h3>⚗️ Analyze</h3>
+      <button class="modal-close" id="az-close">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="az-status-box info" style="font-size:12px;">
+        Select <strong>.abf files</strong> for this session. They upload to the server, are analyzed, then deleted.
+      </div>
+      <div>
+        <label class="field-label">ABF Files</label>
+        <input type="file" id="az-files" accept=".abf" multiple style="font:inherit;font-size:13px;" />
+        <div id="az-file-count" style="font-size:12px;color:var(--grey);margin-top:3px;"></div>
+      </div>
+      <div class="field-grid">
+        <div>
+          <label class="field-label">Exp Condition</label>
+          <input id="az-exp-cond" class="field-input" type="text" placeholder="e.g. MTDT" />
+        </div>
+        <div>
+          <label class="field-label">Test Pulse</label>
+          <select id="az-protocol-mode" class="field-input">
+            <option value="">Auto-detect</option>
+            <option value="Test Pulse First">First (before EPSC)</option>
+            <option value="Test Pulse Later">Later (after EPSC)</option>
+          </select>
+        </div>
+      </div>
+      <div class="field-grid">
+        <div>
+          <label class="field-label">EPSC Min (pA)</label>
+          <input id="az-epsc-min" class="field-input" type="number" value="20" />
+        </div>
+        <div>
+          <label class="field-label">EPSC Max (pA)</label>
+          <input id="az-epsc-max" class="field-input" type="number" value="1000" />
+        </div>
+      </div>
+      <div>
+        <label class="field-label">Report Email</label>
+        <input id="az-email" class="field-input" type="email" placeholder="you@example.com" />
+      </div>
+      <div>
+        <label class="field-label">Secondary Output Path <span style="font-weight:400;text-transform:none;">(optional)</span></label>
+        <input id="az-extra-out" class="field-input" type="text" placeholder="/Volumes/… or leave blank" />
+      </div>
+      <div id="az-prog-wrap" style="display:none;">
+        <div style="font-size:12px;color:var(--grey);margin-bottom:5px;" id="az-prog-label">Uploading…</div>
+        <div class="prog-bar-wrap"><div class="prog-bar" id="az-prog-bar"></div></div>
+      </div>
+      <div id="az-status" style="display:none;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" id="az-cancel">Cancel</button>
+      <button class="save" id="az-submit">Upload & Analyze</button>
+    </div>
+  </div>
+</div>
+
+<script>
+"use strict";
+
+const $ = id => document.getElementById(id);
+const escHtml = s => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+const fmtDate = iso => { if (!iso) return "—"; const [y,m,d] = iso.split("-"); return `${m}/${d}/${y}`; };
+
+let currentUser = null;
+let currentType = "ltd";
+let pollingTimers = {};   // job_id → intervalId
+let _activeJob   = null;  // job context for open modal
+
+async function api(method, path, body) {
+  const opts = { method, headers: {} };
+  if (body !== undefined) { opts.headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(body); }
+  const r = await fetch(path, opts);
+  if (r.status === 401) { location.href = "/eln/login"; throw new Error("401"); }
+  if (!r.ok) { const t = await r.text(); throw new Error(t || r.status); }
+  return r.json();
+}
+
+// ── Auth ──────────────────────────────────────────────────────────────────
+async function boot() {
+  try { currentUser = await api("GET", "/api/eln/auth/me"); }
+  catch { return; }
+  renderHeader();
+  await loadTab(currentType);
+}
+
+function renderHeader() {
+  const u = currentUser;
+  const ini = u.initials || (u.display_name || u.username || "?")[0].toUpperCase();
+  const pill = u.effective_role === "admin"
+    ? `<span class="mode-pill">Admin</span>`
+    : `<span class="mode-pill member">Member</span>`;
+  $("me-area").innerHTML = `
+    <div class="avatar" style="background:${escHtml(u.color||"#F2B33D")}">${escHtml(ini)}</div>
+    <span>${escHtml(u.display_name || u.username)}</span>${pill}
+    ${u.role==="admin"?`<button class="switch-mode" onclick="switchMode()">Switch mode</button>`:""}
+    <button class="signout" onclick="signOut()">Sign out</button>`;
+}
+async function signOut()   { await api("POST","/api/eln/auth/logout"); location.href="/eln/login"; }
+async function switchMode(){ const m=currentUser.effective_role==="admin"?"member":"admin"; await api("POST","/api/eln/auth/set-mode",{mode:m}); currentUser=await api("GET","/api/eln/auth/me"); renderHeader(); await loadTab(currentType); }
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+document.querySelectorAll(".type-tab").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".type-tab").forEach(b => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentType = btn.dataset.type;
+    loadTab(currentType);
+  });
+});
+
+async function loadTab(type) {
+  $("tab-content").innerHTML = `<div class="loading">Loading…</div>`;
+  if (type === "vor_okr")      { renderVORTab(); return; }
+  if (type === "excitability") { renderExcitabilityTab(); return; }
+  await renderLTDTab();
+}
+
+// ── LTD tab ───────────────────────────────────────────────────────────────
+async function renderLTDTab() {
+  // Fetch finalized slice notes + analysis jobs in parallel
+  let notes = [], jobs = [];
+  try {
+    const [logData, jobsData] = await Promise.all([
+      api("GET", "/api/eln/log?experiment_type=slice"),
+      api("GET", "/api/eln/analysis/jobs").catch(() => ({ jobs: [] })),
+    ]);
+    // Deduplicate log records by note_id (one row per note, not per cell)
+    const seen = new Set();
+    for (const r of (logData.records || [])) {
+      if (!seen.has(r.note_id)) { seen.add(r.note_id); notes.push(r); }
+    }
+    jobs = jobsData.jobs || [];
+  } catch (e) {
+    $("tab-content").innerHTML = `<div class="empty-state">Error: ${escHtml(e.message)}</div>`;
+    return;
+  }
+
+  // Index jobs by note_id
+  const jobByNote = {};
+  for (const j of jobs) {
+    const nid = j.note_id || j.params?.note_id;
+    if (nid) jobByNote[nid] = j;
+  }
+
+  // Filter controls
+  const projects = [...new Set(notes.map(n => n.project_slug).filter(Boolean))].sort();
+  const filterHTML = `
+    <div class="filter-bar">
+      <div class="filter-group">
+        <label>Project</label>
+        <select id="f-proj"><option value="">All</option>${projects.map(p=>`<option>${escHtml(p)}</option>`).join("")}</select>
+      </div>
+      <div class="filter-group">
+        <label>Status</label>
+        <select id="f-status">
+          <option value="">All</option>
+          <option value="pending">Not analyzed</option>
+          <option value="done">Done</option>
+          <option value="failed">Failed</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>From</label><input type="date" id="f-from" />
+      </div>
+      <div class="filter-group">
+        <label>To</label><input type="date" id="f-to" />
+      </div>
+      <button class="btn-filter" onclick="applyLTDFilter()">Apply</button>
+    </div>`;
+
+  $("tab-content").innerHTML = filterHTML + `<div id="ltd-table-wrap"></div>`;
+  renderLTDTable(notes, jobByNote);
+
+  $("f-proj")?.addEventListener("change",   () => applyLTDFilter(notes, jobByNote));
+  $("f-status")?.addEventListener("change", () => applyLTDFilter(notes, jobByNote));
+
+  // Start polling for running jobs
+  for (const j of jobs) {
+    if (j.status === "running" || j.status === "pending") startPolling(j.job_id);
+  }
+}
+
+function applyLTDFilter(notes, jobByNote) {
+  if (!notes || !jobByNote) { renderLTDTab(); return; }
+  const proj   = $("f-proj")?.value   || "";
+  const status = $("f-status")?.value || "";
+  const from   = $("f-from")?.value   || "";
+  const to     = $("f-to")?.value     || "";
+  const filtered = notes.filter(n => {
+    if (proj   && n.project_slug !== proj) return false;
+    if (from   && n.date < from)           return false;
+    if (to     && n.date > to)             return false;
+    if (status) {
+      const job = (window._jobByNote||{})[n.note_id];
+      const js  = job?.status || "none";
+      if (status === "pending" && !["none","failed",undefined].includes(js) && js!=="none") return false;
+      if (status === "done"    && js !== "done")    return false;
+      if (status === "failed"  && js !== "failed")  return false;
+    }
+    return true;
+  });
+  renderLTDTable(filtered, jobByNote);
+}
+
+function renderLTDTable(notes, jobByNote) {
+  window._jobByNote = jobByNote;
+  if (!notes.length) {
+    $("ltd-table-wrap").innerHTML = `<div class="table-wrap"><div class="empty-state">No finalized Slice ePhys notes found.</div></div>`;
+    return;
+  }
+
+  const rows = notes.map(n => {
+    const job = jobByNote[n.note_id];
+    const res = job?.result;
+
+    let statusCell = "";
+    let actionCell = "";
+
+    if (!job) {
+      statusCell = `<span style="color:var(--grey);font-size:12px;">—</span>`;
+      actionCell = `<button class="btn-analyze" onclick="openAnalyzeModal(${JSON.stringify(n)})">⚗️ Analyze</button>`;
+    } else if (job.status === "done" && res) {
+      const excelName = res.excel?.split("/").pop();
+      const dl = excelName
+        ? `<a class="dl-link" href="/api/eln/analysis/results/${job.job_id}/${encodeURIComponent(excelName)}" target="_blank">↓ Excel</a>`
+        : "";
+      statusCell = `
+        <span class="chip chip-done">✓ Done</span>
+        <div class="results-summary" style="margin-top:4px;">
+          <b class="q">${res.n_qualified ?? "—"}</b> qualified &nbsp;
+          <b class="x">${res.n_excluded  ?? "—"}</b> excluded &nbsp;
+          <span style="color:var(--grey);">(${res.n_cells ?? "—"} total)</span>
+        </div>
+        <div style="font-size:11px;color:var(--grey);margin-top:2px;">${escHtml(res.protocol_mode||"")}</div>`;
+      actionCell = dl;
+    } else if (job.status === "running" || job.status === "pending") {
+      statusCell = `<span class="chip chip-running" id="chip-${job.job_id}">⏳ Running…</span>`;
+      actionCell = `<span style="font-size:11px;color:var(--grey);">polling…</span>`;
+      startPolling(job.job_id);
+    } else if (job.status === "failed") {
+      statusCell = `<span class="chip chip-failed">✗ Failed</span><div style="font-size:11px;color:var(--grey);margin-top:3px;max-width:180px;">${escHtml((job.error||"").slice(0,80))}</div>`;
+      actionCell = `<button class="btn-retry" onclick="openAnalyzeModal(${JSON.stringify(n)})">Retry</button>`;
+    }
+
+    return `<tr id="row-${n.note_id}">
+      <td>${fmtDate(n.date)}</td>
+      <td style="font-size:11.5px;color:var(--grey);max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escHtml(n.project_slug||"")}</td>
+      <td style="font-family:monospace;font-weight:700;">${escHtml(n.mouse_id||"—")}</td>
+      <td>${n.condition?`<span class="info-pill cond">${escHtml(n.condition)}</span>`:"—"}</td>
+      <td>${n.days_in_condition!=null?`<span class="info-pill days">d${n.days_in_condition}</span>`:"—"}</td>
+      <td>${escHtml(n.exp_condition||"—")}</td>
+      <td>${statusCell}</td>
+      <td>${actionCell}</td>
+    </tr>`;
+  }).join("");
+
+  $("ltd-table-wrap").innerHTML = `
+    <div class="table-wrap">
+      <table class="at">
+        <thead><tr>
+          <th>Date</th><th>Project</th><th>Mouse</th>
+          <th>Condition</th><th>Days in Cond</th><th>Exp Cond</th>
+          <th>Status</th><th>Action</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+// ── Status polling ─────────────────────────────────────────────────────────
+function startPolling(jobId) {
+  if (pollingTimers[jobId]) return;
+  pollingTimers[jobId] = setInterval(async () => {
+    try {
+      const j = await api("GET", `/api/eln/analysis/jobs/${jobId}`);
+      if (j.status === "done" || j.status === "failed") {
+        clearInterval(pollingTimers[jobId]);
+        delete pollingTimers[jobId];
+        await renderLTDTab();   // full refresh to show results
+      } else {
+        const chip = document.getElementById(`chip-${jobId}`);
+        if (chip) chip.textContent = "⏳ Running…";
+      }
+    } catch (_) {}
+  }, 6000);
+}
+
+// ── Excitability tab ──────────────────────────────────────────────────────
+function renderExcitabilityTab() {
+  $("tab-content").innerHTML = `
+    <div class="matlab-panel" style="max-width:700px;">
+      <h3>Excitability Analysis</h3>
+      <p>Automated extraction of passive/active membrane properties from .abf files.
+         Manual firing-pattern classification required after extraction.</p>
+      <div style="background:rgba(242,179,61,.13);border:1px solid rgba(242,179,61,.4);border-radius:9px;padding:11px 14px;font-size:13px;color:#8a5b00;margin-bottom:16px;">
+        🚧 Analysis queue for Excitability (same upload → analyze flow as LTD) coming soon.
+        The extraction script <code>analyze_exc_metaLTD_hg.py</code> is already deployed on the server.
+      </div>
+      <div style="font-size:13px;color:var(--grey);">
+        Firing pattern classification is manual — after extraction you'll review per-cell plots
+        and label each cell's pattern (regular spiking / intrinsic bursting / …).
+        A review UI will be added as part of the Excitability build-out.
+      </div>
+    </div>`;
+}
+
+// ── VOR / OKR tab ─────────────────────────────────────────────────────────
+const MATLAB_LINKS_KEY = "labos_matlab_links";
+
+function getMatlabLinks() {
+  try { return JSON.parse(localStorage.getItem(MATLAB_LINKS_KEY) || "[]"); }
+  catch { return []; }
+}
+function saveMatlabLinks(links) {
+  localStorage.setItem(MATLAB_LINKS_KEY, JSON.stringify(links));
+}
+
+function renderVORTab() {
+  const links = getMatlabLinks();
+  const rows = links.map((l, i) => `
+    <div class="matlab-link-row">
+      <div class="icon">📂</div>
+      <div class="info">
+        <div class="name">${escHtml(l.name)}</div>
+        <div class="desc">${escHtml(l.path)}</div>
+      </div>
+      <a class="open-btn" href="file://${escHtml(l.path)}" title="Open in Finder/MATLAB">Open</a>
+      <button onclick="removeMatlabLink(${i})" style="background:none;border:none;cursor:pointer;color:var(--grey);font-size:16px;padding:0 4px;" title="Remove">×</button>
+    </div>`).join("");
+
+  $("tab-content").innerHTML = `
+    <div class="matlab-panel">
+      <h3>VOR / OKR Analysis — MATLAB Scripts</h3>
+      <p>Pinned links to your MATLAB analysis scripts. Click "Open" to open the folder in Finder.
+         Launch MATLAB separately and run the script from there.</p>
+
+      ${rows || `<div style="font-size:13px;color:var(--grey);margin-bottom:12px;">No scripts pinned yet. Add one below.</div>`}
+
+      <div class="matlab-add-row">
+        <input id="ml-name" class="name-in" placeholder="Script name" />
+        <input id="ml-path" placeholder="/Volumes/… path to script or folder" />
+        <button onclick="addMatlabLink()">+ Add</button>
+      </div>
+      <div style="font-size:11.5px;color:var(--grey);margin-top:8px;">
+        Links are saved in this browser. The "Open" button uses a <code>file://</code> URL —
+        works in Safari; in Chrome you may need to open Finder manually.
+      </div>
+
+      <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--grey-light);">
+        <div style="font-size:12px;font-weight:700;color:var(--grey);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;">Plan — MATLAB integration</div>
+        <div style="font-size:13px;color:var(--grey);line-height:1.6;">
+          Future: clicking a script will pass the selected data folder path to MATLAB via a
+          <code>.m</code> launcher script, automating the folder-selection step.
+          VOR/OKR analysis data can then be pushed back to the ELN log
+          (calibration pass/fail, gain values, etc.).
+        </div>
+      </div>
+    </div>`;
+}
+
+function addMatlabLink() {
+  const name = $("ml-name")?.value.trim();
+  const path = $("ml-path")?.value.trim();
+  if (!name || !path) { alert("Enter both a name and a path."); return; }
+  const links = getMatlabLinks();
+  links.push({ name, path });
+  saveMatlabLinks(links);
+  renderVORTab();
+}
+
+function removeMatlabLink(i) {
+  const links = getMatlabLinks();
+  links.splice(i, 1);
+  saveMatlabLinks(links);
+  renderVORTab();
+}
+
+// ── Upload & Analyze modal ─────────────────────────────────────────────────
+function openAnalyzeModal(noteRecord) {
+  _activeJob = { note: noteRecord, jobId: null };
+  $("az-exp-cond").value    = noteRecord.exp_condition || "";
+  $("az-protocol-mode").value = "";
+  $("az-epsc-min").value    = "20";
+  $("az-epsc-max").value    = "1000";
+  $("az-email").value       = localStorage.getItem("az_email") || "";
+  $("az-extra-out").value   = "";
+  $("az-files").value       = "";
+  $("az-file-count").textContent = "";
+  $("az-prog-wrap").style.display  = "none";
+  $("az-status").style.display     = "none";
+  $("az-submit").disabled          = false;
+  $("az-submit").textContent       = "Upload & Analyze";
+  $("modal-analyze").style.display = "flex";
+}
+
+$("az-close")?.addEventListener("click",  () => { $("modal-analyze").style.display = "none"; });
+$("az-cancel")?.addEventListener("click", () => { $("modal-analyze").style.display = "none"; });
+$("modal-analyze")?.addEventListener("click", e => { if (e.target === $("modal-analyze")) $("modal-analyze").style.display = "none"; });
+
+$("az-files")?.addEventListener("change", () => {
+  const n = $("az-files").files.length;
+  $("az-file-count").textContent = n ? `${n} file${n>1?"s":""} selected` : "";
+});
+
+const setAzStatus = (html, cls = "info") => {
+  const el = $("az-status");
+  el.style.display = "";
+  el.className = `az-status-box ${cls}`;
+  el.innerHTML = html;
+};
+
+$("az-submit")?.addEventListener("click", async () => {
+  const files   = Array.from($("az-files").files);
+  const expCond = $("az-exp-cond").value.trim();
+  const mode    = $("az-protocol-mode").value;
+  const email   = $("az-email").value.trim();
+  const epscMin = parseFloat($("az-epsc-min").value) || 20;
+  const epscMax = parseFloat($("az-epsc-max").value) || 1000;
+  const extraOut = $("az-extra-out").value.trim();
+  const note    = _activeJob?.note;
+
+  if (!files.length) { alert("Select at least one .abf file."); return; }
+  if (email) localStorage.setItem("az_email", email);
+
+  const jobId = "job_" + Math.random().toString(36).slice(2, 10);
+  $("az-submit").disabled = true;
+  $("az-submit").textContent = "Uploading…";
+  $("az-prog-wrap").style.display = "";
+
+  const setBar = (pct, label) => {
+    $("az-prog-bar").style.width = pct + "%";
+    $("az-prog-label").textContent = label;
+  };
+
+  try {
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
+      setBar(Math.round((i / files.length) * 80), `Uploading ${i+1}/${files.length}: ${f.name}`);
+      const buf = await f.arrayBuffer();
+      const r = await fetch(`/api/eln/analysis/upload/${jobId}`, {
+        method: "POST",
+        headers: { "x-filename": f.name, "Content-Type": "application/octet-stream" },
+        body: buf,
+      });
+      if (!r.ok) throw new Error(`Upload failed: ${await r.text()}`);
+    }
+
+    setBar(88, "Starting analysis…");
+    const slug = note?.project_slug || "";
+    await fetch(`/api/eln/analysis/start?upload_job_id=${encodeURIComponent(jobId)}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        note_id: note?.note_id || null,
+        project_slug: slug,
+        analysis_type: "ltd",
+        exp_condition: expCond,
+        note_date: note?.date || "",
+        prefix: expCond || "LTD",
+        protocol_mode: mode,
+        epsc_min: epscMin,
+        epsc_max: epscMax,
+        email,
+        extra_out_dir: extraOut,
+      }),
+    });
+
+    setBar(100, "Queued — analyzing on server…");
+    setAzStatus("⏳ Analysis running. This page will update automatically.", "info");
+    $("az-submit").textContent = "Running…";
+    $("modal-analyze").style.display = "none";
+
+    // Reload the tab (will pick up the new pending job and start polling)
+    await loadTab(currentType);
+
+  } catch (err) {
+    setAzStatus(`❌ ${escHtml(err.message)}`, "err");
+    $("az-submit").disabled = false;
+    $("az-submit").textContent = "Upload & Analyze";
+    $("az-prog-bar").style.width = "0%";
+  }
+});
+
+// ── Start ─────────────────────────────────────────────────────────────────
+boot();
+</script>
+<script src="/labos-nav.js" defer></script>
+</body>
+</html>

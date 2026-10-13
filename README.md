@@ -43,12 +43,19 @@ is a self-contained HTML file of vanilla JS.
   recording, behavior, histology, overview).
 - **Dashboard** — lab activity at a glance: notes by user and by project, status
   rollups, and an append-only audit log.
+- **Today & tracking** — today's schedule, overdue work, draft/review queues,
+  schedule-to-note links, exact-note deep links, mouse histories, and persistent
+  animal synchronization reports. Mobile edits preserve existing event metadata.
 - **Slack bot** (optional) — natural-language scheduling and cage-card intake from a
   phone photo. (Bot replies are Korean by design; the rest of the UI is English.)
 - **Mobile + installable** — phones auto-redirect to touch-optimized scheduler/ELN
   views, and the app is a PWA you can add to your home screen. See [USAGE.md](USAGE.md#on-your-phone).
 
 ## How it works
+
+Release v1.12.0 includes backend and frontend regression checks. Install
+`requirements-dev.txt`, provide Node.js for JavaScript checks, and run
+`bash scripts/verify_release.sh` before deploying changes.
 
 One Python web server, one SQLite file. Every lab computer just opens a browser.
 

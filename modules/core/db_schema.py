@@ -132,6 +132,17 @@ def init_eln_tables(con: sqlite3.Connection) -> None:
     cur.execute("CREATE INDEX IF NOT EXISTS eln_notes_user_idx ON eln_notes(user_id, updated_at)")
     cur.execute("CREATE INDEX IF NOT EXISTS eln_notes_status_idx ON eln_notes(status, updated_at)")
 
+    cur.execute("""CREATE TABLE IF NOT EXISTS eln_event_notes (
+        event_id TEXT NOT NULL,
+        note_id TEXT NOT NULL,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (event_id, note_id),
+        FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE,
+        FOREIGN KEY (note_id) REFERENCES eln_notes(id) ON DELETE CASCADE
+    )""")
+    cur.execute("CREATE INDEX IF NOT EXISTS eln_event_notes_note_idx ON eln_event_notes(note_id)")
+
     # ---- Naming conventions (admin-configured prefix lists) ----
     cur.execute(
         """CREATE TABLE IF NOT EXISTS eln_naming_conventions (
@@ -309,5 +320,24 @@ def init_eln_tables(con: sqlite3.Connection) -> None:
         )"""
     )
     cur.execute("CREATE INDEX IF NOT EXISTS eln_mouse_transfers_mid_idx ON eln_mouse_transfers(mouse_id)")
+
+    # ---- Analysis jobs (ephys auto-pipeline) ----
+    cur.execute(
+        """CREATE TABLE IF NOT EXISTS eln_analysis_jobs (
+            id              TEXT PRIMARY KEY,
+            note_id         TEXT,
+            project_slug    TEXT NOT NULL,
+            user_id         TEXT NOT NULL,
+            analysis_type   TEXT NOT NULL DEFAULT 'ltd',
+            status          TEXT NOT NULL DEFAULT 'pending',
+            params          TEXT NOT NULL DEFAULT '{}',
+            result          TEXT,
+            error           TEXT,
+            created_at      TEXT NOT NULL,
+            updated_at      TEXT NOT NULL
+        )"""
+    )
+    cur.execute("CREATE INDEX IF NOT EXISTS eln_analysis_jobs_status_idx ON eln_analysis_jobs(status, created_at)")
+    cur.execute("CREATE INDEX IF NOT EXISTS eln_analysis_jobs_note_idx  ON eln_analysis_jobs(note_id)")
 
     con.commit()

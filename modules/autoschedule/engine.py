@@ -61,7 +61,10 @@ def build_schedule(
     mix_control: bool = False,
     seed: Optional[int] = None,
 ) -> Dict[str, Any]:
-    """Assign mice to days, ``per_day`` each, sequentially.
+    """Distribute mice evenly across dates without exceeding per_day.
+
+    When mice don't divide evenly, earlier dates get more mice to balance the load.
+    Mice above the available daily capacity remain unscheduled with a warning.
 
     When ``mix_control`` and a control group is given, the experimental and
     control mice are pooled and shuffled (seedable for a stable preview) so the
@@ -82,10 +85,19 @@ def build_schedule(
                 "n_days": 0, "n_mice": len(pool)}
 
     assignments: List[Tuple[date, str]] = []
+    num_dates = len(dates)
+    num_mice = min(len(pool), num_dates * per_day)
+
+    # Distribute mice evenly across dates
+    base_per_day = num_mice // num_dates
+    extra_mice = num_mice % num_dates
+
     i = 0
-    for d in dates:
-        for _ in range(per_day):
-            if i >= len(pool):
+    for day_idx, d in enumerate(dates):
+        # First 'extra_mice' days get one extra mouse
+        day_count = base_per_day + (1 if day_idx < extra_mice else 0)
+        for _ in range(day_count):
+            if i >= num_mice:
                 break
             assignments.append((d, pool[i]))
             i += 1

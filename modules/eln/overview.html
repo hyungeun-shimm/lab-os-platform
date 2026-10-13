@@ -154,6 +154,17 @@
   .pill.behavior { background: rgba(16,185,129,0.13); color: #065f46; }
   .pill.draft    { background: var(--grey-lighter); color: var(--grey); }
   .pill.approved { background: var(--green-soft); color: var(--green); }
+  .pill.include { background: rgba(52,199,89,0.16);  color: #1b7f3b; }
+  .pill.exclude { background: rgba(255,59,48,0.13);  color: #b3261e; }
+  .pill.retest  { background: rgba(242,179,61,0.20); color: #8a5b00; }
+  .pill.drop    { background: rgba(99,99,102,0.16);  color: #3a3a3c; }
+  .dispo-date { display: block; font-size: 10.5px; color: var(--grey); margin-top: 3px; text-transform: none; letter-spacing: 0; font-weight: 600; }
+  tr.ov-section td {
+    background: var(--grey-light); color: var(--navy); font-weight: 700;
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em;
+    padding: 8px 12px; cursor: default;
+  }
+  tr.ov-section:hover td { background: var(--grey-light); }
   .small-chip {
     display: inline-block;
     background: var(--grey-lighter); color: var(--navy);
@@ -237,10 +248,11 @@
           <th>Summary</th>
           <th data-sort="author">Author</th>
           <th data-sort="status">Status</th>
+          <th data-sort="disposition">Disposition</th>
         </tr>
       </thead>
       <tbody id="ov-body">
-        <tr><td colspan="8" class="empty"><span class="loading-spin"></span>Loading…</td></tr>
+        <tr><td colspan="9" class="empty"><span class="loading-spin"></span>Loading…</td></tr>
       </tbody>
     </table>
   </div>
@@ -297,7 +309,7 @@ async function boot() {
     await loadAll();
   } catch (e) {
     if (e.status === 401) { window.location.href = "/eln/login"; return; }
-    $("#ov-body").innerHTML = `<tr><td colspan="8"><div class="err">Load failed: ${escapeHtml(e.message)}</div></td></tr>`;
+    $("#ov-body").innerHTML = `<tr><td colspan="9"><div class="err">Load failed: ${escapeHtml(e.message)}</div></td></tr>`;
   }
 }
 
@@ -315,7 +327,7 @@ function renderHeader() {
 // Load + flatten
 // ───────────────────────────────────────────
 async function loadAll() {
-  $("#ov-body").innerHTML = `<tr><td colspan="8" class="empty"><span class="loading-spin"></span>Loading all notes…</td></tr>`;
+  $("#ov-body").innerHTML = `<tr><td colspan="9" class="empty"><span class="loading-spin"></span>Loading all notes…</td></tr>`;
   try {
     const [sliceRes, behavRes] = await Promise.all([
       api("GET", `/api/eln/projects/${encodeURIComponent(projectSlug)}/notes?experiment_type=slice_recording`),
@@ -344,6 +356,8 @@ async function loadAll() {
           author,
           author_id:     n.author?.id || "",
           status:        n.status || "draft",
+          disposition:    e.disposition || "",
+          disposition_at: e.disposition_at || "",
           summary:       {
             cellType: e.cell_type || "",
             cells, protos,
@@ -376,6 +390,8 @@ async function loadAll() {
           author,
           author_id:     n.author?.id || "",
           status:        n.status || "draft",
+          disposition:    e.disposition || "",
+          disposition_at: e.disposition_at || "",
           summary:       {
             tasks:         (e.behavior_tasks || []),
             mods,
@@ -398,7 +414,7 @@ async function loadAll() {
     renderStats();
     renderTable();
   } catch (e) {
-    $("#ov-body").innerHTML = `<tr><td colspan="8"><div class="err">Load failed: ${escapeHtml(e.message)}</div></td></tr>`;
+    $("#ov-body").innerHTML = `<tr><td colspan="9"><div class="err">Load failed: ${escapeHtml(e.message)}</div></td></tr>`;
   }
 }
 
@@ -487,6 +503,8 @@ function summaryCell(row) {
   }
 }
 
+const DISPO_LABEL = { include: "Include", exclude: "Exclude", retest: "Re-test", drop: "Drop" };
+
 function renderTable() {
   // Update sort arrows
   $$("#ov-table th[data-sort]").forEach(th => {
@@ -503,10 +521,11 @@ function renderTable() {
 
   const rows = sortRows(filteredRows());
   if (!rows.length) {
-    $("#ov-body").innerHTML = `<tr><td colspan="8" class="empty">No entries match these filters.</td></tr>`;
+    $("#ov-body").innerHTML = `<tr><td colspan="9" class="empty">No entries match these filters.</td></tr>`;
     return;
   }
-  $("#ov-body").innerHTML = rows.map(r => {
+
+  const rowHtml = (r) => {
     const typePill = r.type === "slice_recording"
       ? `<span class="pill slice">🔬 Slice</span>`
       : `<span class="pill behavior">🐭 Behavior</span>`;
@@ -514,6 +533,9 @@ function renderTable() {
       ? `<span class="pill draft">Draft</span>`
       : `<span class="pill approved">Finalized</span>`;
     const dest = r.type === "slice_recording" ? "slice" : "behavior";
+    const dispoCell = r.disposition
+      ? `<span class="pill ${r.disposition}">${escapeHtml(DISPO_LABEL[r.disposition] || r.disposition)}</span>${r.disposition_at ? `<span class="dispo-date">${escapeHtml(r.disposition_at)}</span>` : ""}`
+      : "—";
     return `
       <tr data-dest="${dest}">
         <td style="white-space:nowrap;">${escapeHtml(r.date)}</td>
@@ -524,8 +546,16 @@ function renderTable() {
         <td>${summaryCell(r)}</td>
         <td>${escapeHtml(r.author)}</td>
         <td>${statusPill}</td>
+        <td>${dispoCell}</td>
       </tr>`;
-  }).join("");
+  };
+
+  const behav = rows.filter(r => r.type === "behavior");
+  const slice = rows.filter(r => r.type === "slice_recording");
+  const section = (title, list) => list.length
+    ? `<tr class="ov-section"><td colspan="9">${title} · ${list.length}</td></tr>` + list.map(rowHtml).join("")
+    : "";
+  $("#ov-body").innerHTML = section("🐭 Behavior", behav) + section("🔬 Slice ePhys", slice);
 
   $$("#ov-body tr[data-dest]").forEach(tr => {
     tr.addEventListener("click", () => {
@@ -591,14 +621,16 @@ function rowToCSV(r) {
     if (s.sessionCount)    bits.push(`n_sessions=${s.sessionCount}`);
     summaryText = bits.join("; ");
   }
-  return [r.date, r.type, r.mouse_id, r.exp_condition, r.cohort, summaryText, r.author, r.status]
+  const dispo = r.disposition ? (DISPO_LABEL[r.disposition] || r.disposition) : "";
+  return [r.date, r.type, r.mouse_id, r.exp_condition, r.cohort, summaryText, r.author, r.status,
+          dispo, r.disposition_at || ""]
     .map(csvEscape).join(",");
 }
 
 $("#btn-export").addEventListener("click", () => {
   const rows = sortRows(filteredRows());
   if (!rows.length) { alert("No rows to export."); return; }
-  const header = ["date","type","mouse_id","exp_condition","cohort","summary","author","status"].join(",");
+  const header = ["date","type","mouse_id","exp_condition","cohort","summary","author","status","disposition","disposition_at"].join(",");
   const csv = "﻿" + header + "\n" + rows.map(rowToCSV).join("\n") + "\n";
   const today = new Date().toISOString().slice(0, 10);
   const fname = `${project?.slug || "overview"}_overview_${today}.csv`;

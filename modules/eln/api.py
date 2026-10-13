@@ -11,6 +11,7 @@ import json
 import os
 import re
 import secrets
+import shutil
 import sqlite3
 import uuid
 from datetime import datetime, timezone
@@ -958,6 +959,35 @@ def _compute_age_weeks(dob):
         return None
 
 
+def _surgery_done(dos):
+    """True when a surgery date exists and is on/before today. Permissive on parse
+    failure → False (treated as not-yet-operated)."""
+    if not dos:
+        return False
+    try:
+        from datetime import date
+        return date.fromisoformat(str(dos).strip()) <= date.today()
+    except Exception:
+        return False
+
+
+def _cohort_base(v):
+    """Strip a control-group suffix (-con / -control, any spacing/dash) so an
+    experimental cohort and its control collapse to one base, case-insensitively.
+    e.g. 'dC', 'dC-con', 'dC - control' → 'dc'."""
+    import re
+    s = re.sub(r"\s*[-–]\s*(con|control)\s*$", "", (v or "").strip(), flags=re.I)
+    return s.strip().lower()
+
+
+def _cohort_matches(filt, val):
+    """True if cohort `val` is in the same group as filter `filt` — i.e. the
+    cohort itself OR its control (filtering 'dC' also shows 'dC-con')."""
+    if not (filt or "").strip():
+        return True
+    return _cohort_base(filt) == _cohort_base(val)
+
+
 def _compute_days_in_condition(animal_row):
     """Return (days_in_current_condition, marker_date_iso). Walks dates from cond3 back to dos."""
     from datetime import date
@@ -1096,7 +1126,9 @@ def lookup_mouse(mouse_id: str, _user: dict = Depends(auth_helpers.require_user)
             "cohort": row["cohort"],
             "project": row["project"],
             "experiment": row["experiment"],
-            "sacrificed": bool(row["sacrificed"]) if "sacrificed" in row.keys() else False,
+            "dos": row["dos"] if "dos" in row.keys() else None,
+            "surgery_done": _surgery_done(row["dos"] if "dos" in row.keys() else None),
+            "sacrificed": str(row["sacrificed"] or "").strip().upper() in {"Y", "YES", "1", "TRUE"},
         },
     }
 
@@ -1131,7 +1163,7 @@ def mouse_timeline(mouse_id: str, user: dict = Depends(auth_helpers.require_user
                 "cohort": m_row["cohort"],
                 "project": m_row["project"],
                 "experiment": m_row["experiment"],
-                "sacrificed": bool(m_row["sacrificed"]) if "sacrificed" in m_row.keys() else False,
+                "sacrificed": str(m_row["sacrificed"] or "").strip().upper() in {"Y", "YES", "1", "TRUE"},
             }
         else:
             mouse_info = {"from_db": False, "mouse_id": mid}
@@ -1176,6 +1208,9 @@ def mouse_timeline(mouse_id: str, user: dict = Depends(auth_helpers.require_user
                 if (e.get("mouse_id") or "").strip().lower() != mid_lower:
                     continue
                 entries_out.append({
+                    "note_id":        r["id"],
+                    "user_id":        r["user_id"],
+                    "approved_by":    r["approved_by"],
                     "project_slug":   r["project_slug"],
                     "project_title":  proj_titles.get(r["project_slug"], r["project_slug"]),
                     "experiment_type": r["experiment_type"],
@@ -1251,14 +1286,8 @@ def create_note(payload: CreateNoteIn, user: dict = Depends(auth_helpers.require
     with _con() as con:
         con.row_factory = sqlite3.Row
         _check_project_access(con, payload.project_slug, user)
-        # Prevent duplicate per (project, exp_type, date, user) — there should only be one note per day per user
-        existing = con.execute(
-            """SELECT id FROM eln_notes
-                WHERE project_slug = ? AND experiment_type = ? AND note_date = ? AND user_id = ?""",
-            (payload.project_slug, payload.experiment_type, payload.note_date, user["id"]),
-        ).fetchone()
-        if existing:
-            raise HTTPException(409, {"detail": "A note already exists for this date.", "note_id": existing["id"]})
+        # A user may run more than one experiment of the same kind on the same
+        # day, so multiple notes per (project, exp_type, date, user) are allowed.
         note_id = secrets.token_hex(8)
         now = _now_iso()
         con.execute(
@@ -1294,9 +1323,11 @@ def update_note(note_id: str, payload: UpdateNoteIn, user: dict = Depends(auth_h
             raise HTTPException(403, "You can only edit your own notes.")
         if row["status"] in {"submitted", "approved"} and not is_admin:
             raise HTTPException(403, "This note is locked (submitted/approved). Ask an admin to return it for edit.")
+        saved_payload = json.loads(row["payload"] or "{}")
+        saved_payload.update(payload.payload)
         con.execute(
             "UPDATE eln_notes SET payload = ?, updated_at = ? WHERE id = ?",
-            (json.dumps(payload.payload), _now_iso(), note_id),
+            (json.dumps(saved_payload), _now_iso(), note_id),
         )
         auth_helpers.audit(con, user["id"], "update_note", "note", note_id)
         con.commit()
@@ -1373,6 +1404,175 @@ def push_record(note_id: str, payload: PushRecordIn,
     return {"ok": True}
 
 
+class CopyFoldersIn(BaseModel):
+    destination: str
+
+
+@router.post("/notes/{note_id}/copy-folders")
+def copy_folders(note_id: str, payload: CopyFoldersIn,
+                 user: dict = Depends(auth_helpers.require_user)):
+    """Copy all data folders in a note's VOR/OKR entries to a destination path.
+    Originals are never removed. Works on draft and finalized notes."""
+    with _con() as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT * FROM eln_notes WHERE id = ?", (note_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Note not found.")
+        if not (row["user_id"] == user["id"] or user.get("effective_role") == "admin"):
+            raise HTTPException(403, "Not allowed.")
+
+        dest_root = Path(payload.destination.strip())
+        try:
+            dest_root.mkdir(parents=True, exist_ok=True)
+        except OSError as e:
+            raise HTTPException(400, f"Cannot create destination: {e}")
+
+        note_payload = json.loads(row["payload"] or "{}")
+        entries = note_payload.get("entries", [])
+
+        seen: set = set()
+        results = []
+        for entry in entries:
+            for log in entry.get("vor_okr_log", []):
+                for key in ("full_path", "calib_folder_path"):
+                    src_str = log.get(key)
+                    if not src_str or src_str in seen:
+                        continue
+                    seen.add(src_str)
+                    src = Path(src_str)
+                    if not src.exists():
+                        results.append({"folder": src.name, "dest": str(dest_root), "ok": False,
+                                        "error": "Source folder not found."})
+                        continue
+                    dst = dest_root / src.name
+                    try:
+                        shutil.copytree(str(src), str(dst), dirs_exist_ok=True)
+                        results.append({"folder": src.name, "dest": str(dst), "ok": True})
+                    except Exception as e:
+                        results.append({"folder": src.name, "dest": str(dst), "ok": False,
+                                        "error": str(e)[:200]})
+
+        auth_helpers.audit(con, user["id"], "push_data", "note", note_id,
+                           json.dumps({"destination": str(dest_root),
+                                       "results": results}))
+        con.commit()
+    return {"ok": True, "results": results}
+
+
+DISPOSITIONS = {"", "include", "exclude", "retest", "drop"}
+
+
+class EntryDispositionIn(BaseModel):
+    entry_index: int
+    disposition: str
+
+
+@router.post("/notes/{note_id}/entry-disposition")
+def set_entry_disposition(note_id: str, payload: EntryDispositionIn,
+                          user: dict = Depends(auth_helpers.require_user)):
+    """Set include/exclude/retest/drop on a single animal entry. Mirrors
+    push-record: author-or-admin, and deliberately has NO status gate so the
+    disposition can be recorded after the note is finalized (locked). Stamps the
+    date the decision was made."""
+    from datetime import date
+    dispo = (payload.disposition or "").strip().lower()
+    if dispo not in DISPOSITIONS:
+        raise HTTPException(400, f"disposition must be one of {sorted(DISPOSITIONS - {''})} or empty.")
+    with _con() as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT id, user_id, payload FROM eln_notes WHERE id = ?", (note_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Note not found.")
+        if not (row["user_id"] == user["id"] or user.get("effective_role") == "admin"):
+            raise HTTPException(403, "Not allowed.")
+        note_payload = json.loads(row["payload"] or "{}")
+        entries = note_payload.get("entries", [])
+        if not (0 <= payload.entry_index < len(entries)):
+            raise HTTPException(400, "entry_index out of range.")
+        entry = entries[payload.entry_index]
+        if dispo:
+            entry["disposition"] = dispo
+            entry["disposition_at"] = date.today().isoformat()
+            entry["disposition_by"] = user["id"]
+        else:
+            entry["disposition"] = ""
+            entry["disposition_at"] = ""
+            entry["disposition_by"] = ""
+        con.execute(
+            "UPDATE eln_notes SET payload = ?, updated_at = ? WHERE id = ?",
+            (json.dumps(note_payload), _now_iso(), note_id),
+        )
+        auth_helpers.audit(con, user["id"], "set_disposition", "note", note_id,
+                           json.dumps({"entry_index": payload.entry_index,
+                                       "mouse_id": entry.get("mouse_id"),
+                                       "disposition": dispo}))
+        con.commit()
+    return {"ok": True, "entry_index": payload.entry_index,
+            "disposition": entry["disposition"], "disposition_at": entry["disposition_at"]}
+
+
+@router.post("/notes/{note_id}/archive-mice")
+def archive_note_mice(note_id: str, user: dict = Depends(auth_helpers.require_user)):
+    """Move the mice on a slice-recording note into the sacrificed archive.
+    Author-or-admin — works for the note's own author even in member mode, since
+    slice recording is terminal and the person who ran it retires the animals.
+    Idempotent: mice already archived / not in the colony are skipped."""
+    from server import require_animal_removal_source
+    require_animal_removal_source()
+    now = _now_iso()
+    with _con() as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute(
+            "SELECT id, user_id, experiment_type, note_date, payload FROM eln_notes WHERE id=?",
+            (note_id,),
+        ).fetchone()
+        if not row:
+            raise HTTPException(404, "Note not found.")
+        if not (row["user_id"] == user["id"] or user.get("effective_role") == "admin"):
+            raise HTTPException(403, "Only the note's author or an admin can archive its mice.")
+        if row["experiment_type"] != "slice_recording":
+            raise HTTPException(400, "Only slice-recording notes can archive mice.")
+        try:
+            payload = json.loads(row["payload"] or "{}")
+        except Exception:
+            payload = {}
+        mids: list = []
+        for e in payload.get("entries", []):
+            m = (e.get("mouse_id") or "").strip()
+            if m and m not in mids:
+                mids.append(m)
+        sdate = row["note_date"]
+        archived: list = []
+        skipped: list = []
+        for mid in mids:
+            a = animals_dal.get(con, mid, case_insensitive=True)
+            if not a:
+                skipped.append(mid)
+                continue
+            a = dict(a)
+            con.execute("""
+                INSERT INTO animal_archive
+                  (mouse_id, project, condition, experiment, cohort, strain,
+                   dob, sex, dos, date_cond1, date_cond2, date_cond3,
+                   sacrificed, sacrificed_date, notes, barcode, synced_at,
+                   archived_at, archive_reason)
+                VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+            """, (
+                a["mouse_id"], a.get("project"), a.get("condition"), a.get("experiment"),
+                a.get("cohort"), a.get("strain"), a.get("dob"), a.get("sex"), a.get("dos"),
+                a.get("date_cond1"), a.get("date_cond2"), a.get("date_cond3"),
+                "Y", (sdate or a.get("sacrificed_date")),
+                a.get("notes"), a.get("barcode"), a.get("synced_at"),
+                now, "sacrificed — slice recording",
+            ))
+            animals_dal.delete(con, a["mouse_id"])
+            archived.append(a["mouse_id"])
+        auth_helpers.audit(con, user["id"], "archive_mice", "note", note_id,
+                           json.dumps({"archived": archived, "skipped": skipped}))
+        con.commit()
+    return {"ok": True, "archived": archived, "skipped": skipped}
+
+
 @router.post("/notes/{note_id}/return")
 def return_note(note_id: str, _admin: dict = Depends(auth_helpers.require_admin)):
     """Unlock a submitted/approved note back to draft for further edits."""
@@ -1389,6 +1589,32 @@ def return_note(note_id: str, _admin: dict = Depends(auth_helpers.require_admin)
         con.commit()
         row = con.execute("SELECT * FROM eln_notes WHERE id = ?", (note_id,)).fetchone()
     return {"ok": True, "note": _row_to_note(row)}
+
+
+@router.delete("/notes/{note_id}")
+def delete_note(note_id: str, user: dict = Depends(auth_helpers.require_user)):
+    """Delete a note. Admins (admin mode) may delete any note; an author may
+    delete only their own note while it is still a draft."""
+    with _con() as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT * FROM eln_notes WHERE id = ?", (note_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Note not found.")
+        _check_project_access(con, row["project_slug"], user)
+        is_admin = user.get("effective_role") == "admin"
+        is_owner = row["user_id"] == user["id"]
+        if not is_admin:
+            if not is_owner:
+                raise HTTPException(403, "You can only delete your own notes.")
+            if row["status"] != "draft":
+                raise HTTPException(403, "This note is locked. Ask an admin to delete it.")
+        con.execute("DELETE FROM eln_notes WHERE id = ?", (note_id,))
+        auth_helpers.audit(con, user["id"], "delete_note", "note", note_id,
+                           json.dumps({"project": row["project_slug"], "exp": row["experiment_type"],
+                                       "date": row["note_date"], "status": row["status"],
+                                       "author": row["user_id"]}))
+        con.commit()
+    return {"ok": True}
 
 
 @router.get("/notes/{note_id}")
@@ -1478,14 +1704,21 @@ def _normalize_entry_py(e: dict) -> dict:
     return {**e, "recordings": []}
 
 
-def _compute_filename_py(entry: dict, rec: dict, initials: str = "") -> str:
+def _yymmdd(iso: str) -> str:
+    """ISO date (YYYY-MM-DD…) → YYMMDD, or '' if unparseable."""
+    m = re.match(r"^(\d{4})-(\d{2})-(\d{2})", str(iso or ""))
+    return (m.group(1)[2:] + m.group(2) + m.group(3)) if m else ""
+
+
+def _compute_filename_py(entry: dict, rec: dict, initials: str = "", note_date: str = "") -> str:
     cohort_cell = (entry.get("cohort") or "") + (rec.get("cell") or "")
     run_str     = str(int(rec.get("run_index") or 0)).zfill(4)
     exc_sfx     = "_exclude" if rec.get("excluded") else ""
     parts = [p for p in [
+        _yymmdd(note_date),
         initials or "",
         entry.get("exp_condition") or "",
-        entry.get("exp_type") or "",
+        entry.get("header_name") or entry.get("exp_type") or "",
         cohort_cell,
         rec.get("protocol") or "",
     ] if p]
@@ -1500,14 +1733,12 @@ def _fmt_date_long(iso: str) -> str:
         return iso
 
 
-@router.get("/projects/{slug}/notes/export-pdf")
-def export_notes_pdf(slug: str, experiment_type: str,
-                     date_from: Optional[str] = None,
-                     date_to: Optional[str] = None,
-                     user: dict = Depends(auth_helpers.require_user)):
-    """Export notes for a project + experiment_type as a protected, locked PDF.
+def _notes_to_pdf_bytes(proj_title: str, experiment_type: str, notes: list,
+                        generated_by: str, range_label: str) -> bytes:
+    """Render enriched note dicts (each carrying ['author']) to protected PDF bytes.
 
-    date_from / date_to (YYYY-MM-DD): optional inclusive range. Omit both for all dates.
+    Shared by the range export and the single-note finalize PDF so both stay in sync,
+    including the YYMMDD-prefixed .abf filenames.
     """
     try:
         import io
@@ -1524,46 +1755,6 @@ def export_notes_pdf(slug: str, experiment_type: str,
     except ImportError:
         raise HTTPException(500, "reportlab is not installed on the server.")
 
-    for d in (date_from, date_to):
-        if d and not DATE_RE.match(d):
-            raise HTTPException(400, "date_from / date_to must be YYYY-MM-DD.")
-
-    with _con() as con:
-        con.row_factory = sqlite3.Row
-        _check_project_access(con, slug, user)
-        if experiment_type not in EXP_TYPES:
-            raise HTTPException(400, "Invalid experiment_type.")
-
-        proj_row = con.execute("SELECT title FROM eln_projects WHERE slug = ?", (slug,)).fetchone()
-        proj_title = proj_row["title"] if proj_row else slug
-
-        clauses = ["project_slug = ?", "experiment_type = ?"]
-        params: list = [slug, experiment_type]
-        if user.get("effective_role") != "admin":
-            clauses.append("user_id = ?")
-            params.append(user["id"])
-        if date_from:
-            clauses.append("note_date >= ?")
-            params.append(date_from)
-        if date_to:
-            clauses.append("note_date <= ?")
-            params.append(date_to)
-        rows = con.execute(
-            f"SELECT * FROM eln_notes WHERE {' AND '.join(clauses)} ORDER BY note_date ASC, updated_at ASC",
-            params,
-        ).fetchall()
-
-        notes = []
-        for r in rows:
-            n = _row_to_note(r)
-            author = con.execute(
-                "SELECT id, username, display_name FROM eln_users WHERE id = ?",
-                (r["user_id"],),
-            ).fetchone()
-            n["author"] = dict(author) if author else None
-            notes.append(n)
-
-    # ── Build PDF ─────────────────────────────────────────────────────────────
     buf = io.BytesIO()
     enc = StandardEncryption(
         userPassword="",
@@ -1572,16 +1763,7 @@ def export_notes_pdf(slug: str, experiment_type: str,
         strength=128,
     )
     exp_label = experiment_type.replace("_", " ").title()
-    author_name = user.get("display_name") or user.get("username") or ""
     generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
-    if date_from and date_to:
-        range_label = f"{date_from} – {date_to}"
-    elif date_from:
-        range_label = f"From {date_from}"
-    elif date_to:
-        range_label = f"Up to {date_to}"
-    else:
-        range_label = "All dates"
 
     doc = SimpleDocTemplate(
         buf, pagesize=A4,
@@ -1589,7 +1771,7 @@ def export_notes_pdf(slug: str, experiment_type: str,
         topMargin=2.5*cm, bottomMargin=2.5*cm,
         encrypt=enc,
         title=f"{proj_title} — {exp_label}",
-        author=author_name,
+        author=generated_by,
     )
 
     base = getSampleStyleSheet()
@@ -1617,7 +1799,7 @@ def export_notes_pdf(slug: str, experiment_type: str,
     story: list = []
     story.append(Paragraph(proj_title, S["proj_title"]))
     story.append(Paragraph(f"{exp_label} — Lab Notes · {range_label}", S["sub"]))
-    story.append(Paragraph(f"Generated {generated_at} by {author_name}", S["meta"]))
+    story.append(Paragraph(f"Generated {generated_at} by {generated_by}", S["meta"]))
     story.append(HRFlowable(width="100%", thickness=0.5,
                             color=colors.HexColor("#cccccc"), spaceAfter=12))
 
@@ -1720,7 +1902,7 @@ def export_notes_pdf(slug: str, experiment_type: str,
                                 tbl_data.append([
                                     rec.get("cell", "") or "",
                                     rec.get("protocol", "") or "",
-                                    _compute_filename_py(entry, rec, a_initials),
+                                    _compute_filename_py(entry, rec, a_initials, note.get("note_date", "")),
                                     rec.get("notes", "") or "",
                                 ])
                             tbl = Table(tbl_data, colWidths=[1.4*cm, 3.2*cm, 6.2*cm, 4.2*cm], repeatRows=1)
@@ -1733,10 +1915,106 @@ def export_notes_pdf(slug: str, experiment_type: str,
 
     doc.build(story)
     buf.seek(0)
+    return buf.read()
+
+
+@router.get("/projects/{slug}/notes/export-pdf")
+def export_notes_pdf(slug: str, experiment_type: str,
+                     date_from: Optional[str] = None,
+                     date_to: Optional[str] = None,
+                     user: dict = Depends(auth_helpers.require_user)):
+    """Export notes for a project + experiment_type as a protected, locked PDF.
+
+    date_from / date_to (YYYY-MM-DD): optional inclusive range. Omit both for all dates.
+    """
+    for d in (date_from, date_to):
+        if d and not DATE_RE.match(d):
+            raise HTTPException(400, "date_from / date_to must be YYYY-MM-DD.")
+
+    with _con() as con:
+        con.row_factory = sqlite3.Row
+        _check_project_access(con, slug, user)
+        if experiment_type not in EXP_TYPES:
+            raise HTTPException(400, "Invalid experiment_type.")
+
+        proj_row = con.execute("SELECT title FROM eln_projects WHERE slug = ?", (slug,)).fetchone()
+        proj_title = proj_row["title"] if proj_row else slug
+
+        clauses = ["project_slug = ?", "experiment_type = ?"]
+        params: list = [slug, experiment_type]
+        if user.get("effective_role") != "admin":
+            clauses.append("user_id = ?")
+            params.append(user["id"])
+        if date_from:
+            clauses.append("note_date >= ?")
+            params.append(date_from)
+        if date_to:
+            clauses.append("note_date <= ?")
+            params.append(date_to)
+        rows = con.execute(
+            f"SELECT * FROM eln_notes WHERE {' AND '.join(clauses)} ORDER BY note_date ASC, updated_at ASC",
+            params,
+        ).fetchall()
+
+        notes = []
+        for r in rows:
+            n = _row_to_note(r)
+            author = con.execute(
+                "SELECT id, username, display_name, initials FROM eln_users WHERE id = ?",
+                (r["user_id"],),
+            ).fetchone()
+            n["author"] = dict(author) if author else None
+            notes.append(n)
+
+    if date_from and date_to:
+        range_label = f"{date_from} – {date_to}"
+    elif date_from:
+        range_label = f"From {date_from}"
+    elif date_to:
+        range_label = f"Up to {date_to}"
+    else:
+        range_label = "All dates"
+    generated_by = user.get("display_name") or user.get("username") or ""
+    pdf_bytes = _notes_to_pdf_bytes(proj_title, experiment_type, notes, generated_by, range_label)
+
     date_suffix = f"{date_from or 'start'}_{date_to or 'end'}" if (date_from or date_to) else "all"
     filename = f"{slug}_{experiment_type}_{date_suffix}.pdf"
     return Response(
-        content=buf.read(),
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+@router.get("/notes/{note_id}/pdf")
+def note_pdf(note_id: str, user: dict = Depends(auth_helpers.require_user)):
+    """Render a single note to a protected PDF. Used when finalizing a slice note so a
+    copy of the day's lab note can be dropped into its data folder."""
+    with _con() as con:
+        con.row_factory = sqlite3.Row
+        row = con.execute("SELECT * FROM eln_notes WHERE id = ?", (note_id,)).fetchone()
+        if not row:
+            raise HTTPException(404, "Note not found.")
+        _check_project_access(con, row["project_slug"], user)
+        if user.get("effective_role") != "admin" and row["user_id"] != user["id"]:
+            raise HTTPException(403, "You can only export your own notes.")
+        slug            = row["project_slug"]
+        experiment_type = row["experiment_type"]
+        proj_row = con.execute("SELECT title FROM eln_projects WHERE slug = ?", (slug,)).fetchone()
+        proj_title = proj_row["title"] if proj_row else slug
+        note = _row_to_note(row)
+        author = con.execute(
+            "SELECT id, username, display_name, initials FROM eln_users WHERE id = ?",
+            (row["user_id"],),
+        ).fetchone()
+        note["author"] = dict(author) if author else None
+
+    generated_by = user.get("display_name") or user.get("username") or ""
+    range_label  = _fmt_date_long(note["note_date"])
+    pdf_bytes = _notes_to_pdf_bytes(proj_title, experiment_type, [note], generated_by, range_label)
+    filename = f"{note['note_date']}_{slug}_{experiment_type}_labnote.pdf"
+    return Response(
+        content=pdf_bytes,
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
@@ -1871,7 +2149,7 @@ def dashboard(user: dict = Depends(auth_helpers.require_user)):
         proj_stats = {
             p["slug"]: {
                 "slug": p["slug"], "title": p["title"], "kind": p["kind"],
-                "total_notes": 0, "draft": 0, "finalized": 0,
+                "total_notes": 0, "draft": 0, "submitted": 0, "finalized": 0,
                 "slice_recording": 0, "behavior": 0,
                 "last_active": None, "_user_ids": set(),
             }
@@ -1890,6 +2168,7 @@ def dashboard(user: dict = Depends(auth_helpers.require_user)):
                     "slice_recording": 0,
                     "behavior": 0,
                     "draft": 0,
+                    "submitted": 0,
                     "finalized": 0,
                     "last_active": None,
                     "by_project": {},
@@ -1900,6 +2179,8 @@ def dashboard(user: dict = Depends(auth_helpers.require_user)):
                 u[et] += 1
             if r["status"] == "draft":
                 u["draft"] += 1
+            elif r["status"] == "submitted":
+                u["submitted"] += 1
             else:
                 u["finalized"] += 1
             if not u["last_active"] or (r["updated_at"] and r["updated_at"] > u["last_active"]):
@@ -1914,6 +2195,8 @@ def dashboard(user: dict = Depends(auth_helpers.require_user)):
                 ps[et] += 1
             if r["status"] == "draft":
                 ps["draft"] += 1
+            elif r["status"] == "submitted":
+                ps["submitted"] += 1
             else:
                 ps["finalized"] += 1
             if not ps["last_active"] or (r["updated_at"] and r["updated_at"] > ps["last_active"]):
@@ -2291,7 +2574,42 @@ def colony_stats(scope: str = "mine", user: dict = Depends(auth_helpers.require_
         cages   = animals_dal.cage_cards(con, assigned_to=owner)
         recent  = animals_dal.list_recent(con, limit=10, assigned_to=owner)
 
+        # Admin-only per-person summary: each person's current (alive/active)
+        # animal count + strain holdings. Archived (sacrificed) mice are already
+        # out of `animals`, so a plain count is the live holding.
+        by_person = []
+        if scope == "all":
+            prows = con.execute("""
+                SELECT a.assigned_to AS uid,
+                       COALESCE(u.display_name, u.username, '— unassigned —') AS name,
+                       u.initials AS initials, u.color AS color,
+                       a.strain AS strain, COUNT(*) AS n
+                FROM animals a LEFT JOIN eln_users u ON u.id = a.assigned_to
+                WHERE COALESCE(a.removed,0)=0
+                  AND (a.sacrificed IS NULL OR TRIM(a.sacrificed)=''
+                       OR LOWER(a.sacrificed) IN ('0','no','false','n'))
+                  AND a.assigned_to IS NOT NULL AND TRIM(a.assigned_to) != ''
+                GROUP BY a.assigned_to, a.strain
+            """).fetchall()
+            _agg: dict = {}
+            for r in prows:
+                d = _agg.setdefault(r["uid"], {
+                    "uid": r["uid"], "name": r["name"], "initials": r["initials"],
+                    "color": r["color"], "count": 0, "by_strain": {}})
+                d["count"] += r["n"]
+                if r["strain"]:
+                    d["by_strain"][r["strain"]] = d["by_strain"].get(r["strain"], 0) + r["n"]
+            by_person = sorted(
+                [{"uid": d["uid"], "name": d["name"], "initials": d["initials"],
+                  "color": d["color"], "count": d["count"],
+                  "by_strain": sorted(
+                      [{"strain": s, "n": n} for s, n in d["by_strain"].items()],
+                      key=lambda x: -x["n"])}
+                 for d in _agg.values()],
+                key=lambda x: -x["count"])
+
     return {
+        "by_person":     by_person,
         "total":         total,
         "alive":         alive,
         "sacrificed":    sacrificed,
@@ -2399,16 +2717,21 @@ def set_config(payload: ConfigIn, _admin: dict = Depends(auth_helpers.require_ad
 # Data folder  (create + browse)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def _entry_folder_name(entry: dict) -> str:
+def _entry_folder_name(entry: dict, note_date: str = "") -> str:
     """Compute the canonical folder name for an entry.
 
-    Format: {exp_condition}_{exp_type}_{cohort}_sub-{mouse_id}_{days_in_cond}d
+    Format: {exp_condition}_{exp_type}_{cohort}_{YYMMDD}_{mouse_id}_{days_in_cond}d
+    The experiment date (YYMMDD) takes the slot the old "sub-" tag used to occupy.
+    Kept in sync with computeFolderName() in slice.html; the client normally passes
+    an explicit folder_name, so this is a fallback.
     """
     parts: List[str] = []
     if entry.get("exp_condition"): parts.append(entry["exp_condition"])
     if entry.get("exp_type"):      parts.append(entry["exp_type"])
     if entry.get("cohort"):        parts.append(entry["cohort"])
-    if entry.get("mouse_id"):      parts.append(f"sub-{entry['mouse_id']}")
+    dp = _yymmdd(note_date)
+    if dp:                         parts.append(dp)
+    if entry.get("mouse_id"):      parts.append(entry["mouse_id"])
     days = (entry.get("mouse") or {}).get("days_in_condition")
     if days is not None:           parts.append(f"{days}d")
     return "_".join(parts) if parts else "unnamed"
@@ -2520,22 +2843,173 @@ def list_data_folder(folder_name: str, data_root: Optional[str] = None,
 
 @router.post("/rename-file")
 def rename_file(payload: RenameFileIn, _user: dict = Depends(auth_helpers.require_user)):
-    """Rename a file inside a data folder (used for exclude toggling)."""
+    """Rename a file inside a data folder. If old_name is '*.abf', finds and renames the most recent .abf file."""
+    from pathlib import Path
     root   = _resolve_data_root(payload.data_root)
     folder = (root / payload.folder_name).resolve()
-    old_p  = (folder / payload.old_name).resolve()
     new_p  = (folder / payload.new_name).resolve()
+
     # path traversal guard
-    if not str(old_p).startswith(str(folder)):
-        raise HTTPException(400, "Invalid path.")
     if not str(new_p).startswith(str(folder)):
         raise HTTPException(400, "Invalid path.")
-    if not old_p.exists():
-        raise HTTPException(404, f"File not found: {payload.old_name}")
+
+    # If old_name is "*.abf", find the most recent .abf file
+    old_name = payload.old_name
+    if old_name == "*.abf":
+        if not folder.exists():
+            raise HTTPException(404, f"Folder not found: {payload.folder_name}")
+        # Find most recent .abf file
+        abf_files = sorted(
+            folder.glob("*.abf"),
+            key=lambda p: p.stat().st_mtime,
+            reverse=True
+        )
+        if not abf_files:
+            raise HTTPException(404, "No .abf file found in folder")
+        old_p = abf_files[0]
+        old_name = old_p.name
+    else:
+        old_p = (folder / old_name).resolve()
+        if not str(old_p).startswith(str(folder)):
+            raise HTTPException(400, "Invalid path.")
+        if not old_p.exists():
+            raise HTTPException(404, f"File not found: {payload.old_name}")
+
     if new_p.exists():
         raise HTTPException(409, f"File already exists: {payload.new_name}")
+
     old_p.rename(new_p)
-    return {"ok": True, "old_name": payload.old_name, "new_name": payload.new_name}
+    return {"ok": True, "old_name": old_name, "new_name": payload.new_name}
+
+
+@router.post("/match-and-rename-files")
+def match_and_rename_files(
+    payload: dict,
+    _user: dict = Depends(auth_helpers.require_user)
+):
+    """Auto-match existing .abf files to note entries by file mtime order.
+
+    Scans folder for all .abf files (sorted by modification time), then matches
+    them 1:1 with entries from the specified project's notes on the given date.
+    Renames files based on computeFilename logic from the matched entries.
+
+    Request body:
+      {
+        "project_slug": str,
+        "note_date": "YYYY-MM-DD",
+        "folder_name": str,
+        "data_root": str (optional)
+      }
+
+    Returns:
+      {
+        "matched": int,
+        "renamed": [{"old_name": str, "new_name": str}, ...],
+        "unmatched_files": [str, ...],
+        "unmatched_entries": int
+      }
+    """
+    import json
+    from datetime import datetime
+
+    project_slug = payload.get("project_slug", "").strip()
+    note_date = payload.get("note_date", "").strip()
+    folder_name = payload.get("folder_name", "").strip()
+    data_root = payload.get("data_root")
+
+    if not project_slug or not note_date or not folder_name:
+        raise HTTPException(400, "Missing required fields: project_slug, note_date, folder_name")
+
+    # Get the note for that date
+    con = _con()
+    con.row_factory = sqlite3.Row
+
+    note = con.execute(
+        "SELECT id, payload FROM eln_notes WHERE project_slug = ? AND note_date = ? AND user_id = ?",
+        (project_slug, note_date, _user["id"])
+    ).fetchone()
+
+    if not note:
+        raise HTTPException(404, "No note found for that date/project")
+
+    try:
+        entries = json.loads(note["payload"]).get("entries", [])
+    except (json.JSONDecodeError, TypeError):
+        entries = []
+
+    # Get the folder
+    root = _resolve_data_root(data_root)
+    folder = (root / folder_name).resolve()
+
+    if not folder.exists():
+        raise HTTPException(404, f"Folder not found: {folder_name}")
+
+    # Get all .abf files sorted by mtime (oldest first)
+    abf_files = sorted(
+        folder.glob("*.abf"),
+        key=lambda p: p.stat().st_mtime
+    )
+
+    if not abf_files:
+        raise HTTPException(404, "No .abf files found in folder")
+
+    # Match files to entries
+    renamed = []
+    unmatched_files = []
+
+    for idx, file_path in enumerate(abf_files):
+        if idx >= len(entries):
+            # More files than entries
+            unmatched_files.append(file_path.name)
+            continue
+
+        entry = entries[idx]
+        # Compute the target filename from the entry
+        # This mirrors the logic in slice.html's computeFilename()
+        exp_cond = entry.get("exp_condition", "").strip()
+        exp_type = entry.get("exp_type", "").strip()
+        cohort = entry.get("cohort", "").strip()
+        cell = entry.get("cell", "").strip()
+        protocol = entry.get("protocol", "").strip()
+
+        parts = []
+        if exp_cond:
+            parts.append(exp_cond)
+        if exp_type:
+            parts.append(exp_type)
+        if cohort:
+            parts.append(cohort)
+        if cell:
+            parts.append(cell)
+        if protocol:
+            parts.append(protocol)
+
+        if not parts:
+            # Can't compute a name, skip this file
+            unmatched_files.append(file_path.name)
+            continue
+
+        new_name = "_".join(parts) + ".abf"
+        new_path = folder / new_name
+
+        # Skip if target already exists
+        if new_path.exists():
+            unmatched_files.append(f"{file_path.name} (target exists: {new_name})")
+            continue
+
+        # Rename
+        try:
+            file_path.rename(new_path)
+            renamed.append({"old_name": file_path.name, "new_name": new_name})
+        except Exception as e:
+            unmatched_files.append(f"{file_path.name} (rename failed: {str(e)})")
+
+    return {
+        "matched": len(renamed),
+        "renamed": renamed,
+        "unmatched_files": unmatched_files,
+        "unmatched_entries": max(0, len(entries) - len(abf_files))
+    }
 
 
 @router.get("/browse-dir")
@@ -2628,6 +3102,598 @@ def _vision_extract_cell_params(image_b64: str, mime: str) -> dict:
     except Exception:
         raise HTTPException(502, f"Bad JSON from model: {text[:200]}")
     return {k: data.get(k) for k in ("ra", "rin", "cm", "ihold", "rmp")}
+
+
+@router.get("/vor-okr/status")
+def vor_okr_status(
+    project_slug: Optional[str] = None,
+    user: dict = Depends(auth_helpers.require_user),
+):
+    """Return all VOR/OKR entries across notes with their calibration status.
+
+    Returns a list of records: {date, project_slug, mouse_id, task, calibration_done,
+    good_signal, calib_channel, experiment_notes, note_id, author}.
+    Admins see all notes; members see only their own.
+    """
+    with _con() as con:
+        con.row_factory = sqlite3.Row
+        is_admin = user.get("effective_role") == "admin"
+        if is_admin:
+            if project_slug:
+                rows = con.execute(
+                    "SELECT n.id, n.note_date, n.project_slug, n.user_id, n.payload, "
+                    "u.display_name, u.username "
+                    "FROM eln_notes n LEFT JOIN eln_users u ON u.id=n.user_id "
+                    "WHERE n.experiment_type='behavior' AND n.project_slug=? "
+                    "ORDER BY n.note_date DESC",
+                    (project_slug,),
+                ).fetchall()
+            else:
+                rows = con.execute(
+                    "SELECT n.id, n.note_date, n.project_slug, n.user_id, n.payload, "
+                    "u.display_name, u.username "
+                    "FROM eln_notes n LEFT JOIN eln_users u ON u.id=n.user_id "
+                    "WHERE n.experiment_type='behavior' "
+                    "ORDER BY n.note_date DESC",
+                ).fetchall()
+        else:
+            q = ("SELECT n.id, n.note_date, n.project_slug, n.user_id, n.payload, "
+                 "u.display_name, u.username "
+                 "FROM eln_notes n LEFT JOIN eln_users u ON u.id=n.user_id "
+                 "WHERE n.experiment_type='behavior' AND n.user_id=? ")
+            params = [user["id"]]
+            if project_slug:
+                q += "AND n.project_slug=? "
+                params.append(project_slug)
+            q += "ORDER BY n.note_date DESC"
+            rows = con.execute(q, params).fetchall()
+
+    vor_abbrs = {"vor", "okr"}
+
+    def _task_abbr(t):
+        import re as _re
+        s = str(t or "").strip()
+        m = _re.search(r'\(([^)]+)\)\s*$', s)
+        raw = m.group(1) if m else _re.sub(r'\s*\([^)]*\)\s*$', '', s)
+        return _re.sub(r'[^A-Za-z0-9]', '', raw).lower()
+
+    results = []
+    for row in rows:
+        try:
+            payload = json.loads(row["payload"] or "{}")
+        except Exception:
+            continue
+        entries = payload.get("entries") or []
+        for entry in entries:
+            tasks = entry.get("behavior_tasks") or []
+            folders = entry.get("folders") or {}
+            for task in tasks:
+                if _task_abbr(task) not in vor_abbrs:
+                    continue
+                fd = folders.get(task) or {}
+                results.append({
+                    "note_id":          row["id"],
+                    "date":             row["note_date"],
+                    "project_slug":     row["project_slug"],
+                    "mouse_id":         entry.get("mouse_id", ""),
+                    "task":             task,
+                    "calibration_done": bool(fd.get("calibration_done")),
+                    "good_signal":      fd.get("good_signal", ""),
+                    "calib_channel":    fd.get("calib_channel", ""),
+                    "experiment_notes": fd.get("experiment_notes", ""),
+                    "author":           row["display_name"] or row["username"] or row["user_id"],
+                })
+
+    return {"records": results}
+
+
+# ── Experiment Log (aggregated view across all notes) ──────────────────────
+
+@router.get("/log")
+def get_experiment_log(
+    project_slug: Optional[str] = None,
+    experiment_type: Optional[str] = None,   # "slice" | "behavior"
+    sub_type: Optional[str] = None,           # "vor_okr"
+    author_id: Optional[str] = None,
+    mouse_id: Optional[str] = None,
+    cohort: Optional[str] = None,
+    date_from: Optional[str] = None,
+    date_to: Optional[str] = None,
+    user: dict = Depends(auth_helpers.require_user),
+):
+    con = _con()
+    con.row_factory = sqlite3.Row
+    effective_role = user.get("effective_role", "member")
+
+    q = """
+        SELECT n.id, n.project_slug, n.experiment_type, n.note_date, n.payload,
+               n.user_id, u.display_name, u.username, u.color, u.initials
+        FROM eln_notes n
+        JOIN eln_users u ON u.id = n.user_id
+        WHERE 1=1
+    """
+    params: list = []
+
+    if effective_role != "admin":
+        q += " AND n.project_slug IN (SELECT project_slug FROM eln_project_members WHERE user_id=?)"
+        params.append(user["id"])
+
+    # NOTE: project is filtered post-hoc by the mouse's REAL project
+    # (animals.project), not the note's ELN project_slug — see the mouse_project
+    # pass below. This keeps e.g. cohort-I mice under their tuning project even
+    # if a note was filed under a different ELN project.
+    if experiment_type:
+        # notes store slice as "slice_recording"; the UI/filter uses "slice"
+        q += " AND n.experiment_type=?"
+        params.append("slice_recording" if experiment_type == "slice" else experiment_type)
+    if author_id:
+        q += " AND n.user_id=?"
+        params.append(author_id)
+    if date_from:
+        q += " AND n.note_date>=?"
+        params.append(date_from)
+    if date_to:
+        q += " AND n.note_date<=?"
+        params.append(date_to)
+
+    q += " ORDER BY n.note_date DESC"
+    rows = con.execute(q, params).fetchall()
+
+    import re as _re
+
+    def _tab(t):
+        s = str(t or "").strip()
+        m = _re.search(r'\(([^)]+)\)\s*$', s)
+        raw = m.group(1) if m else _re.sub(r'\s*\([^)]*\)\s*$', '', s)
+        return _re.sub(r'[^A-Za-z0-9]', '', raw).lower()
+
+    vor_abbrs = {"vor", "okr"}
+    records = []
+
+    for row in rows:
+        try:
+            payload = json.loads(row["payload"] or "{}")
+        except Exception:
+            continue
+
+        author = {
+            "id": row["user_id"],
+            "name": row["display_name"] or row["username"],
+            "color": row["color"] or "#8E8E93",
+            "initials": row["initials"] or "?",
+        }
+        base = {
+            "note_id": row["id"],
+            "date": row["note_date"],
+            "project_slug": row["project_slug"],
+            "experiment_type": row["experiment_type"],
+            "author": author,
+        }
+
+        etype = row["experiment_type"]
+        entries = payload.get("entries") or []
+
+        if etype in ("slice", "slice_recording"):
+            for entry in entries:
+                mid = entry.get("mouse_id", "")
+                if mouse_id and mid != mouse_id:
+                    continue
+                if cohort and not _cohort_matches(cohort, entry.get("cohort", "")):
+                    continue
+                mouse = entry.get("mouse") or {}
+                records.append({
+                    **base,
+                    "experiment_type": "slice",
+                    "entry_type": "recording",
+                    "mouse_id": mid,
+                    "strain": mouse.get("strain", ""),
+                    "sex": mouse.get("sex", ""),
+                    "age_weeks": mouse.get("age_weeks"),
+                    "condition": mouse.get("condition", ""),
+                    "days_in_condition": mouse.get("days_in_condition"),
+                    "cohort": entry.get("cohort", "") or mouse.get("cohort", ""),
+                    "cell": entry.get("cell", ""),
+                    "exp_condition": entry.get("exp_condition", ""),
+                    "exp_type": entry.get("exp_type", ""),
+                    "protocol": entry.get("protocol", ""),
+                    "agent": entry.get("agent", ""),
+                    "notes": entry.get("notes", ""),
+                })
+
+        elif etype == "behavior":
+            # Recording entries (VOR/OKR tasks)
+            for entry in entries:
+                tasks = entry.get("behavior_tasks") or []
+                folders = entry.get("folders") or {}
+                mid = entry.get("mouse_id", "")
+                if mouse_id and mid.upper() != mouse_id.upper():
+                    continue
+                if cohort and not _cohort_matches(cohort, entry.get("cohort", "")):
+                    continue
+                mouse_meta = entry.get("mouse") or {}
+                for task in tasks:
+                    abbr = _tab(task)
+                    if abbr not in vor_abbrs:
+                        continue
+                    if sub_type and sub_type != "vor_okr":
+                        continue
+                    fd = folders.get(task) or {}
+                    is_acclim = entry.get("acclimatization", False)
+                    records.append({
+                        **base,
+                        "sub_type": "vor_okr",
+                        "entry_type": "acclimatization" if is_acclim else "recording",
+                        "mouse_id": mid,
+                        "cohort": entry.get("cohort", "") or mouse_meta.get("cohort", ""),
+                        "strain": mouse_meta.get("strain", ""),
+                        "sex": mouse_meta.get("sex", ""),
+                        "condition": mouse_meta.get("condition", ""),
+                        "age_weeks": mouse_meta.get("age_weeks"),
+                        "days_in_condition": mouse_meta.get("days_in_condition"),
+                        "task": task,
+                        "good_signal": fd.get("good_signal", ""),
+                        "calib_channel": fd.get("calib_channel", ""),
+                        "calibration_done": bool(fd.get("calibration_done")),
+                        "experiment_notes": fd.get("experiment_notes", ""),
+                        "smr_filename": fd.get("smr_filename", ""),
+                        "folder_name": fd.get("folder_name", ""),
+                        "disposition": entry.get("disposition", ""),
+                        "disposition_at": entry.get("disposition_at", ""),
+                    })
+
+            # VOR/OKR log (acclimatization events auto-logged on Done)
+            if not sub_type or sub_type == "vor_okr":
+                for log_entry in (payload.get("vor_okr_log") or []):
+                    mid = log_entry.get("mouse_id", "")
+                    if mouse_id and mid.upper() != mouse_id.upper():
+                        continue
+                    records.append({
+                        **base,
+                        "sub_type": "vor_okr",
+                        "entry_type": log_entry.get("type", "log"),
+                        "mouse_id": mid,
+                        "cohort": "", "strain": "", "sex": "",
+                        "condition": "", "age_weeks": None, "days_in_condition": None,
+                        "task": log_entry.get("type", ""),
+                        "good_signal": "", "calib_channel": "",
+                        "calibration_done": False,
+                        "experiment_notes": "",
+                        "smr_filename": "", "folder_name": "",
+                        "notes": log_entry.get("notes", ""),
+                    })
+
+    # ── Legacy vor_okr_logs (flat trial/acclim records) ────────────────────
+    if not experiment_type or experiment_type == "behavior":
+        if not sub_type or sub_type == "vor_okr":
+            from datetime import date as _ddate
+            # Read active + archived animals so archived (sacrificed) mice keep
+            # their cohort/strain/project in the log. animals wins on conflict.
+            _acols = ("mouse_id, project, strain, condition, cohort, dob, "
+                      "date_cond1, date_cond2, date_cond3")
+            legacy_animals = {}
+            for r in con.execute(f"SELECT {_acols} FROM animal_archive").fetchall():
+                if r["mouse_id"]:
+                    legacy_animals[r["mouse_id"].upper()] = dict(r)
+            for r in con.execute(f"SELECT {_acols} FROM animals").fetchall():
+                if r["mouse_id"]:
+                    legacy_animals[r["mouse_id"].upper()] = dict(r)
+            legacy_rows = con.execute("SELECT * FROM vor_okr_logs").fetchall()
+            for vrow in legacy_rows:
+                mid = vrow["mouse_id"]
+                if mouse_id and mid.upper() != mouse_id.upper():
+                    continue
+                ani = legacy_animals.get(mid.upper(), {})
+                if cohort and not _cohort_matches(cohort, ani.get("cohort", "")):
+                    continue
+                try:
+                    trials = json.loads(vrow["trials"] or "[]")
+                except Exception:
+                    trials = []
+                try:
+                    acclim_dates = json.loads(vrow["acclimatization"] or "[]")
+                except Exception:
+                    acclim_dates = []
+
+                def _legacy_rec(date_str: str, task_type: str, notes_txt: str, is_acclim: bool):
+                    if not date_str:
+                        return None
+                    if date_from and date_str < date_from:
+                        return None
+                    if date_to and date_str > date_to:
+                        return None
+                    age_wk = None
+                    dic = None
+                    try:
+                        td = _ddate.fromisoformat(date_str)
+                        if ani.get("dob"):
+                            age_wk = (td - _ddate.fromisoformat(ani["dob"])).days // 7
+                        for dcol in ["date_cond3", "date_cond2", "date_cond1"]:
+                            if ani.get(dcol) and ani[dcol] <= date_str:
+                                dic = (td - _ddate.fromisoformat(ani[dcol])).days
+                                break
+                    except Exception:
+                        pass
+                    return {
+                        "note_id": f"legacy-{mid}-{date_str}-{task_type}",
+                        "date": date_str,
+                        "project_slug": ani.get("project", ""),
+                        "experiment_type": "behavior",
+                        "sub_type": "vor_okr",
+                        "source": "legacy",
+                        "author": None,
+                        "entry_type": "acclimatization" if is_acclim else "recording",
+                        "mouse_id": mid,
+                        "cohort": ani.get("cohort", ""),
+                        "strain": ani.get("strain", ""),
+                        "condition": ani.get("condition", ""),
+                        "age_weeks": age_wk,
+                        "days_in_condition": dic,
+                        "task": task_type,
+                        "good_signal": "",
+                        "calib_channel": "",
+                        "calibration_done": False,
+                        "experiment_notes": notes_txt,
+                        "smr_filename": "",
+                        "folder_name": "",
+                        "notes": notes_txt,
+                        "dropout": bool(vrow["dropout"]) if "dropout" in vrow.keys() else False,
+                        "disposition": "",
+                        "disposition_at": "",
+                    }
+
+                for i, ad in enumerate(acclim_dates):
+                    rec = _legacy_rec(ad, "Acclimatization", "", True)
+                    if rec:
+                        records.append(rec)
+                for trial in trials:
+                    td_str = trial.get("date") or trial.get("test_date") or ""
+                    rec = _legacy_rec(td_str, trial.get("type", "VOR/OKR"), trial.get("memo", ""), False)
+                    if rec:
+                        records.append(rec)
+
+    # Surgery-done behavior mice with no sessions yet: still list them (blank
+    # OKR/VOR) so a mouse that's been operated on but not yet run shows up.
+    # "Behavior" = experiment mentions VOR/OKR. Skipped when filtering by author
+    # (these aren't authored records).
+    if ((not experiment_type) or experiment_type == "behavior") and \
+       ((not sub_type) or sub_type == "vor_okr") and not author_id:
+        from datetime import date as _pdate
+        _today = _pdate.today()
+        _behav_have = {(r.get("mouse_id") or "").upper()
+                       for r in records if r.get("experiment_type") == "behavior"}
+        _dropped = {(r["mouse_id"] or "").upper()
+                    for r in con.execute("SELECT mouse_id FROM vor_okr_logs WHERE dropout=1").fetchall()
+                    if r["mouse_id"]}
+        for a in con.execute(
+            "SELECT mouse_id, project, strain, sex, condition, cohort, dob, dos, "
+            "experiment, date_cond1, date_cond2, date_cond3 FROM animals "
+            "WHERE COALESCE(removed,0)=0 AND dos IS NOT NULL AND TRIM(dos)!=''"
+        ).fetchall():
+            mid = (a["mouse_id"] or "").strip()
+            if not mid or mid.upper() in _behav_have:
+                continue
+            if mouse_id and mid.upper() != mouse_id.upper():
+                continue
+            if cohort and not _cohort_matches(cohort, a["cohort"] or ""):
+                continue
+            _exp = (a["experiment"] or "").lower()
+            if "vor" not in _exp and "okr" not in _exp:
+                continue
+            try:
+                if _pdate.fromisoformat(a["dos"]) > _today:
+                    continue   # surgery not yet performed
+            except Exception:
+                continue
+            _dic, _ = _compute_days_in_condition(a)
+            records.append({
+                "note_id": f"pending-{mid}",
+                "date": a["dos"] or "",
+                "project_slug": "",
+                "experiment_type": "behavior",
+                "sub_type": "vor_okr",
+                "source": "pending",
+                "pending": True,
+                "author": None,
+                "entry_type": "pending",
+                "mouse_id": mid,
+                "cohort": a["cohort"] or "",
+                "strain": a["strain"] or "",
+                "sex": a["sex"] or "",
+                "condition": a["condition"] or "",
+                "age_weeks": _compute_age_weeks(a["dob"]),
+                "days_in_condition": _dic,
+                "task": "",
+                "good_signal": "", "calib_channel": "", "calibration_done": False,
+                "experiment_notes": "", "smr_filename": "", "folder_name": "",
+                "notes": "",
+                "dropout": (mid.upper() in _dropped), "disposition": "", "disposition_at": "",
+            })
+
+    # Tag every record with the mouse's REAL project (animals.project) and
+    # filter by it. This is what the user means by "project" — not where the
+    # note happens to be filed.
+    proj_map = {}
+    for r in con.execute("SELECT mouse_id, project FROM animal_archive").fetchall():
+        if r["mouse_id"]:
+            proj_map[r["mouse_id"].upper()] = (r["project"] or "").strip()
+    for r in con.execute("SELECT mouse_id, project FROM animals").fetchall():
+        if r["mouse_id"]:
+            proj_map[r["mouse_id"].upper()] = (r["project"] or "").strip()
+    for r in records:
+        r["mouse_project"] = proj_map.get((r.get("mouse_id") or "").upper(), "")
+    if project_slug:
+        _pl = project_slug.strip().lower()
+        records = [r for r in records if (r.get("mouse_project") or "").lower() == _pl]
+
+    # Derive "sacrificed": a mouse is sacrificed once it appears in a FINALIZED
+    # (approved) slice-recording note. App-owned/derived — never written to the
+    # animals table or Google Sheet (so a Sheet sync can't clobber it). Date =
+    # the slice note's date (slice recording is terminal).
+    sacrificed: dict = {}
+    for sr in con.execute(
+        "SELECT note_date, payload FROM eln_notes "
+        "WHERE experiment_type='slice_recording' AND status='approved'"
+    ).fetchall():
+        try:
+            sp = json.loads(sr["payload"] or "{}")
+        except Exception:
+            continue
+        for e in sp.get("entries", []):
+            smid = (e.get("mouse_id") or "").strip().upper()
+            if not smid:
+                continue
+            d = sr["note_date"] or ""
+            if smid not in sacrificed or (d and d < sacrificed[smid]):
+                sacrificed[smid] = d
+    for r in records:
+        smid = (r.get("mouse_id") or "").strip().upper()
+        r["sacrificed"] = smid in sacrificed
+        r["sacrificed_at"] = sacrificed.get(smid, "")
+
+    # Project dropdown = distinct real projects (animals.project), case-folded
+    proj_seen: dict = {}
+    for r in con.execute(
+        "SELECT project FROM animals WHERE project IS NOT NULL AND TRIM(project)!=''"
+    ).fetchall():
+        k = r["project"].strip()
+        proj_seen.setdefault(k.lower(), k)
+    projects = [{"slug": v, "title": v} for v in sorted(proj_seen.values(), key=str.lower)]
+
+    # Authors — all experimenters (project is now mouse-based, not membership)
+    auth_rows = con.execute("""
+        SELECT DISTINCT u.id, u.display_name, u.username, u.color, u.initials
+        FROM eln_users u JOIN eln_project_members m ON m.user_id=u.id
+        ORDER BY u.display_name
+    """).fetchall()
+    authors = [
+        {"id": r["id"], "name": r["display_name"] or r["username"],
+         "color": r["color"] or "#8E8E93", "initials": r["initials"] or "?"}
+        for r in auth_rows
+    ]
+
+    return {"records": records, "projects": projects, "authors": authors}
+
+
+# ── Ephys Analysis Pipeline ────────────────────────────────────────────────
+
+_UPLOAD_DIR  = Path("/opt/labos/analysis_uploads")
+_RESULTS_DIR = Path("/opt/labos/analysis_results")
+
+
+class AnalysisJobIn(BaseModel):
+    note_id:        Optional[str] = None
+    project_slug:   str
+    analysis_type:  str = "ltd"          # "ltd" | "excitability"
+    exp_condition:  str = ""             # e.g. "MTDT"
+    note_date:      str = ""             # "YYYY-MM-DD"
+    prefix:         str = "LTD"
+    protocol_mode:  str = ""             # "" = auto-detect
+    epsc_min:       float = 20.0
+    epsc_max:       float = 1000.0
+    email:          str = ""
+    extra_out_dir:  str = ""             # optional secondary output path
+
+
+@router.post("/analysis/upload/{job_id}")
+async def upload_abf(
+    job_id: str,
+    request: Request,
+    user: dict = Depends(auth_helpers.require_user),
+):
+    """Receive a single ABF file chunk. Call repeatedly for each file."""
+    content_type = request.headers.get("content-type", "")
+    filename = request.headers.get("x-filename", "file.abf")
+    if not filename.lower().endswith((".abf",)):
+        raise HTTPException(400, "Only .abf files accepted.")
+
+    dest_dir = _UPLOAD_DIR / job_id
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    dest = dest_dir / Path(filename).name
+    body = await request.body()
+    dest.write_bytes(body)
+    return {"ok": True, "filename": dest.name, "size": len(body)}
+
+
+
+
+@router.post("/analysis/start")
+def start_analysis_job(
+    payload: AnalysisJobIn,
+    upload_job_id: str,           # the job_id used when uploading files
+    user: dict = Depends(auth_helpers.require_user),
+):
+    """Validate uploaded files exist, then enqueue the analysis job."""
+    con = _con()
+    upload_dir = _UPLOAD_DIR / upload_job_id
+    if not upload_dir.exists() or not list(upload_dir.glob("*.abf")):
+        raise HTTPException(400, "No ABF files found for this upload_job_id.")
+
+    n_files = len(list(upload_dir.glob("*.abf")))
+    params = payload.dict()
+
+    con.execute(
+        """INSERT INTO eln_analysis_jobs
+           (id, note_id, project_slug, user_id, analysis_type, status, params, created_at, updated_at)
+           VALUES (?,?,?,?,?,?,?,?,?)""",
+        [upload_job_id, payload.note_id, payload.project_slug, user["id"],
+         payload.analysis_type, "pending", json.dumps(params),
+         _now_iso(), _now_iso()],
+    )
+    con.commit()
+    return {"job_id": upload_job_id, "n_files": n_files, "status": "pending"}
+
+
+@router.get("/analysis/jobs/{job_id}")
+def get_analysis_job(job_id: str, user: dict = Depends(auth_helpers.require_user)):
+    con = _con()
+    con.row_factory = __import__("sqlite3").Row
+    row = con.execute("SELECT * FROM eln_analysis_jobs WHERE id=?", [job_id]).fetchone()
+    if not row:
+        raise HTTPException(404, "Job not found.")
+    result = json.loads(row["result"] or "null")
+    return {
+        "job_id":  job_id,
+        "status":  row["status"],
+        "params":  json.loads(row["params"] or "{}"),
+        "result":  result,
+        "error":   row["error"],
+        "created_at": row["created_at"],
+        "updated_at": row["updated_at"],
+    }
+
+
+@router.get("/analysis/jobs")
+def list_analysis_jobs(
+    project_slug: Optional[str] = None,
+    user: dict = Depends(auth_helpers.require_user),
+):
+    con = _con()
+    con.row_factory = __import__("sqlite3").Row
+    q = "SELECT * FROM eln_analysis_jobs WHERE user_id=? OR ? = 'admin'"
+    rows = con.execute(q, [user["id"], user.get("effective_role", "member")]).fetchall()
+    if project_slug:
+        rows = [r for r in rows if r["project_slug"] == project_slug]
+    return {"jobs": [
+        {"job_id": r["id"], "note_id": r["note_id"], "status": r["status"],
+         "analysis_type": r["analysis_type"], "project_slug": r["project_slug"],
+         "created_at": r["created_at"],
+         "params": json.loads(r["params"] or "{}"),
+         "result": json.loads(r["result"] or "null")}
+        for r in rows
+    ]}
+
+
+@router.get("/analysis/results/{job_id}/{filename}")
+def download_result(
+    job_id: str, filename: str,
+    user: dict = Depends(auth_helpers.require_user),
+):
+    from fastapi.responses import FileResponse as FR
+    safe = Path(filename).name
+    path = _RESULTS_DIR / job_id / safe
+    if not path.exists():
+        raise HTTPException(404, "File not found.")
+    return FR(str(path), filename=safe)
 
 
 class _VisionIn(BaseModel):

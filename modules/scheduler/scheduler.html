@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script src="/labos-ui.js"></script>
 <title>Lab Scheduler</title>
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
 <link rel="manifest" href="/manifest.webmanifest" />
@@ -388,6 +389,7 @@
   .modal {
     background: var(--bg); border-radius: 12px; min-width: 380px;
     padding: 18px; box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    max-height:90vh; overflow-y:auto;
   }
   .modal h2 { margin: 0 0 12px; font-size: 16px; }
   .modal .row { display: flex; gap: 8px; margin-bottom: 10px; }
@@ -399,6 +401,7 @@
   .modal textarea { resize: vertical; min-height: 60px; }
   .modal .actions {
     display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px;
+    position:sticky;bottom:-18px;background:var(--bg);padding:10px 0;
   }
   .modal .actions .danger {
     background: #fff; color: #ff3b30; border: 1px solid #ffd1cf; margin-right: auto;
@@ -495,7 +498,7 @@
   <button class="icon-btn" id="compactBtn" title="Compact / Normal">⊟</button>
   <button class="icon-btn" id="darkBtn" title="Dark mode">🌙</button>
   <button class="icon-btn" id="pdfBtn" title="Print / PDF & CSV export">📄</button>
-  <a href="/colony.html" class="icon-btn" title="Colony DB" style="text-decoration:none; display:inline-flex; align-items:center;">🐭</a>
+  <a href="https://docs.google.com/spreadsheets/d/YOUR_SHEET_ID/edit" target="_blank" rel="noopener" class="icon-btn" title="Open Animal DB Google Sheet" style="text-decoration:none; display:inline-flex; align-items:center;" onclick="try{localStorage.setItem('labos_animal_sheet_opened_at', String(Date.now()))}catch(e){}">🐭</a>
   <a href="/vor_okr.html" class="icon-btn" title="VOR / OKR Log" style="text-decoration:none; display:inline-flex; align-items:center;">V/O</a>
   <button class="primary-btn" id="aiSchedBtn" title="AI schedule from plain language" style="margin-right:6px;">✨<span class="tb-txt"> AI</span></button>
   <button class="primary-btn" id="newBtn">+ New</button>
@@ -522,10 +525,17 @@
       <div id="memberList"></div>
     </div>
 
-    <!-- Hidden no-op placeholders so render() doesn't crash if it tries to write here -->
-    <div id="catList" style="display:none;"></div>
-    <div id="cohortList" style="display:none;"></div>
-    <input type="checkbox" id="cohortShowAll" checked style="display:none;" />
+    <h3>Experiment type</h3>
+    <div id="catList"></div>
+    <h3>Cohorts</h3>
+    <label class="proj-item"><input type="checkbox" id="cohortShowAll" checked /> All cohorts</label>
+    <div id="cohortList"></div>
+    <h3>Status</h3>
+    <select id="statusFilter" style="width:100%;padding:7px;border:1px solid var(--border);border-radius:6px;background:var(--bg);color:var(--text)">
+      <option value="">All statuses</option><option value="planned">Planned</option><option value="in_progress">In progress</option>
+      <option value="done">Done</option><option value="delayed">Delayed</option><option value="skipped">Skipped</option>
+    </select>
+    <button id="resetFiltersBtn" style="margin-top:8px">Reset filters</button>
 
     <h3>Animals DB</h3>
     <div id="animalSyncBar" class="animal-db-bar"></div>
@@ -540,7 +550,7 @@
       <button id="migrateBtn" title="One-time import from old browser storage">Migrate localStorage</button>
     </div>
     <div style="margin-top:10px; font-size:11px; color:var(--text-muted);">
-      Saved to local server (scheduler.db).
+      Saved to Lab OS. Changes are shared with the lab.
     </div>
   </aside>
 
@@ -633,11 +643,10 @@
   <div class="modal" style="min-width:520px; max-width:620px; max-height:90vh; display:flex; flex-direction:column;">
     <h2 style="flex:none;">✨ AI schedule</h2>
     <p style="flex:none; margin:0 0 10px; font-size:12px; color:var(--text-muted);">
-      Describe the experiments in plain language — cohort, assay, dates, mice/day, control mixing.
-      A preview is shown before anything is added to the calendar.
+      Describe experiments to add, or ask to delete existing schedules. A preview is shown before anything changes.
     </p>
     <textarea id="aiSchedText" rows="3"
-      placeholder="e.g. Schedule cohort dA OKR testing next week on weekdays, 2 mice/day, randomly mixed with the dA-con control group"
+      placeholder="e.g. Schedule cohort dA OKR next week, 2 mice/day; or delete OKR schedules from 2026-06-23 to 2026-06-28"
       style="flex:none; width:100%; box-sizing:border-box; padding:9px; border:1px solid var(--border); border-radius:6px; font:inherit; resize:vertical;"></textarea>
     <div class="actions" style="flex:none; margin-top:8px; justify-content:flex-start;">
       <button class="primary-btn" id="aiGenBtn">Generate preview</button>
@@ -813,6 +822,8 @@
     </div>
     <div class="actions">
       <button class="danger" id="deleteBtn">Delete</button>
+      <button id="eventNotesBtn" type="button">📓 Notes</button>
+      <button id="duplicateBtn" style="display:none;">Duplicate</button>
       <button id="cancelBtn">Cancel</button>
       <button class="primary-btn" id="saveBtn">Save</button>
     </div>
@@ -871,6 +882,7 @@ const state = {
   editing: null,
   loaded: false,
   searchQuery: '',
+  statusFilter: '',
   darkMode: false,
   compact: false,
   team: [],           // [{id, name, role, color}]
@@ -881,6 +893,9 @@ const state = {
   elnUsersById: {},        // eln user id -> {display_name, username, initials, color}
   myTeamIds: new Set(),    // team_members.id linked to my eln user (assignee match)
   resources: { locations: [], rigs: [] },   // admin-curated location/rig lists
+  aiMode: 'add',
+  aiProposed: [],
+  aiDeleteIds: [],
   cohortFilter: new Set(),    // selected base-cohort names; empty = show all
   cohortShowAll: true,
   animalSyncStatus: { excel_path: '', last_synced: '', count: 0 },
@@ -893,6 +908,14 @@ function reloadCats() {
   rebuildCatIndex();
   state.customCats.forEach(c => state.catFilter.add(c.key));
 }
+window.addEventListener('labos:animals-synced', async e => {
+  state.animalSyncStatus = {...state.animalSyncStatus, ...e.detail, last_report:e.detail.report};
+  state.animalsLoaded = false;
+  if (document.getElementById('micePanelBack').classList.contains('show')) {
+    await loadAnimals(); renderMicePanelList(document.getElementById('micePanelSearch').value,document.getElementById('showSacrificedChk').checked);
+  }
+  renderSidebar();
+});
 
 // ---------- API ----------
 async function api(path, opts = {}) {
@@ -1217,6 +1240,11 @@ function baseCohort(name) {
 
 function visibleEvents() {
   return state.events.filter(ev => {
+    if (state.statusFilter && ev.status !== state.statusFilter) return false;
+    const query = state.searchQuery.trim().toLowerCase();
+    if (query && ![ev.title, ev.notes, ev.subcategory, ev.subcategory2, ev.category, ev.cohort,
+      projectNameOf(ev.project_slug), memberById(ev.assignee)?.name, ev.location, ev.rig, ...(ev.mice || [])]
+      .join(' ').toLowerCase().includes(query)) return false;
     if (!state.catFilter.has(ev.category)) return false;
     if (!state.projectShowAll) {
       if (state.projectFilter.size === 0) return false;
@@ -1229,7 +1257,7 @@ function visibleEvents() {
     if (!state.cohortShowAll) {
       // Events with no cohort are always shown (they're not "filterable by cohort").
       const evBase = baseCohort(ev.cohort || '');
-      if (evBase && state.cohortFilter.size > 0 && !state.cohortFilter.has(evBase)) return false;
+      if (!state.cohortFilter.has(evBase)) return false;
     }
     if (state.mineOnly && state.me) {
       const mine = (ev.owner_id && ev.owner_id === state.me.id) || state.myTeamIds.has(ev.assignee || '');
@@ -1496,6 +1524,10 @@ function renderSidebar() {
   };
 
   // Team members
+  const teamSection = document.getElementById('teamSection');
+  if (teamSection) teamSection.style.display = state.team.length ? '' : 'none';
+  const addMemberBtn = document.getElementById('addMemberBtn');
+  if (addMemberBtn) addMemberBtn.style.display = state._schedulerIsAdmin ? '' : 'none';
   const memberList = document.getElementById('memberList');
   memberList.innerHTML = '';
   state.team.forEach(m => {
@@ -1504,9 +1536,9 @@ function renderSidebar() {
     const checked = state.assigneeFilter.has(m.id);
     item.innerHTML = `
       <input type="checkbox" data-mid="${m.id}" ${checked ? 'checked' : ''} ${state.assigneeShowAll ? 'disabled' : ''} />
-      <span class="cat-dot color-dot-btn" data-mid="${m.id}" style="background:${m.color}; cursor:pointer;" title="Click to change color"></span>
+      <span class="cat-dot${state._schedulerIsAdmin ? ' color-dot-btn' : ''}" data-mid="${m.id}" style="background:${m.color};${state._schedulerIsAdmin ? ' cursor:pointer;' : ''}" ${state._schedulerIsAdmin ? 'title="Click to change color"' : ''}></span>
       <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(m.name)}${m.role ? ' <span style="color:var(--text-muted);font-size:11px;">(' + escapeHtml(m.role) + ')</span>' : ''}</span>
-      <button class="del-member" data-mid="${m.id}" title="Remove member" style="background:none;border:none;color:var(--text-muted);cursor:pointer;">×</button>
+      ${state._schedulerIsAdmin ? `<button class="del-member" data-mid="${m.id}" title="Remove member" style="background:none;border:none;color:var(--text-muted);cursor:pointer;">×</button>` : ''}
     `;
     memberList.appendChild(item);
   });
@@ -1619,6 +1651,16 @@ function renderSidebar() {
     syncBtn.onclick = () => syncAnimals(syncBtn);
     btnRow.appendChild(syncBtn);
     syncBar.appendChild(btnRow);
+    const historyBtn = document.createElement('button');
+    historyBtn.textContent = 'History / issues';
+    historyBtn.onclick = () => LabOS.syncHistory();
+    btnRow.appendChild(historyBtn);
+    const rejected = state.animalSyncStatus.last_report?.counts?.rejected || 0;
+    if (rejected) {
+      const warn = document.createElement('div');
+      warn.textContent = `⚠ ${rejected} rejected row(s) — see History`;
+      warn.style.color = '#b45309'; syncBar.appendChild(warn);
+    }
     const srcDiv = document.createElement('div');
     srcDiv.style.cssText = 'font-size:10px; opacity:0.7;';
     srcDiv.textContent = sheet_id ? 'source: Google Sheet' : 'source: not configured';
@@ -2493,6 +2535,7 @@ function attachEventInteractions(node, ev) {
 // ---------- Modal ----------
 const ADD_NEW = '__add_new__';
 let miceState = []; // array of strings for the open modal
+let modalTitleTouched = false;
 
 function fillCategoryOptions(selectedKey) {
   const sel = document.getElementById('fCategory');
@@ -2516,7 +2559,7 @@ function fillSubOptions(catKey, selectedSub) {
   sel.appendChild(blank);
   const defaults = (CAT_BY_KEY[catKey]?.subs) || [];
   const custom = state.customSubs[catKey] || [];
-  [...new Set([...defaults, ...custom])].forEach(s => {
+  [...new Set([...defaults, ...custom, ...(selectedSub ? [selectedSub] : [])])].forEach(s => {
     const o = document.createElement('option');
     o.value = s; o.textContent = s;
     sel.appendChild(o);
@@ -2524,7 +2567,7 @@ function fillSubOptions(catKey, selectedSub) {
   const addOpt = document.createElement('option');
   addOpt.value = ADD_NEW; addOpt.textContent = '+ Add new…';
   sel.appendChild(addOpt);
-  sel.value = selectedSub && [...defaults, ...custom].includes(selectedSub) ? selectedSub : '';
+  sel.value = selectedSub || '';
   updateSub2(catKey, sel.value, '');
   updateAutoTitleMode(catKey);
 }
@@ -2537,7 +2580,7 @@ function fillSub2Options(subKey, selectedSub2) {
   field.style.display = '';
   document.getElementById('sub2Label').textContent = subKey;
   sel.innerHTML = '';
-  subs.forEach(s => {
+  [...new Set([...subs, ...(selectedSub2 ? [selectedSub2] : [])])].forEach(s => {
     const o = document.createElement('option');
     o.value = s; o.textContent = s;
     sel.appendChild(o);
@@ -2545,7 +2588,7 @@ function fillSub2Options(subKey, selectedSub2) {
   const addOpt = document.createElement('option');
   addOpt.value = ADD_NEW; addOpt.textContent = '+ Add new…';
   sel.appendChild(addOpt);
-  sel.value = selectedSub2 && subs.includes(selectedSub2) ? selectedSub2 : subs[0];
+  sel.value = selectedSub2 || subs[0];
   updateAutoTitle();
 }
 
@@ -2566,6 +2609,7 @@ function updateAutoTitleMode(catKey) {
 }
 
 function updateAutoTitle() {
+  if (modalTitleTouched) return;
   const cat = document.getElementById('fCategory').value;
   if (!AUTO_TITLE_CATS.has(cat)) return;
   const sub = document.getElementById('fSubcategory').value;
@@ -2837,11 +2881,13 @@ function updateMiceRow(catKey) {
 
 function openModal(eventId, defaultStart, defaultEnd) {
   state.editing = eventId;
+  modalTitleTouched = !!eventId;
   let ev;
   if (eventId) {
     ev = state.events.find(x => x.id === eventId);
     document.getElementById('modalTitle').textContent = 'Edit Task';
     document.getElementById('deleteBtn').style.display = '';
+    document.getElementById('duplicateBtn').style.display = '';
   } else {
     ev = {
       id: null, title: '', category: 'experiments', subcategory: '',
@@ -2853,7 +2899,11 @@ function openModal(eventId, defaultStart, defaultEnd) {
     };
     document.getElementById('modalTitle').textContent = 'New Task';
     document.getElementById('deleteBtn').style.display = 'none';
+    document.getElementById('duplicateBtn').style.display = 'none';
   }
+  const noteBtn = document.getElementById('eventNotesBtn');
+  noteBtn.style.display = eventId ? '' : 'none';
+  noteBtn.onclick = () => LabOS.openEventNotes(ev, document.getElementById('fDate').value);
   const cb = document.getElementById('fCreatedBy');
   if (ev && ev.owner_id) {
     const u = state.elnUsersById[ev.owner_id];
@@ -2953,7 +3003,7 @@ async function saveModal() {
   } else {
     start = parseTime(date, startT);
     end = parseTime(dateEnd || date, endT);
-    if (end <= start) end = new Date(start.getTime() + 60*60000);
+    if (end <= start) { alert('End time must be after start time.'); return; }
   }
 
   const subVal = subcategory === ADD_NEW ? '' : subcategory;
@@ -2964,8 +3014,7 @@ async function saveModal() {
   let title;
   if (AUTO_TITLE_CATS.has(category)) {
     const label = (sub2Val && sub2Val !== ADD_NEW) ? sub2Val : (subVal || '');
-    title = label;
-    if (!title) title = document.getElementById('fTitle').value.trim();
+    title = document.getElementById('fTitle').value.trim() || label;
   } else {
     title = document.getElementById('fTitle').value.trim();
   }
@@ -2984,8 +3033,9 @@ async function saveModal() {
   try {
     if (state.editing) {
       const ev = state.events.find(x => x.id === state.editing);
-      Object.assign(ev, { title, category, subcategory: subVal, subcategory2: sub2Val, cohort, project_slug, status, start, end, notes, mice, all_day: allDay, assignee, location, rig, delay_reason, reschedule_to, recur });
-      await api(`/api/events/${ev.id}`, { method: 'PUT', body: JSON.stringify(evToWire(ev)) });
+      const changes = { ...ev, title, category, subcategory: subVal, subcategory2: sub2Val, cohort, project_slug, status, start, end, notes, mice, all_day: allDay, assignee, location, rig, delay_reason, reschedule_to, recur };
+      const saved = await api(`/api/events/${ev.id}`, { method: 'PUT', body: JSON.stringify(evToWire(changes)) });
+      Object.assign(ev, evFromWire(saved));
       eventForLog = ev;
     } else {
       const ev = { id: uid(), title, category, subcategory: subVal, subcategory2: sub2Val, cohort, project_slug, status, start, end, notes, mice, all_day: allDay, assignee, location, rig, delay_reason, reschedule_to, recur };
@@ -3011,6 +3061,49 @@ async function saveModal() {
     }
   } catch (err) { alert(err.message); return; }
   closeModal(); render(); renderSidebar();
+}
+
+function duplicateEvent() {
+  if (!state.editing) return;
+  const src = state.events.find(x => x.id === state.editing);
+  if (!src) return;
+  const dur = src.end - src.start;
+  const newStart = new Date(src.start.getTime() + 24*60*60000);
+  const newEnd   = new Date(newStart.getTime() + dur);
+  closeModal();
+  // open as new event with all fields pre-filled
+  state.editing = null;
+  openModal(null, newStart, newEnd);
+  // override fields after openModal populated the form
+  const fill = (id, val) => { const el = document.getElementById(id); if (el) el.value = val ?? ''; };
+  fill('fTitle',    src.title);
+  modalTitleTouched = true;
+  fill('fNotes',    src.notes);
+  fill('fCohort',   src.cohort);
+  fill('fStatus',   src.status);
+  fill('fProject',  src.project_slug);
+  fill('fAssignee', src.assignee);
+  fill('fDelayReason',   src.delay_reason);
+  fill('fRescheduleTo',  src.reschedule_to);
+  // category / sub chain
+  fillCategoryOptions(src.category);
+  document.getElementById('fCategory').value = src.category;
+  fillSubOptions(src.category, src.subcategory || '');
+  document.getElementById('fSubcategory').value = src.subcategory || '';
+  updateSub2(src.category, src.subcategory || '', src.subcategory2 || '');
+  document.getElementById('fSubcategory2').value = src.subcategory2 || '';
+  // mice chips
+  miceState = [...(src.mice || [])]; renderMiceChips(); updateMiceRow(src.category);
+  fillResourceSelect('fLocation', 'fLocationCustom', state.resources.locations || [], src.location || '');
+  fillResourceSelect('fRig', 'fRigCustom', state.resources.rigs || [], src.rig || '');
+  // all-day
+  const allDay = document.getElementById('fAllDay');
+  if (allDay) allDay.checked = !!src.all_day;
+  document.getElementById('timeRow').style.display = src.all_day ? 'none' : '';
+  // recur
+  fill('fRecurFreq',  src.recur?.freq  || '');
+  fill('fRecurUntil', src.recur?.until || '');
+  document.getElementById('modalTitle').textContent = 'New Task (copy)';
 }
 
 async function deleteEvent() {
@@ -3119,13 +3212,19 @@ function initSidebar() {
     });
   }
 
-  // Show Team panel only when logged-in user is in admin mode
+  // Show Team panel always; restrict add/remove/color to admin mode
   fetch('/api/eln/auth/me', { credentials: 'include' })
     .then(r => r.ok ? r.json() : null)
     .then(d => {
       const isAdmin = d && d.user && d.user.effective_role === 'admin';
+      state._schedulerIsAdmin = isAdmin;
       const team = document.getElementById('teamSection');
-      if (team) team.style.display = isAdmin ? '' : 'none';
+      if (team) {
+        team.style.display = state.team.length ? '' : 'none';
+        const addBtn = document.getElementById('addMemberBtn');
+        if (addBtn) addBtn.style.display = isAdmin ? '' : 'none';
+      }
+      renderSidebar();
     })
     .catch(() => {});
 }
@@ -3344,9 +3443,13 @@ function openAiSched() {
   document.getElementById('aiSchedText').value = '';
   const prev = document.getElementById('aiSchedPreview');
   prev.style.display = 'none'; prev.innerHTML = '';
-  document.getElementById('aiCommitBtn').disabled = true;
+  const commitBtn = document.getElementById('aiCommitBtn');
+  commitBtn.disabled = true;
+  commitBtn.textContent = 'Confirm & add';
   aiSchedMsg('');
+  state.aiMode = 'add';
   state.aiProposed = null;
+  state.aiDeleteIds = [];
   document.getElementById('aiSchedBack').classList.add('show');
   document.getElementById('aiSchedText').focus();
 }
@@ -3366,9 +3469,13 @@ async function aiGeneratePreview() {
   genBtn.disabled = true; aiSchedMsg('Thinking…');
   try {
     const r = await api('/api/schedule/ai', { method: 'POST', body: JSON.stringify({ text }) });
+    state.aiMode = r.action === 'delete' ? 'delete' : 'add';
     state.aiProposed = r.events || [];
+    state.aiDeleteIds = (r.delete_events || []).map(e => e.id).filter(Boolean);
     renderAiPreview(r);
-    document.getElementById('aiCommitBtn').disabled = state.aiProposed.length === 0;
+    const commitBtn = document.getElementById('aiCommitBtn');
+    commitBtn.textContent = state.aiMode === 'delete' ? 'Confirm & delete' : 'Confirm & add';
+    commitBtn.disabled = state.aiMode === 'delete' ? state.aiDeleteIds.length === 0 : state.aiProposed.length === 0;
     aiSchedMsg('');
   } catch (e) {
     aiSchedMsg(String(e.message || e), 'error');
@@ -3380,6 +3487,27 @@ async function aiGeneratePreview() {
 function renderAiPreview(r) {
   const prev = document.getElementById('aiSchedPreview');
   const s = r.summary || {}, p = r.params || {};
+  if (r.action === 'delete') {
+    const targets = r.delete_events || [];
+    const rows = targets.map(e => {
+      const when = `${escapeHtml(String(e.start || '').replace('T', ' '))}${e.end ? ' → ' + escapeHtml(String(e.end).replace('T', ' ')) : ''}`;
+      const meta = [e.category, e.subcategory, e.cohort, (e.mice || []).join(', ')].filter(Boolean).join(' · ');
+      return `<tr><td style="white-space:nowrap; padding:2px 8px 2px 0; color:var(--text-muted);">${when}</td><td style="padding:2px 0;"><b>${escapeHtml(e.title || '')}</b>${meta ? `<div style="color:var(--text-muted);">${escapeHtml(meta)}</div>` : ''}</td></tr>`;
+    }).join('');
+    const warn = (r.warnings || []).map(w => `<div>⚠ ${escapeHtml(w)}</div>`).join('');
+    prev.innerHTML = `
+      <div style="font-size:12px; color:var(--text-muted); margin-bottom:6px;">
+        Understood: delete ${escapeHtml(p.query || p.title_contains || p.subcategory || p.category || 'events')} ·
+        ${escapeHtml(p.date_from || '')}→${escapeHtml(p.date_to || '')}
+      </div>
+      <div style="font-size:13px; margin-bottom:6px;">
+        <b>${s.matched || 0}</b> existing events will be deleted${Number.isFinite(s.candidates) ? ` · ${s.candidates} checked in range` : ''}
+      </div>
+      ${warn ? `<div style="font-size:12px; color:#b80; margin-bottom:6px;">${warn}</div>` : ''}
+      <table style="width:100%; border-collapse:collapse; font-size:12px;"><tbody>${rows || '<tr><td class="empty">No matching existing events</td></tr>'}</tbody></table>`;
+    prev.style.display = 'block';
+    return;
+  }
   const rows = (r.events || []).map(e =>
     `<tr><td style="white-space:nowrap; padding:2px 8px 2px 0; color:var(--text-muted);">${escapeHtml(e.start.replace('T', ' '))}</td><td style="padding:2px 0;">${escapeHtml(e.title)}</td></tr>`
   ).join('');
@@ -3403,11 +3531,19 @@ function renderAiPreview(r) {
 }
 
 async function aiCommit() {
-  if (!state.aiProposed || !state.aiProposed.length) return;
+  if (state.aiMode === 'delete') {
+    if (!state.aiDeleteIds || !state.aiDeleteIds.length) return;
+  } else if (!state.aiProposed || !state.aiProposed.length) {
+    return;
+  }
   const btn = document.getElementById('aiCommitBtn');
-  btn.disabled = true; aiSchedMsg('Adding…');
+  btn.disabled = true; aiSchedMsg(state.aiMode === 'delete' ? 'Deleting…' : 'Adding…');
   try {
-    await api('/api/schedule/commit', { method: 'POST', body: JSON.stringify({ events: state.aiProposed }) });
+    if (state.aiMode === 'delete') {
+      await api('/api/schedule/delete', { method: 'POST', body: JSON.stringify({ event_ids: state.aiDeleteIds }) });
+    } else {
+      await api('/api/schedule/commit', { method: 'POST', body: JSON.stringify({ events: state.aiProposed }) });
+    }
     closeAiSched();
     await loadAll(); render(); renderSidebar();
   } catch (e) {
@@ -3595,7 +3731,9 @@ function wire() {
   });
   document.getElementById('cancelBtn').addEventListener('click', closeModal);
   document.getElementById('saveBtn').addEventListener('click', saveModal);
+  document.getElementById('fTitle').addEventListener('input', () => { modalTitleTouched = true; });
   document.getElementById('deleteBtn').addEventListener('click', deleteEvent);
+  document.getElementById('duplicateBtn').addEventListener('click', duplicateEvent);
   document.getElementById('modalBack').addEventListener('click', e => {
     if (e.target.id === 'modalBack') closeModal();
   });
@@ -3675,6 +3813,15 @@ function wire() {
     state.searchQuery = e.target.value;
     render();
   });
+  document.getElementById('statusFilter').onchange = e => { state.statusFilter = e.target.value; render(); };
+  document.getElementById('resetFiltersBtn').onclick = () => {
+    state.searchQuery = ''; state.statusFilter = ''; state.mineOnly = false;
+    state.projectShowAll = true; state.assigneeShowAll = true; state.cohortShowAll = true;
+    state.catFilter = new Set(CATS.map(c => c.key));
+    document.getElementById('searchInput').value = ''; document.getElementById('statusFilter').value = '';
+    document.getElementById('mineBtn').style.background = ''; document.getElementById('mineBtn').style.color = '';
+    renderSidebar(); render();
+  };
 
   // Dark mode
   const darkBtn = document.getElementById('darkBtn');
@@ -3713,6 +3860,9 @@ function wire() {
       if (e.key === 'Enter' && e.ctrlKey) saveModal();
       return;
     }
+    // Don't hijack single-key shortcuts while the user is typing in a field.
+    const tag = (e.target.tagName || '').toLowerCase();
+    if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
     if (e.key === 'ArrowLeft') shiftCursor(-1);
     if (e.key === 'ArrowRight') shiftCursor(1);
     if (e.key === 't' || e.key === 'T') { state.cursor = new Date(); render(); }
@@ -3742,7 +3892,7 @@ async function boot() {
     document.body.innerHTML = `<div style="padding:40px; font-family:sans-serif;">
       <h2>Can't reach the server</h2>
       <p>${escapeHtml(err.message)}</p>
-      <p>Make sure to start it via <code>start_scheduler.command</code> (or <code>python3 server.py</code>).</p>
+      <p>Reload to retry. If the problem continues, contact the lab administrator.</p><button onclick="location.reload()">Retry</button>
     </div>`;
     return;
   }
@@ -3751,6 +3901,11 @@ async function boot() {
   wire();
   if (window.matchMedia('(max-width: 640px)').matches) state.view = 'agenda';
   render();
+  const requestedEvent = new URLSearchParams(location.search).get('event');
+  if (requestedEvent && state.events.some(e => e.id === requestedEvent)) {
+    state.cursor = state.events.find(e => e.id === requestedEvent).start;
+    render(); openModal(requestedEvent);
+  }
   setTimeout(() => {
     const vp = document.getElementById('viewport');
     vp.scrollTop = (8 - HOURS_START) * ROW_H;

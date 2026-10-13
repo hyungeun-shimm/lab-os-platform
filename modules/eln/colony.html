@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
+<script src="/labos-ui.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Lab OS — Animal DB</title>
 <style>
@@ -67,7 +68,7 @@
   .page-head h1 { margin: 0 0 4px; font-family: Georgia, serif; color: var(--navy); font-size: 22px; }
   .page-head .desc { color: var(--grey); font-size: 13px; }
   .page-head .sync-area {
-    margin-left: auto; display: flex; align-items: center; gap: 10px;
+    margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap:wrap;
   }
   .sync-info { font-size: 12px; color: var(--grey); text-align: right; }
   .sync-info strong { color: var(--navy); }
@@ -284,6 +285,9 @@
   .tab-panel-wrap {
     background: var(--white); border-radius: 0 0 12px 12px;
     margin-bottom: 16px;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
   }
 
   /* Browse-tab specifics */
@@ -296,6 +300,40 @@
     border: 1px solid #d1d5db; border-radius: 7px;
     padding: 6px 10px; font: inherit; font-size: 13px; background: var(--white);
   }
+  .strain-filter-wrap { position: relative; }
+  .strain-filter-btn {
+    border: 1px solid #d1d5db; border-radius: 7px;
+    padding: 6px 10px; font: inherit; font-size: 13px; background: var(--white);
+    cursor: pointer; white-space: nowrap;
+  }
+  .strain-filter-btn.active { border-color: var(--navy); color: var(--navy); font-weight: 600; }
+  .strain-dropdown {
+    position: absolute; top: calc(100% + 4px); left: 0; z-index: 200;
+    background: var(--white); border: 1px solid #d1d5db; border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.12); padding: 6px 0; min-width: 160px;
+  }
+  .strain-opt {
+    display: flex; align-items: center; gap: 7px;
+    padding: 6px 14px; font-size: 13px; cursor: pointer;
+  }
+  .strain-opt:hover { background: var(--grey-lighter); }
+  .strain-opt.strain-all { font-weight: 600; }
+  .strain-divider { border-top: 1px solid var(--grey-light); margin: 4px 0; }
+  table.browse th sup { font-size: 8px; vertical-align: super; }
+  td.age-cell { color: var(--grey); font-size: 12px; }
+  .cond-date {
+    display: block; font-size: 10px; color: var(--grey);
+    margin-top: 2px; white-space: nowrap;
+  }
+  .cond-date em { font-style: normal; color: var(--navy); opacity: 0.75; font-weight: 600; }
+  td.notes-cell { max-width: 160px; overflow: hidden; text-overflow: ellipsis; color: var(--grey); font-size: 12px; cursor: default; }
+  .cond-lbl-row {
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+    padding: 8px 0; border-bottom: 1px solid var(--grey-lighter);
+  }
+  .cond-lbl-cond { font-weight: 700; font-size: 13px; min-width: 60px; color: var(--navy); }
+  .cond-lbl-slot { display: flex; align-items: center; gap: 5px; font-size: 12px; color: var(--grey); }
+  .cond-lbl-save { font-size: 12px; padding: 4px 10px; margin-left: auto; }
   .toolbar .spacer { flex: 1; }
   .toolbar .perm-warn {
     font-size: 12px; color: var(--grey); font-style: italic;
@@ -331,10 +369,16 @@
   table.browse tbody tr.edit-able:hover { background: var(--grey-lighter); }
   table.browse .mid { font-family: 'SF Mono', Consolas, monospace; font-weight: 700; color: var(--navy); }
   table.browse .dim { color: var(--grey); }
-  .browse-wrap { max-height: 70vh; overflow: auto; }
+  .browse-wrap {
+    flex: 1 1 auto;
+    min-height: 0;
+    max-height: calc(100vh - 290px);
+    overflow: auto;
+  }
   .browse-footer {
     padding: 10px 18px; font-size: 12px; color: var(--grey);
     border-top: 1px solid var(--grey-light);
+    flex: 0 0 auto;
   }
 
   /* Owner chips in Browse */
@@ -404,7 +448,10 @@
       <a class="btn-sync" id="btn-scan-card" href="/eln/cage-card" style="text-decoration:none;">
         <span class="lbl">📷 Scan card</span>
       </a>
-      <button class="btn-sync" id="btn-sync">
+      <a class="btn-sync" id="animal-sheet-link" target="_blank" rel="noopener" style="text-decoration:none">Open source Sheet ↗</a>
+      <button class="btn-sync" id="animal-source-sync"><span class="lbl">↻ Sync animals</span></button>
+      <button class="btn-sync" id="animal-sync-history">History / issues</button>
+      <button class="btn-sync" id="btn-sync" style="display:none;">
         <span class="spin"></span>
         <span class="lbl">🔄 Sync now</span>
       </button>
@@ -413,9 +460,9 @@
 
   <div class="scope-bar">
     <span class="scope-label">View</span>
-    <button class="scope-toggle active" data-scope="mine">🐭 My mice</button>
-    <button class="scope-toggle" data-scope="all" id="btn-scope-all" style="display:none;">🌐 Lab-wide</button>
-    <span class="scope-label" id="scope-hint" style="margin-left:8px;color:var(--grey);text-transform:none;letter-spacing:0;font-weight:400;font-size:12px;">— mice currently assigned to you</span>
+    <button class="scope-toggle" data-scope="mine">🐭 My mice</button>
+    <button class="scope-toggle active" data-scope="all" id="btn-scope-all">🌐 Lab-wide</button>
+    <span class="scope-label" id="scope-hint" style="margin-left:8px;color:var(--grey);text-transform:none;letter-spacing:0;font-weight:400;font-size:12px;">— every mouse in the colony</span>
   </div>
 
   <div class="tab-bar">
@@ -443,6 +490,39 @@
     <div class="modal-foot">
       <button class="cancel" id="ba-cancel" type="button">Cancel</button>
       <button class="go" id="ba-go" type="button">Assign</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modal-bulk-edit">
+  <div class="modal wide">
+    <div class="modal-head">
+      <h3>✎ Bulk edit mice</h3>
+      <button class="modal-close" id="be-close" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:13px;color:var(--grey);">Edit <strong id="be-count" style="color:var(--navy);">0</strong> selected mice. Tick the fields you want to apply.</div>
+      <div class="bulk-grid" style="display:grid;grid-template-columns:140px minmax(0,1fr);gap:12px 16px;margin-top:14px;align-items:center;">
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="be-use-owner" /> Owner</label>
+        <select id="be-owner" class="field-input" disabled></select>
+
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="be-use-project" /> Project</label>
+        <input type="text" id="be-project" class="field-input" placeholder="e.g. TeMP_dark" disabled />
+
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="be-use-experiment" /> Experiment</label>
+        <input type="text" id="be-experiment" class="field-input" placeholder="e.g. ePhys" disabled />
+
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="be-use-cohort" /> Cohort</label>
+        <input type="text" id="be-cohort" class="field-input" placeholder="e.g. dC" disabled />
+
+        <label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="be-use-condition" /> Condition</label>
+        <input type="text" id="be-condition" class="field-input" placeholder="e.g. RAFI" disabled />
+      </div>
+      <div id="be-msg" class="modal-msg" style="margin-top:12px;display:none;"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" id="be-cancel" type="button">Cancel</button>
+      <button class="go" id="be-go" type="button">Apply</button>
     </div>
   </div>
 </div>
@@ -545,6 +625,29 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="modal-cond-lbl">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-head">
+      <h3>⚙ Condition slot labels</h3>
+      <button class="modal-close" data-close="modal-cond-lbl" type="button">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="font-size:13px;color:var(--grey);margin:0 0 14px;">
+        Define what C1 / C2 / C3 means for each condition type.<br>
+        These labels appear below the day-count in the Days C1/C2/C3 columns.
+      </p>
+      <div id="cond-lbl-rows"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;align-items:center;">
+        <input type="text" id="cond-lbl-new-cond" class="field-input" placeholder="Condition (e.g. DT)" style="width:110px;" />
+        <button class="btn-tool secondary" id="cond-lbl-add-row">+ Add condition</button>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="cancel" data-close="modal-cond-lbl" type="button">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="modal-xfer">
   <div class="modal">
     <div class="modal-head">
@@ -572,13 +675,32 @@ const $$ = (s) => Array.from(document.querySelectorAll(s));
 
 let currentUser = null;
 let colonyData = null;
-let colonyScope = "mine";   // 'mine' | 'all'
+let colonyScope = "all";    // 'mine' | 'all'
+let animalSource = {};
+window.addEventListener('labos:animals-synced', async () => { if (currentUser) { await fetchBrowse(); await sync(); } });
 let currentTab = "overview"; // 'overview' | 'browse'
 let usersLight = [];        // for transfer modal
 let browseRows = [];        // /api/animals payload for Browse tab
-let browseSort = { col: "mouse_id", dir: "asc" };
+let browseSort = [{ col: "mouse_id", dir: "asc" }]; // array for multi-column sort
 let browseQuery = "";
-let browseFilter = { project: "", condition: "", sex: "", strain: "" };
+let browseFilter = { project: "", condition: "", sex: "" };
+let browseStrains = new Set(); // multi-select strain filter
+let condSlotLabels = {};    // {condition: {c1, c2, c3}} from colony_cond_labels
+
+function ageStr(dob) {
+  if (!dob) return "—";
+  const days = Math.floor((Date.now() - new Date(dob).getTime()) / 86400000);
+  if (days < 0) return "—";
+  if (days < 28) return days + "d";
+  return Math.floor(days / 7) + "w";
+}
+
+function cellVal(c, r) {
+  if (c.key === "_age") return ageStr(r.dob);
+  if (c.key === "assigned_to") return null; // handled separately
+  const v = r[c.key];
+  return (v == null || v === "") ? "—" : String(v);
+}
 let editingMid = null;      // mouse_id being edited (null = adding new)
 let selectedMids = new Set();  // Browse table multi-select
 let userById = {};             // id -> user object (display_name, color, initials)
@@ -609,6 +731,15 @@ function ownerChipHtml(uid) {
 function escapeHtml(s) {
   return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 }
+// A cohort and its control group share one "base" (strip -con/-control, any
+// spacing/dash), so filtering 'dC' also shows 'dC-con' / 'dC - control'.
+function cohortBase(v) {
+  return String(v ?? "").trim().replace(/\s*[-–]\s*(con|control)\s*$/i, "").trim().toLowerCase();
+}
+function cohortMatches(filt, val) {
+  if (!String(filt ?? "").trim()) return true;
+  return cohortBase(filt) === cohortBase(val);
+}
 function fmtTime(iso) {
   if (!iso) return "—";
   return new Date(iso).toLocaleString();
@@ -632,11 +763,19 @@ async function api(method, path, body) {
 async function boot() {
   try {
     const me = await api("GET", "/api/eln/auth/me");
+    const source = await api('GET','/api/animals/sync-status');
+    animalSource = source;
+    $('#animal-sheet-link').href = source.sheet_url || '#';
+    $('#animal-sheet-link').style.display = source.sheet_url ? '' : 'none';
+    $('#animal-sync-history').onclick = () => LabOS.syncHistory();
+    $('#animal-source-sync').style.display = me.user.can_edit_colony && source.can_sync ? '' : 'none';
+    $('#animal-source-sync').onclick = async () => {
+      const btn = $('#animal-source-sync'); btn.disabled = true;
+      try { await api('POST','/api/animals/sync',{}); await fetchBrowse(); await sync(); await LabOS.syncHistory(); }
+      catch(e) { alert(e.message); } finally { btn.disabled = false; }
+    };
     currentUser = me.user;
     renderHeader();
-    if (currentUser.effective_role === "admin") {
-      $("#btn-scope-all").style.display = "";
-    }
     await Promise.all([sync(), loadUsersLight()]);
   } catch (e) {
     if (e.status === 401) { window.location.href = "/eln/login"; return; }
@@ -778,6 +917,22 @@ function renderOverview() {
         ${groupTable(c.age_buckets,  "Age (alive only)", ageColor)}
         ${groupTable(c.by_cohort,    "By cohort",    strainColor)}
       </div>
+
+      ${(c.by_person && c.by_person.length) ? `
+        <div style="margin-top:18px;">
+          <div class="grp-title" style="margin-bottom:8px;">By person — current holdings <span style="font-weight:400;color:var(--grey);font-size:11px;">(admin · alive/active mice)</span></div>
+          <div class="stats-row">
+            ${c.by_person.map(p => `
+              <div class="stat-card">
+                <div class="stat-label" style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;">
+                  <span style="display:inline-flex;width:18px;height:18px;border-radius:50%;background:${p.color || '#8E8E93'};color:#fff;font-size:9px;align-items:center;justify-content:center;font-weight:700;flex:0 0 auto;">${escapeHtml(p.initials || '?')}</span>
+                  ${escapeHtml(p.name)}
+                </div>
+                <div class="stat-value">${p.count}</div>
+                <div class="stat-sub">${(p.by_strain || []).map(s => `${escapeHtml(s.strain)}·${s.n}`).join("&nbsp; ") || "—"}</div>
+              </div>`).join("")}
+          </div>
+        </div>` : ""}
 
       ${projXStrainHtml ? `
         <div style="margin-top:18px;">
@@ -945,19 +1100,30 @@ const BROWSE_COLS = [
   { key: "strain",      label: "Strain" },
   { key: "sex",         label: "Sex" },
   { key: "dob",         label: "DOB" },
+  { key: "_age",        label: "Age", virtual: true },
+  { key: "dos",         label: "Surgery date" },
   { key: "project",     label: "Project" },
   { key: "experiment",  label: "Experiment" },
   { key: "cohort",      label: "Cohort" },
   { key: "condition",   label: "Condition" },
+  { key: "days_cond1",  label: "Days C1", dateKey: "date_cond1", slot: "c1" },
+  { key: "days_cond2",  label: "Days C2", dateKey: "date_cond2", slot: "c2" },
+  { key: "days_cond3",  label: "Days C3", dateKey: "date_cond3", slot: "c3" },
   { key: "barcode",     label: "Barcode" },
+  { key: "notes",       label: "Notes" },
   { key: "sacrificed",  label: "Sac" },
 ];
 
 async function fetchBrowse() {
   try {
-    const r = await fetch("/api/animals", { credentials: "include" });
-    const d = await r.json();
-    browseRows = d.animals || d.rows || (Array.isArray(d) ? d : []);
+    const [ra, rl] = await Promise.all([
+      fetch("/api/animals", { credentials: "include" }),
+      fetch("/api/animals/cond-labels", { credentials: "include" }),
+    ]);
+    const da = await ra.json();
+    const dl = await rl.json();
+    browseRows = da.animals || da.rows || (Array.isArray(da) ? da : []);
+    condSlotLabels = dl.labels || {};
   } catch (_) { browseRows = []; }
 }
 
@@ -969,15 +1135,24 @@ function filteredBrowseRows() {
     if (q && !Object.values(r).some(v => String(v ?? "").toLowerCase().includes(q))) return false;
     if (browseFilter.project   && r.project   !== browseFilter.project)   return false;
     if (browseFilter.condition && r.condition !== browseFilter.condition) return false;
+    if (browseFilter.cohort    && !cohortMatches(browseFilter.cohort, r.cohort)) return false;
     if (browseFilter.sex       && r.sex       !== browseFilter.sex)       return false;
-    if (browseFilter.strain    && r.strain    !== browseFilter.strain)    return false;
+    if (browseStrains.size && !browseStrains.has(r.strain ?? ""))         return false;
     return true;
   });
   out.sort((a, b) => {
-    const va = (a[browseSort.col] ?? "").toString().toLowerCase();
-    const vb = (b[browseSort.col] ?? "").toString().toLowerCase();
-    if (va < vb) return browseSort.dir === "asc" ? -1 : 1;
-    if (va > vb) return browseSort.dir === "asc" ?  1 : -1;
+    for (const { col, dir } of browseSort) {
+      let va, vb;
+      if (col === "_age") {
+        va = a.dob ? Date.now() - new Date(a.dob).getTime() : -1;
+        vb = b.dob ? Date.now() - new Date(b.dob).getTime() : -1;
+      } else {
+        va = (a[col] ?? "").toString().toLowerCase();
+        vb = (b[col] ?? "").toString().toLowerCase();
+      }
+      if (va < vb) return dir === "asc" ? -1 : 1;
+      if (va > vb) return dir === "asc" ?  1 : -1;
+    }
     return 0;
   });
   return out;
@@ -988,16 +1163,12 @@ function uniqueVals(col) {
     .sort();
 }
 
-function renderBrowse() {
+// Builds only the selection-bar + table + footer (the part that changes on
+// search/filter/sort). Kept separate from the toolbar so the search <input> is
+// never destroyed mid-typing (which used to bounce focus after one character).
+function browseTableHtml() {
   const editable = canEdit();
   const rows = filteredBrowseRows();
-
-  const filterSelect = (col, label) => {
-    const opts = uniqueVals(col).map(v =>
-      `<option value="${escapeHtml(v)}" ${browseFilter[col] === v ? "selected" : ""}>${escapeHtml(v)}</option>`
-    ).join("");
-    return `<select data-fcol="${col}"><option value="">${label}</option>${opts}</select>`;
-  };
 
   // Drop any stale selections (rows currently out of view)
   if (selectedMids.size) {
@@ -1009,121 +1180,243 @@ function renderBrowse() {
     <div class="sel-bar">
       <span><strong>${selectedMids.size}</strong> selected</span>
       <button id="bs-assign-sel">⇄ Assign to…</button>
+      <button id="bs-edit-sel">✎ Bulk edit…</button>
       <button id="bs-unassign-sel">↩ Unassign</button>
       <span style="flex:1;"></span>
       <button class="clr" id="bs-clear-sel">Clear</button>
     </div>` : "";
 
   const totalCols = BROWSE_COLS.length + (editable ? 1 : 0);
+  return `
+    ${selBar}
+    <div class="browse-wrap">
+      <table class="browse">
+        <thead>
+          <tr>
+            ${editable ? `<th class="col-sel"><input type="checkbox" id="bs-sel-all" ${allSelected ? "checked" : ""} /></th>` : ""}
+            ${BROWSE_COLS.map(c => {
+              const si = browseSort.findIndex(s => s.col === c.key);
+              const arrow = si >= 0 ? `<span class="arrow">${browseSort[si].dir === "asc" ? "↑" : "↓"}${browseSort.length > 1 ? `<sup>${si + 1}</sup>` : ""}</span>` : "";
+              const sortHint = c.virtual ? " (not sortable)" : " · click again to reverse · click ↑↓ to remove";
+              return `<th${c.virtual ? "" : ` data-sort="${c.key}"`} title="Click to sort${sortHint}">${escapeHtml(c.label)}${arrow}</th>`;
+            }).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.length ? rows.map(r => `
+            <tr ${editable ? `class="edit-able" data-mid="${escapeHtml(r.mouse_id)}"` : ""}>
+              ${editable ? `<td class="col-sel"><input type="checkbox" class="bs-row-sel" data-mid="${escapeHtml(r.mouse_id)}" ${selectedMids.has(r.mouse_id) ? "checked" : ""} /></td>` : ""}
+              ${BROWSE_COLS.map(c => {
+                if (c.key === "assigned_to") return `<td>${ownerChipHtml(r.assigned_to)}</td>`;
+                const txt = cellVal(c, r);
+                const isDim = txt === "—";
+                const cls = c.key === "mouse_id" ? "mid" : (c.key === "_age" ? "age-cell" : (isDim ? "dim" : ""));
+                if (c.dateKey) {
+                  const startDate = r[c.dateKey];
+                  const slotLbl = condSlotLabels[r.condition]?.[c.slot] || "";
+                  const sub = (startDate || slotLbl) ? `<span class="cond-date">${slotLbl ? `<em>${escapeHtml(slotLbl)}</em> ` : ""}${startDate ? escapeHtml(startDate) : ""}</span>` : "";
+                  return `<td class="${cls}">${escapeHtml(txt)}${sub}</td>`;
+                }
+                if (c.key === "notes" && txt !== "—") {
+                  return `<td class="notes-cell" title="${escapeHtml(txt)}">${escapeHtml(txt.length > 30 ? txt.slice(0, 28) + "…" : txt)}</td>`;
+                }
+                return `<td class="${cls}">${escapeHtml(txt)}</td>`;
+              }).join("")}
+            </tr>`).join("") : `<tr><td colspan="${totalCols}" class="empty" style="padding:30px;">No matches.</td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    <div class="browse-footer">
+      Showing ${rows.length} of ${browseRows.length} animals${colonyScope === "mine" ? " (filtered: assigned to you)" : ""}.
+      ${editable ? `· Click a row to edit ${selectedMids.size ? "· checkboxes to bulk-assign" : "· check rows to bulk-assign"}.` : ""}
+    </div>`;
+}
+
+// Re-render only the table host. Leaves the toolbar (and the focused search
+// input) untouched.
+function renderBrowseTable() {
+  const host = document.getElementById("bs-table-host");
+  if (!host) { renderBrowse(); return; }
+  host.innerHTML = browseTableHtml();
+  wireBrowseTable();
+}
+
+// Wire the interactions that live inside #bs-table-host (sort headers, row
+// clicks, multi-select). Re-run after every renderBrowseTable().
+function wireBrowseTable() {
+  const editable = canEdit();
+  const rows = filteredBrowseRows();
+
+  document.querySelectorAll("table.browse th[data-sort]").forEach(th => {
+    th.addEventListener("click", (ev) => {
+      if (ev.target.closest(".cond-note-label")) return; // handled separately
+      const k = th.dataset.sort;
+      const existing = browseSort.findIndex(s => s.col === k);
+      if (existing === 0) {
+        // already primary: toggle asc→desc→remove
+        if (browseSort[0].dir === "asc") {
+          browseSort[0].dir = "desc";
+        } else {
+          browseSort.shift();
+          if (!browseSort.length) browseSort = [{ col: "mouse_id", dir: "asc" }];
+        }
+      } else {
+        // promote to primary; remove any existing entry for this col first
+        if (existing > 0) browseSort.splice(existing, 1);
+        // keep mouse_id as secondary tiebreaker only if it's not the key being sorted
+        const secondary = browseSort.filter(s => s.col === "mouse_id" || s.col !== k);
+        browseSort = [{ col: k, dir: "asc" }, ...secondary.filter(s => s.col !== k)];
+        // always append mouse_id tiebreaker unless we're sorting by mouse_id itself
+        if (k !== "mouse_id" && !browseSort.find(s => s.col === "mouse_id")) {
+          browseSort.push({ col: "mouse_id", dir: "asc" });
+        }
+      }
+      renderBrowseTable();
+    });
+  });
+
+  if (!editable) return;
+
+  document.querySelectorAll("table.browse tr.edit-able").forEach(tr => {
+    tr.addEventListener("click", (ev) => {
+      if (ev.target.closest("input, button, label")) return;
+      const row = browseRows.find(r => r.mouse_id === tr.dataset.mid);
+      if (row) openEditModal(row);
+    });
+  });
+  const selAll = document.getElementById("bs-sel-all");
+  if (selAll) {
+    selAll.addEventListener("change", () => {
+      if (selAll.checked) rows.forEach(r => selectedMids.add(r.mouse_id));
+      else                rows.forEach(r => selectedMids.delete(r.mouse_id));
+      renderBrowseTable();
+    });
+  }
+  document.querySelectorAll(".bs-row-sel").forEach(cb => {
+    cb.addEventListener("change", () => {
+      const mid = cb.dataset.mid;
+      if (cb.checked) selectedMids.add(mid); else selectedMids.delete(mid);
+      renderBrowseTable();
+    });
+  });
+  document.getElementById("bs-clear-sel")?.addEventListener("click", () => {
+    selectedMids.clear(); renderBrowseTable();
+  });
+  document.getElementById("bs-assign-sel")?.addEventListener("click", () =>
+    openBulkAssignModal(Array.from(selectedMids))
+  );
+  document.getElementById("bs-edit-sel")?.addEventListener("click", () =>
+    openBulkEditModal(Array.from(selectedMids))
+  );
+  document.getElementById("bs-unassign-sel")?.addEventListener("click", () =>
+    doBulkAssign(Array.from(selectedMids), null)
+  );
+}
+
+function strainFilterLabel() {
+  if (!browseStrains.size) return "All strains";
+  if (browseStrains.size === 1) return [...browseStrains][0];
+  return `${browseStrains.size} strains`;
+}
+
+function renderBrowse() {
+  const editable = canEdit();
+
+  const filterSelect = (col, label) => {
+    const opts = uniqueVals(col).map(v =>
+      `<option value="${escapeHtml(v)}" ${browseFilter[col] === v ? "selected" : ""}>${escapeHtml(v)}</option>`
+    ).join("");
+    return `<select data-fcol="${col}"><option value="">${label}</option>${opts}</select>`;
+  };
+
+  const strainOpts = uniqueVals("strain").map(v =>
+    `<label class="strain-opt"><input type="checkbox" value="${escapeHtml(v)}" ${browseStrains.has(v) ? "checked" : ""}> ${escapeHtml(v)}</label>`
+  ).join("");
+
   $("#content").innerHTML = `
     <div class="tab-panel-wrap">
       <div class="toolbar">
         <input type="search" id="bs-q" placeholder="Search…" value="${escapeHtml(browseQuery)}" style="width:200px;" />
         ${filterSelect("project",   "All projects")}
         ${filterSelect("condition", "All conditions")}
+        ${filterSelect("cohort",    "All cohorts")}
         ${filterSelect("sex",       "All sexes")}
-        ${filterSelect("strain",    "All strains")}
+        <div class="strain-filter-wrap">
+          <button class="strain-filter-btn${browseStrains.size ? " active" : ""}" id="bs-strain-btn">
+            ${escapeHtml(strainFilterLabel())} ▾
+          </button>
+          <div class="strain-dropdown" id="bs-strain-drop" style="display:none;">
+            <label class="strain-opt strain-all"><input type="checkbox" id="bs-strain-all" ${!browseStrains.size ? "checked" : ""}> All strains</label>
+            <div class="strain-divider"></div>
+            ${strainOpts}
+          </div>
+        </div>
         <div class="spacer"></div>
         ${editable ? `
-          <button class="btn-tool secondary" id="bs-sync" title="Pull from Excel">⤓ Sync Excel</button>
-          <button class="btn-tool secondary" id="bs-push" title="Push DB → Excel">⤒ Push to Excel</button>
+          <button class="btn-tool secondary" id="bs-cond-lbl" title="Configure C1/C2/C3 labels per condition">⚙ Condition labels</button>
+          ${animalSource.sheet_id ? '' : '<button class="btn-tool secondary" id="bs-sync" title="Pull from local Excel">⤓ Sync local Excel</button><button class="btn-tool secondary" id="bs-push" title="Push to local Excel">⤒ Push to local Excel</button>'}
           <button class="btn-add" id="bs-add">+ Add mouse</button>
         ` : `<span class="perm-warn">Read-only — ask an admin for colony edit access.</span>`}
       </div>
-      ${selBar}
-      <div class="browse-wrap">
-        <table class="browse">
-          <thead>
-            <tr>
-              ${editable ? `<th class="col-sel"><input type="checkbox" id="bs-sel-all" ${allSelected ? "checked" : ""} /></th>` : ""}
-              ${BROWSE_COLS.map(c => `
-                <th data-sort="${c.key}">
-                  ${escapeHtml(c.label)}
-                  ${browseSort.col === c.key ? `<span class="arrow">${browseSort.dir === "asc" ? "↑" : "↓"}</span>` : ""}
-                </th>`).join("")}
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.length ? rows.map(r => `
-              <tr ${editable ? `class="edit-able" data-mid="${escapeHtml(r.mouse_id)}"` : ""}>
-                ${editable ? `<td class="col-sel"><input type="checkbox" class="bs-row-sel" data-mid="${escapeHtml(r.mouse_id)}" ${selectedMids.has(r.mouse_id) ? "checked" : ""} /></td>` : ""}
-                ${BROWSE_COLS.map(c => {
-                  if (c.key === "assigned_to") return `<td>${ownerChipHtml(r.assigned_to)}</td>`;
-                  const v = r[c.key];
-                  const cls = c.key === "mouse_id" ? "mid" : ((v == null || v === "") ? "dim" : "");
-                  const txt = (v == null || v === "") ? "—" : v;
-                  return `<td class="${cls}">${escapeHtml(txt)}</td>`;
-                }).join("")}
-              </tr>`).join("") : `<tr><td colspan="${totalCols}" class="empty" style="padding:30px;">No matches.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-      <div class="browse-footer">
-        Showing ${rows.length} of ${browseRows.length} animals${colonyScope === "mine" ? " (filtered: assigned to you)" : ""}.
-        ${editable ? `· Click a row to edit ${selectedMids.size ? "· checkboxes to bulk-assign" : "· check rows to bulk-assign"}.` : ""}
-      </div>
+      <div id="bs-table-host">${browseTableHtml()}</div>
     </div>`;
 
-  // Wire interactions
-  document.querySelectorAll("table.browse th[data-sort]").forEach(th => {
-    th.addEventListener("click", () => {
-      const k = th.dataset.sort;
-      if (browseSort.col === k) browseSort.dir = browseSort.dir === "asc" ? "desc" : "asc";
-      else { browseSort.col = k; browseSort.dir = "asc"; }
-      renderBrowse();
-    });
-  });
+  // Toolbar wiring (persistent — the input is not rebuilt on keystroke)
   document.querySelectorAll(".toolbar select[data-fcol]").forEach(sel => {
     sel.addEventListener("change", () => {
       browseFilter[sel.dataset.fcol] = sel.value;
-      renderBrowse();
+      renderBrowseTable();
     });
+  });
+
+  // Strain multi-select dropdown
+  const strainBtn = document.getElementById("bs-strain-btn");
+  const strainDrop = document.getElementById("bs-strain-drop");
+  strainBtn?.addEventListener("click", (ev) => {
+    ev.stopPropagation();
+    const open = strainDrop.style.display !== "none";
+    strainDrop.style.display = open ? "none" : "block";
+  });
+  document.getElementById("bs-strain-all")?.addEventListener("change", () => {
+    browseStrains.clear();
+    strainDrop.querySelectorAll("input[type=checkbox]:not(#bs-strain-all)").forEach(cb => cb.checked = false);
+    document.getElementById("bs-strain-all").checked = true;
+    strainBtn.textContent = "All strains ▾";
+    strainBtn.classList.remove("active");
+    renderBrowseTable();
+  });
+  strainDrop?.querySelectorAll("input[type=checkbox]:not(#bs-strain-all)").forEach(cb => {
+    cb.addEventListener("change", () => {
+      if (cb.checked) browseStrains.add(cb.value);
+      else browseStrains.delete(cb.value);
+      document.getElementById("bs-strain-all").checked = !browseStrains.size;
+      strainBtn.textContent = strainFilterLabel() + " ▾";
+      strainBtn.classList.toggle("active", browseStrains.size > 0);
+      renderBrowseTable();
+    });
+  });
+  document.addEventListener("click", function closeStrain(ev) {
+    if (!ev.target.closest(".strain-filter-wrap")) {
+      strainDrop.style.display = "none";
+      document.removeEventListener("click", closeStrain);
+    }
   });
   const q = document.getElementById("bs-q");
   if (q) {
     let debounce = null;
     q.addEventListener("input", () => {
       clearTimeout(debounce);
-      debounce = setTimeout(() => { browseQuery = q.value; renderBrowse(); }, 150);
+      debounce = setTimeout(() => { browseQuery = q.value; renderBrowseTable(); }, 150);
     });
   }
+  document.getElementById("bs-cond-lbl")?.addEventListener("click", openCondLabelModal);
   if (editable) {
     document.getElementById("bs-add")?.addEventListener("click", () => openEditModal(null));
     document.getElementById("bs-sync")?.addEventListener("click", doSyncExcel);
     document.getElementById("bs-push")?.addEventListener("click", doPushExcel);
-    document.querySelectorAll("table.browse tr.edit-able").forEach(tr => {
-      tr.addEventListener("click", (ev) => {
-        if (ev.target.closest("input, button, label")) return;
-        const row = browseRows.find(r => r.mouse_id === tr.dataset.mid);
-        if (row) openEditModal(row);
-      });
-    });
-    // Multi-select wiring
-    const selAll = document.getElementById("bs-sel-all");
-    if (selAll) {
-      selAll.addEventListener("change", () => {
-        if (selAll.checked) rows.forEach(r => selectedMids.add(r.mouse_id));
-        else                rows.forEach(r => selectedMids.delete(r.mouse_id));
-        renderBrowse();
-      });
-    }
-    document.querySelectorAll(".bs-row-sel").forEach(cb => {
-      cb.addEventListener("change", () => {
-        const mid = cb.dataset.mid;
-        if (cb.checked) selectedMids.add(mid); else selectedMids.delete(mid);
-        renderBrowse();
-      });
-    });
-    document.getElementById("bs-clear-sel")?.addEventListener("click", () => {
-      selectedMids.clear(); renderBrowse();
-    });
-    document.getElementById("bs-assign-sel")?.addEventListener("click", () =>
-      openBulkAssignModal(Array.from(selectedMids))
-    );
-    document.getElementById("bs-unassign-sel")?.addEventListener("click", () =>
-      doBulkAssign(Array.from(selectedMids), null)
-    );
   }
+
+  wireBrowseTable();
 }
 
 // ───── Bulk assign ─────
@@ -1136,6 +1429,83 @@ function openBulkAssignModal(mids) {
   $("#ba-msg").style.display = "none";
   $("#modal-bulk-assign").dataset.mids = JSON.stringify(mids);
   $("#modal-bulk-assign").classList.add("open");
+}
+
+function openBulkEditModal(mids) {
+  if (!mids.length) return;
+  $("#be-count").textContent = mids.length;
+  $("#be-owner").innerHTML = '<option value="">— pick a user —</option>' +
+    usersLight.map(u => `<option value="${escapeHtml(u.id)}">${escapeHtml(u.display_name || u.username || u.id)}${u.id === currentUser.id ? " (me)" : ""}</option>`).join("");
+  for (const p of ["owner","project","experiment","cohort","condition"]) {
+    const cb = $("#be-use-" + p);
+    const el = $("#be-" + p);
+    if (cb) cb.checked = false;
+    if (el) { el.disabled = true; el.value = ""; }
+  }
+  $("#be-msg").style.display = "none";
+  $("#modal-bulk-edit").dataset.mids = JSON.stringify(mids);
+  $("#modal-bulk-edit").classList.add("open");
+}
+
+function toggleBulkField(name) {
+  const cb = $("#be-use-" + name);
+  const el = $("#be-" + name);
+  if (!cb || !el) return;
+  el.disabled = !cb.checked;
+}
+
+async function doBulkEdit(mids) {
+  const fields = {};
+  if ($("#be-use-project").checked) fields.project = $("#be-project").value.trim() || null;
+  if ($("#be-use-experiment").checked) fields.experiment = $("#be-experiment").value.trim() || null;
+  if ($("#be-use-cohort").checked) fields.cohort = $("#be-cohort").value.trim() || null;
+  if ($("#be-use-condition").checked) fields.condition = $("#be-condition").value.trim() || null;
+  const ownerChecked = $("#be-use-owner").checked;
+  const owner = $("#be-owner").value || null;
+  if (!ownerChecked && !Object.keys(fields).length) {
+    $("#be-msg").className = "modal-msg error";
+    $("#be-msg").textContent = "Tick at least one field to apply.";
+    $("#be-msg").style.display = "block";
+    return;
+  }
+  if (ownerChecked && !owner) {
+    $("#be-msg").className = "modal-msg error";
+    $("#be-msg").textContent = "Pick an owner or untick Owner.";
+    $("#be-msg").style.display = "block";
+    return;
+  }
+  try {
+    if (Object.keys(fields).length) {
+      const r = await fetch("/api/animals/bulk", {
+        method: "PATCH", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mouse_ids: mids, fields }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.detail || `HTTP ${r.status}`);
+      }
+    }
+    if (ownerChecked) {
+      const r = await fetch("/api/animals/assign", {
+        method: "POST", credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ mouse_ids: mids, to_user_id: owner }),
+      });
+      if (!r.ok) {
+        const d = await r.json().catch(() => ({}));
+        throw new Error(d.detail || `HTTP ${r.status}`);
+      }
+    }
+    selectedMids.clear();
+    $("#modal-bulk-edit").classList.remove("open");
+    await fetchBrowse();
+    await sync();
+  } catch (e) {
+    $("#be-msg").className = "modal-msg error";
+    $("#be-msg").textContent = e.message;
+    $("#be-msg").style.display = "block";
+  }
 }
 
 async function doBulkAssign(mids, toUserId, note) {
@@ -1191,7 +1561,7 @@ function openEditModal(row) {
     usersLight.map(u => `<option value="${escapeHtml(u.id)}" ${u.id === curOwner ? "selected" : ""}>${escapeHtml(u.display_name || u.username || u.id)}${u.id === currentUser.id ? " (me)" : ""}</option>`).join("");
   $("#ef-assigned_to").dataset.original = curOwner;
   $("#ef-msg").style.display = "none";
-  $("#edit-delete").style.display = row ? "" : "none";
+  $("#edit-delete").style.display = row && !(animalSource.sheet_id && animalSource.can_sync) ? "" : "none";
   $("#modal-edit").classList.add("open");
   setTimeout(() => $(row ? "#ef-strain" : "#ef-mid").focus(), 30);
 }
@@ -1273,6 +1643,63 @@ async function doDeleteEdit() {
   }
 }
 
+function renderCondLabelRows() {
+  const conds = Object.keys(condSlotLabels).sort();
+  const allConds = Array.from(new Set([...conds, ...uniqueVals("condition")])).sort();
+  const el = document.getElementById("cond-lbl-rows");
+  if (!el) return;
+  if (!allConds.length) { el.innerHTML = `<p style="color:var(--grey);font-size:13px;">No conditions found yet.</p>`; return; }
+  el.innerHTML = allConds.map(cond => {
+    const lbls = condSlotLabels[cond] || {};
+    return `<div class="cond-lbl-row" data-cond="${escapeHtml(cond)}">
+      <span class="cond-lbl-cond">${escapeHtml(cond)}</span>
+      ${["c1","c2","c3"].map(slot => `
+        <label class="cond-lbl-slot">
+          <span>${slot.toUpperCase()}</span>
+          <input type="text" class="field-input cond-lbl-inp" data-slot="${slot}"
+            value="${escapeHtml(lbls[slot] || "")}" placeholder="e.g. LR-dark" style="width:100px;" />
+        </label>`).join("")}
+      <button class="cond-lbl-save btn-tool secondary" data-cond="${escapeHtml(cond)}">Save</button>
+    </div>`;
+  }).join("");
+
+  el.querySelectorAll(".cond-lbl-save").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const cond = btn.dataset.cond;
+      const row = btn.closest(".cond-lbl-row");
+      const inputs = row.querySelectorAll(".cond-lbl-inp");
+      for (const inp of inputs) {
+        await fetch("/api/animals/cond-labels", {
+          method: "PUT", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ condition: cond, slot: inp.dataset.slot, label: inp.value.trim() }),
+        });
+      }
+      const res = await fetch("/api/animals/cond-labels", { credentials: "include" });
+      const d = await res.json();
+      condSlotLabels = d.labels || {};
+      renderBrowseTable();
+      renderCondLabelRows();
+      btn.textContent = "Saved ✓";
+      setTimeout(() => btn.textContent = "Save", 1500);
+    });
+  });
+}
+
+function openCondLabelModal() {
+  document.getElementById("modal-cond-lbl").classList.add("open");
+  renderCondLabelRows();
+  const addBtn = document.getElementById("cond-lbl-add-row");
+  addBtn.onclick = () => {
+    const condInput = document.getElementById("cond-lbl-new-cond");
+    const cond = condInput.value.trim();
+    if (!cond) return;
+    if (!condSlotLabels[cond]) condSlotLabels[cond] = {};
+    condInput.value = "";
+    renderCondLabelRows();
+  };
+}
+
 async function doSyncExcel() {
   if (!confirm("Pull animals from the configured source? Validated, non-destructive: bad rows are rejected, vanished mice are soft-removed (recoverable), and a snapshot is taken first.")) return;
   const btn = $("#bs-sync");
@@ -1304,7 +1731,7 @@ async function doSyncExcel() {
     }
   } catch (e) {
     alert("Sync failed: " + e.message);
-  } finally { btn.disabled = false; btn.textContent = "⤓ Sync Excel"; }
+  } finally { btn.disabled = false; btn.textContent = "⤓ Sync source"; }
 }
 
 async function doPushExcel() {
@@ -1349,6 +1776,14 @@ $("#modal-xfer").addEventListener("click", (e) => {
   if (e.target.id === "modal-xfer") $("#modal-xfer").classList.remove("open");
 });
 
+// Condition label modal wiring
+document.querySelectorAll("[data-close='modal-cond-lbl']").forEach(el => {
+  el.addEventListener("click", () => $("#modal-cond-lbl").classList.remove("open"));
+});
+$("#modal-cond-lbl").addEventListener("click", (e) => {
+  if (e.target.id === "modal-cond-lbl") $("#modal-cond-lbl").classList.remove("open");
+});
+
 // Bulk assign modal wiring
 ["ba-close", "ba-cancel"].forEach(id => {
   $("#" + id).addEventListener("click", () => $("#modal-bulk-assign").classList.remove("open"));
@@ -1367,6 +1802,21 @@ $("#ba-go").addEventListener("click", () => {
     return;
   }
   doBulkAssign(mids, to, note);
+});
+
+// Bulk edit modal wiring
+["be-close", "be-cancel"].forEach(id => {
+  $("#" + id).addEventListener("click", () => $("#modal-bulk-edit").classList.remove("open"));
+});
+$("#modal-bulk-edit").addEventListener("click", (e) => {
+  if (e.target.id === "modal-bulk-edit") $("#modal-bulk-edit").classList.remove("open");
+});
+["owner","project","experiment","cohort","condition"].forEach(name => {
+  $("#be-use-" + name)?.addEventListener("change", () => toggleBulkField(name));
+});
+$("#be-go").addEventListener("click", () => {
+  const mids = JSON.parse($("#modal-bulk-edit").dataset.mids || "[]");
+  doBulkEdit(mids);
 });
 $("#xfer-go").addEventListener("click", doTransfer);
 
