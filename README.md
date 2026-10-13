@@ -53,7 +53,7 @@ is a self-contained HTML file of vanilla JS.
 
 ## How it works
 
-Release v1.12.0 includes backend and frontend regression checks. Install
+Release v1.12.1 includes backend and frontend regression checks. Install
 `requirements-dev.txt`, provide Node.js for JavaScript checks, and run
 `bash scripts/verify_release.sh` before deploying changes.
 

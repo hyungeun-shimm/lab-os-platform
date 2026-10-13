@@ -850,7 +850,7 @@ function rebuildCatIndex() {
   CAT_BY_KEY = Object.fromEntries(CATS.map(c => [c.key, c]));
 }
 // Categories that need a mouse selector
-const MOUSE_CATS = { surgery: { required: true }, experiments: { required: false }, histology: { required: false } };
+const MOUSE_CATS = { surgery: { required: true }, experiments: { required: false }, behavior: { required: false }, histology: { required: false } };
 
 // Subcategories inside Experiments that expand into a 2nd sub-level
 const SUB2_SUBS = {
@@ -2876,7 +2876,7 @@ function updateMiceRow(catKey) {
   } else {
     row.style.display = 'none';
   }
-  document.getElementById('cohortRow').style.display = (catKey === 'experiments') ? '' : 'none';
+  document.getElementById('cohortRow').style.display = MOUSE_CATS[catKey] ? '' : 'none';
 }
 
 function openModal(eventId, defaultStart, defaultEnd) {
@@ -2971,7 +2971,9 @@ async function saveModal() {
   const category = document.getElementById('fCategory').value;
   const subcategory = document.getElementById('fSubcategory').value;
   const sub2El = document.getElementById('fSubcategory2');
-  const subcategory2 = document.getElementById('sub2Field').style.display !== 'none' ? sub2El.value : '';
+  const oldEvent = state.events.find(e => e.id === state.editing);
+  const subcategory2 = document.getElementById('sub2Field').style.display !== 'none' ? sub2El.value
+    : oldEvent?.category === category ? oldEvent.subcategory2 || '' : '';
   const cohort = document.getElementById('fCohort').value.trim();
   const project_slug = document.getElementById('fProject').value;
   const status = document.getElementById('fStatus').value;
@@ -3008,7 +3010,7 @@ async function saveModal() {
 
   const subVal = subcategory === ADD_NEW ? '' : subcategory;
   const sub2Val = subcategory2 === ADD_NEW ? '' : subcategory2;
-  const mice = miceCfg ? [...miceState] : [];
+  const mice = [...miceState];
 
   // For auto-title categories always derive title from subcategory + mice at save time
   let title;

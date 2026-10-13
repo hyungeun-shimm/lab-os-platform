@@ -14,6 +14,13 @@ and in the top nav bar, so you can always see what is live.
 
 <!-- new-release-here -->
 
+## [1.12.1] - 2026-10-13
+
+### Fixed
+- Behavior category exposes mouse/cohort controls alongside the other animal experiment categories.
+- Desktop edits preserve an event's existing mouse IDs even when the chosen category has no mouse picker.
+- Added a regression check exercising the desktop Behavior save path to prevent mouse/cohort tracking loss.
+
 ## [1.12.0] - 2026-10-13
 
 ### Added
